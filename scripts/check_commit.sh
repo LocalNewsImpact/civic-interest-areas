@@ -17,7 +17,7 @@ for f in $(git diff --cached --name-only --diff-filter=AM); do
     echo "refused: $f is $size bytes (limit 1 MB)" >&2; bad=1
   fi
   case "$f" in
-    *.py|*.sh|*.html|*.md|Makefile|.gitignore|PUBLIC_DATA.txt) ;;
+    *.py|*.sh|*.html|*.md|Makefile|.gitignore|PUBLIC_DATA.txt|LICENSE) ;;
     *)
       if ! grep -qxF "$f" "$root/PUBLIC_DATA.txt"; then
         echo "refused: $f is not code and is not listed in PUBLIC_DATA.txt" >&2; bad=1

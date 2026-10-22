@@ -15,7 +15,7 @@ The method's history, every test and every decision is in
 
 ## Data
 
-The repository holds code and documentation only. Data is kept beside it, in the same
+The repository holds code, documentation and the data files listed in PUBLIC_DATA.txt. Other data is kept beside it, in the same
 folders, and is never committed by default: `.gitignore` is an allowlist of code and
 documentation, and `scripts/check_commit.sh` (installed by `make hooks`) refuses any
 staged data file not listed in [PUBLIC_DATA.txt](PUBLIC_DATA.txt).
@@ -23,7 +23,7 @@ staged data file not listed in [PUBLIC_DATA.txt](PUBLIC_DATA.txt).
 | Data | Committed | Why |
 |---|---|---|
 | Public data (Census, LODES, County Business Patterns, NHTS, ACS, OpenStreetMap, state revenue) | No; obtained from source | Cited in [CITATIONS.md](CITATIONS.md); small tables built from it may be listed in PUBLIC_DATA.txt |
-| Story data from the Local News Impact crawler (outlet, date, place, scope, CIN label) | No, pending a decision | Article text is the publishers' copyright and is never committed |
+| Story data, Boone, Audrain and Osage outlets, March 2026 (outlet, date, URL, place, scope, CIN category) | Yes: [data/stories](data/stories/README.md) | No headlines or article text, which are the publishers' copyright; other counties' story data is not published |
 | Advan Neighborhood Patterns Plus and Weekly Patterns Plus (Dewey Data) | Never | Licensed for academic use; raw data and significant derivatives may not be shared |
 | Results derived from Advan at fine grain (hexagon travel values, tract and block-group flows) | No | Treated as licensed data until the licence is confirmed |
 
@@ -56,3 +56,7 @@ use datadesk's CSS and fonts: copy datadesk's `static/css` and `static/fonts` in
 
 Scripts that read the crawler's database or call a model API take credentials from the
 environment (`PGPASSWORD`, `OPENROUTER_API_KEY`) or Secret Manager; none is stored here.
+
+## Licences
+
+Code: MIT ([LICENSE](LICENSE)). Data this project made: CC BY 4.0 ([LICENSE-DATA.md](LICENSE-DATA.md)).
