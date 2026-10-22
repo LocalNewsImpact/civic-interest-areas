@@ -1,0 +1,124 @@
+<!doctype html>
+
+
+<html lang="en">
+<head><base href="https://data.localnewsimpact.org/visuals/3a9e6a8e-e7ad-4e4e-8633-2815b100a668/">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Columbia-Jefferson City Designated Market Area</title>
+  <link rel="stylesheet" href="/static/css/tokens.1e94ec252665.css">
+  <link rel="stylesheet" href="/static/css/datadesk.eaee6c6d0bbd.css">
+  <style>
+    /* Tokens carry both themes and all three of its states already, so
+       nothing here names a colour that is not one of them. */
+    body { background: var(--bg); color: var(--text); margin: 0;
+           font-family: var(--font-sans); }
+    .wrap { max-width: 56rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem;
+            display: flex; flex-direction: column; gap: 1.5rem; }
+    /* A table is read across: a headline, the outlets it names, who owns
+       them. At a chart's 56rem the headline wrapped to three lines. */
+    .wrap.wide { max-width: 80rem; }
+    /* Inside the data panel, above the tables: its own block rather
+       than loose notes, so what is about the data reads as one thing. */
+    .takeaway { display: flex; flex-direction: column; gap: 0.4rem; }
+    /* A class beats the browser's own `[hidden] { display: none }`, so
+       `display: flex` above made the attribute do nothing and the block
+       sat under the figure -- the footer it was moved out of being. */
+    .takeaway[hidden] { display: none; }
+    /* The snippet is folded away: a reader wants the numbers, and a
+       newsroom that wants to embed this will open one thing to find it. */
+    .embed-offer > summary { cursor: pointer; color: var(--text-2);
+                             font-size: var(--fs-sm); }
+    .embed-offer > summary:hover { color: var(--text); }
+    .embed-pair { display: grid; gap: 1rem; margin-top: .75rem;
+                  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
+    .embed-snippet { background: var(--bg); border: 1px solid var(--border);
+                     border-radius: var(--r-sm); padding: .6rem;
+                     font-size: var(--fs-xs); overflow-x: auto;
+                     white-space: pre-wrap; word-break: break-all; margin: .3rem 0 0; }
+    .figure { background: var(--surface); border: 1px solid var(--border);
+              border-radius: var(--r-lg); padding: 1.5rem;
+              overflow-x: auto; }
+    .note { color: var(--text-2); font-size: var(--fs-sm); margin: 0; }
+    .credit { font-size: var(--fs-sm); }
+    .files-lead { font-size: var(--fs-sm); }
+    .dim { color: var(--text-3); }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  
+  <div class="wrap">
+    <div class="figure">
+
+
+
+
+<figure class="dd-visual">
+  <h2 class="dd-title">Columbia-Jefferson City Designated Market Area</h2>
+  <p class="dd-subtitle">Audrain, Boone and Osage counties highlighted</p>
+  <div class="dd-chart" id="loc">Loading…</div>
+  <figcaption class="dd-footer">
+    <span class="dd-source">Source: Nielsen Designated Market Area counties, from G. Sood, <i>Geographic Information on Designated Media
+      Markets</i>, Harvard Dataverse, 2016 (doi:10.7910/DVN/IVXEHT). County boundaries: U.S. Census Bureau.</span>
+  </figcaption>
+</figure>
+</div></div>
+<script src="/static/js/d3.min.69faba9d2fff.js"></script>
+<script src="/static/js/plot.min.dce7f487647a.js"></script>
+<script src="/static/js/topojson-client.min.7561eb0097a8.js"></script>
+<script>
+// The builder's locator (datadesk-chart.js renderLocator), drawn the same way -- Albers USA framed on the state, the
+// same basemap grey, county lines, state line and plated labels, in the builder's theme colours -- with one more
+// level: the market's other counties in the light end of the builder's blue ramp, the three counties in its navy.
+const dark = new URLSearchParams(location.search).get("theme") === "dark";
+if (dark) document.documentElement.setAttribute("data-theme", "dark");
+const t = dark
+  ? { market: "#3880a1", focus: "#71dbdc", missing: "#3a3a38", ink: "#ffffff", line: "#1a1a19", surface: "#1a1a19" }
+  : { market: "#3880a1", focus: "#71dbdc", missing: "#dedede", ink: "#0b0b0b", line: "#ffffff", surface: "#ffffff" };
+const DMA = new Set(["29007","29019","29027","29041","29051","29053","29089","29125","29131","29135","29139","29141","29151","29175"]);
+const FOCUS = new Map([["29007", "Audrain"], ["29019", "Boone"], ["29151", "Osage"]]);
+Promise.all([d3.json("/static/geo/counties-10m.25fc7999aa36.json"), d3.json("/static/geo/states-10m.76b547057327.json")]).then(([ct, st]) => {
+  const counties = topojson.feature(ct, ct.objects.counties).features.filter((f) => String(f.id).startsWith("29"));
+  const state = topojson.feature(st, st.objects.states).features.filter((f) => String(f.id) === "29");
+  const market = counties.filter((f) => DMA.has(String(f.id)) && !FOCUS.has(String(f.id)));
+  const focus = counties.filter((f) => FOCUS.has(String(f.id)));
+  const el = document.getElementById("loc"), width = el.clientWidth, height = Math.round(width * 0.88);
+  const figure = Plot.plot({
+    width, height,
+    projection: { type: "albers-usa", domain: { type: "FeatureCollection", features: counties } },
+    marks: [
+      Plot.geo(counties, { fill: t.missing, stroke: t.line, strokeWidth: 1 }),
+      Plot.geo(market, { fill: t.market, stroke: t.line, strokeWidth: 1 }),
+      Plot.geo(focus, { fill: t.focus, stroke: t.line, strokeWidth: 1 }),
+      // invisible anchors at each county's centre; the callouts are drawn from their positions after layout
+    ],
+    style: { background: "transparent", color: t.ink },
+  });
+  el.replaceChildren(figure);
+  // THE NAME SITS AT THE CENTRE OF THE COUNTY AS DRAWN, at one size for all three.
+  //
+  // Plot's text mark places a label at the county's GEOGRAPHIC centroid, which falls in a different part of every
+  // shape once projected -- high in one county, off to one side in the next -- so the three read as carelessly
+  // dropped. These are placed instead at the middle of each county's own drawn path, measured after layout, so
+  // each name sits the same way in its county. No leaders, no dots, no plates, no halos.
+  const svgEl = figure.tagName === "svg" ? figure : figure.querySelector("svg");
+  const sr = svgEl.getBoundingClientRect(), k = (svgEl.viewBox.baseVal.width || sr.width) / sr.width;
+  const focusPaths = [...svgEl.querySelectorAll("g[aria-label='geo']")[2].querySelectorAll("path")];
+  const ns = "http://www.w3.org/2000/svg";
+  focus.forEach((f, i) => {
+    const r = focusPaths[i].getBoundingClientRect();
+    const x = (r.left + r.width / 2 - sr.left) * k, y = (r.top + r.height / 2 - sr.top) * k;
+    const node = document.createElementNS(ns, "text");
+    node.setAttribute("x", x); node.setAttribute("y", y + 5);
+    node.setAttribute("text-anchor", "middle");
+    node.setAttribute("font-size", "14"); node.setAttribute("font-weight", "600");
+    node.setAttribute("fill", "#0b0b0b"); node.setAttribute("font-family", "inherit");
+    node.textContent = FOCUS.get(String(f.id));
+    svgEl.append(node);
+  });
+  document.body.dataset.ready = "1";
+});
+</script>
+</body>
+</html>

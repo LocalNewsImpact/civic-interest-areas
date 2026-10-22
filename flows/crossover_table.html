@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<base href="https://data.localnewsimpact.org/">
+<title>County resident crossover</title>
+<link rel="stylesheet" href="/static/css/tokens.1e94ec252665.css">
+<link rel="stylesheet" href="/static/css/datadesk.eaee6c6d0bbd.css">
+<style>
+  body { margin: 0; background: var(--bg, #f4f5f7); }
+  .wrap { max-width: 52rem; margin: 24px auto; padding: 0 16px; }
+  .figure { background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px 18px; }
+  .dd-table th.num { text-align: right; }
+  /* the last column was printing hard against the card's edge */
+  .dd-table th:last-child, .dd-table td:last-child { padding-right: 1.1rem; }
+  .dd-table td.pub, .dd-table td.dest { white-space: nowrap; }
+  /* the share column ran into the words beside it */
+  .dd-table th.where, .dd-table td.dest { padding-left: 1.1rem; }
+  .dd-table td.dest { color: var(--text-2); }
+  .dd-table thead th { border-bottom: 2px solid var(--border); font-weight: 600; vertical-align: bottom; }
+  .dd-table thead th.grp { text-align: center; font-weight: 500; color: var(--text-3);
+    border-bottom: 1px solid var(--border); padding-bottom: .15rem; }
+  .dd-table td.floor, .dd-table th.floor { font-weight: 700; }
+  .method { margin: 14px 0 0; font-size: var(--fs-sm); color: var(--text-2); line-height: 1.5; }
+  .method b { color: var(--ink); font-weight: 600; }
+  .method ol { margin: .4rem 0 0; padding-left: 1.1rem; }
+  .method li { margin-bottom: .3rem; }
+</style>
+</head>
+<body>
+<div class="wrap"><div class="figure">
+<figure class="dd-visual">
+  <h2 class="dd-title">County resident crossover</h2>
+  <p class="dd-subtitle">The least share of residents who travel in a month to one of the other four counties here &mdash;
+    Audrain, Boone, Osage, Cole or Callaway. Commuters are residents employed in one of the four; other travel is the busiest
+    single day recorded in the phone panel. Each is a floor; crossover is the higher of the two.</p>
+  <table class="dd-table">
+    <thead>
+      <tr><th>County</th><th class="num">Population</th>
+          <th class="num">Commuters</th><th class="num">Other travel</th>
+          <th class="num floor">Crossover</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="pub">Audrain County</td><td class="num">24,548</td><td class="num">11.7%</td><td class="num">18.3%</td><td class="num floor">18.3%</td></tr>
+      <tr><td class="pub">Boone County</td><td class="num">188,043</td><td class="num">3.7%</td><td class="num">3.2%</td><td class="num floor">3.7%</td></tr>
+      <tr><td class="pub">Osage County</td><td class="num">13,402</td><td class="num">19.9%</td><td class="num">48.3%</td><td class="num floor">48.3%</td></tr>
+    </tbody>
+  </table>
+  <figcaption class="dd-footer">
+    <span class="dd-source">Sources: work, U.S. Census Bureau LEHD Origin-Destination Employment Statistics (LODES 8), 2023.
+      Daily travel, GeoDS Lab county-to-county mobility flows from SafeGraph phone data, March 2021 (Kang et al.,
+      <i>Scientific Data</i>, 2020), as a rate within a panel of about one phone in ten. The busiest day fell on
+      Audrain 03/06 to Boone, Boone 03/30 to Cole, Osage 03/15 to Cole. Population, U.S. Census Bureau
+      American Community Survey 2020&ndash;2024 five-year estimates. An earlier version of this table gave
+      33%, 5% and 68% and is withdrawn.</span>
+  </figcaption>
+</figure>
+</div></div>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Story map versus market</title>
+<link rel="stylesheet" href="dd/css/fonts.css">
+<link rel="stylesheet" href="dd/css/tokens.css">
+<link rel="stylesheet" href="dd/css/datadesk.css">
+<style>
+  /* PROTOTYPE (2026-10-17): the swipe-compare visual, before anything is built into the datadesk builder. Two layers on one
+     basemap and one frame -- the story map (where home-county outlets report) and the revealed news market -- each drawn by
+     market_pattern_print.html in bare mode; the top layer is cut by a draggable divider. */
+  html, body { margin: 0; background: #ffffff; }
+  body { max-width: 560px; padding: 16px; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .controls { display: flex; gap: 12px; align-items: center; margin: 8px 0 10px; font-size: 13px; color: #55534d; }
+  select { font: inherit; padding: 2px 6px; }
+  .swipe-stage { position: relative; width: 100%; aspect-ratio: 354 / 338; overflow: hidden; border: 1px solid #e6e5df;
+    touch-action: none; user-select: none; }
+  .swipe-stage iframe { position: absolute; inset: 0; width: 528px; height: 504px; border: 0; transform-origin: 0 0; pointer-events: none; }
+  .divider { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid #0b0b0b; cursor: ew-resize; }
+  .divider .grip { position: absolute; top: 50%; left: -14px; width: 26px; height: 26px; margin-top: -13px; border-radius: 50%;
+    background: #ffffff; border: 2px solid #0b0b0b; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+  .tag { position: absolute; top: 8px; font-size: 12px; font-weight: 600; background: #ffffff; padding: 2px 6px; border: 1px solid #c3c2b7; }
+  .tag.left { left: 8px; } .tag.right { right: 8px; }
+  .keys { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; font-size: 12px; color: #55534d; }
+  .keys b { color: #0b0b0b; font-weight: 600; display: block; margin-bottom: 2px; }
+  .sw { display: inline-block; width: 12px; height: 10px; vertical-align: middle; margin-right: 4px; }
+  .source { margin-top: 12px; font-size: 11px; color: #898781; }
+</style>
+</head>
+<body>
+<h2 class="dd-title" id="title">Where the news reports, and where it is local</h2>
+<p class="dd-subtitle">Drag the divider. Left: where the home county's news outlets report (March 2026 stories). Right: the
+  revealed news market, residents' travel strengthened by news ties (January–July 2026). Same 3 km hexagons, same frame.</p>
+<div class="controls">
+  <label>Town <select id="town"><option>Columbia</option><option>Mexico</option><option>Linn</option></select></label>
+</div>
+<div class="swipe-stage" id="stage">
+  <iframe id="right" title="Revealed news market"></iframe>
+  <iframe id="left" title="Story map"></iframe>
+  <span class="tag left">Story map</span><span class="tag right">Revealed market</span>
+  <div class="divider" id="divider"><span class="grip">⇆</span></div>
+</div>
+<div class="keys">
+  <div><b>Story map</b>counties shaded by stories mentioning them; circles sized by stories centred on a place (the builder's story map)</div>
+  <div><b>Revealed market</b><span class="sw" style="background:#d3ecfa"></span><span class="sw" style="background:#003a56"></span>
+    how local each place is, home = 100; orange dot: news ties add 10%, 25%, 50%+</div>
+</div>
+<p class="source">Source: Missouri School of Journalism analysis of local news stories (March 2026) and Advan Research,
+  Neighborhood Patterns Plus (Dewey Data), January–July 2026; U.S. Census Bureau 2020 block groups and places; OpenStreetMap.</p>
+<script>
+const stage = document.getElementById("stage"), divider = document.getElementById("divider");
+const left = document.getElementById("left"), right = document.getElementById("right"), townSel = document.getElementById("town");
+let at = 0.5;
+const fit = () => { const s = stage.clientWidth / 528; [left, right].forEach((f) => { f.style.transform = `scale(${s})`; }); };
+const place = () => { const w = stage.clientWidth; divider.style.left = `${at * w}px`;
+  left.style.clipPath = `inset(0 ${(1 - at) * 100}% 0 0)`; };
+const load = () => { const t = encodeURIComponent(townSel.value);
+  left.src = `market_pattern_print.html?town=${t}&rank=1&bare=1&layer=story`;
+  right.src = `market_pattern_print.html?town=${t}&rank=1&bare=1`; };
+let drag = false;
+const move = (x) => { const r = stage.getBoundingClientRect(); at = Math.min(1, Math.max(0, (x - r.left) / r.width)); place(); };
+stage.addEventListener("pointerdown", (e) => { drag = true; stage.setPointerCapture(e.pointerId); move(e.clientX); });
+stage.addEventListener("pointermove", (e) => { if (drag) move(e.clientX); });
+stage.addEventListener("pointerup", () => { drag = false; });
+window.addEventListener("keydown", (e) => { if (e.key === "ArrowLeft") { at = Math.max(0, at - 0.05); place(); }
+  if (e.key === "ArrowRight") { at = Math.min(1, at + 0.05); place(); } });
+window.addEventListener("resize", () => { fit(); place(); });
+townSel.addEventListener("change", load);
+// ?at=0..1 sets the divider (for static renders)
+const qat = new URLSearchParams(location.search).get("at"); if (qat !== null) at = +qat;
+const qt = new URLSearchParams(location.search).get("town"); if (qt) townSel.value = qt;
+fit(); place(); load();
+</script>
+</body>
+</html>

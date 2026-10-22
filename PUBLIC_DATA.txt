@@ -1,0 +1,2 @@
+# Data files that may be committed: public data, or our own, each cited in CITATIONS.md.
+# One path per line. scripts/check_commit.sh refuses any other data file.

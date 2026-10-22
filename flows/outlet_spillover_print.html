@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Outlet spillover, print figure</title>
+<link rel="stylesheet" href="dd/css/fonts.css">
+<link rel="stylesheet" href="dd/css/tokens.css">
+<link rel="stylesheet" href="dd/css/datadesk.css">
+<style>
+  /* 528 CSS px = 5.5 in; rendered at 3.125x for 300 dpi */
+  html, body { margin: 0; background: #ffffff; }
+  body { width: 528px; padding: 0; }
+  .dd-visual { padding: 0; }
+  .dd-subtitle { margin-bottom: var(--s-2); }
+  .dd-legend { margin-bottom: var(--s-1); align-items: center; gap: var(--s-1) var(--s-4); }
+  .dd-legend .item { display: inline-flex; align-items: center; color: var(--text-3); }
+  .dd-legend svg { margin-right: .35rem; }
+  .dd-footer { margin-top: var(--s-2); }
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+</style>
+</head>
+<body>
+<figure class="dd-visual">
+  <h2 class="dd-title">How far local news reaches beyond its county</h2>
+  <p class="dd-subtitle">Share of each outlet's stories that are about another county, March 2026</p>
+  <div class="dd-legend" id="key"></div>
+  <div id="chart"></div>
+  <figcaption class="dd-footer">
+    <span class="dd-source">Source: Missouri School of Journalism analysis of local news stories and Missouri news outlets.</span>
+  </figcaption>
+</figure>
+<script src="d3.min.js"></script>
+<script>
+// Actual and expected spillover for each outlet and county (outlet_spillover_2026_03.json,
+// ../analysis/spillover_outlets.py). Expected is the outlet model's figure; a county's is its outlets' weighted by
+// stories. The method is in the article text, not on the figure.
+const T = { ink: "#0b0b0b", mute: "#5b6370", grid: "#e1e0d9", actual: "#003a56", expected: "#898781", band: "#f4f4f1" };
+const pct = (x) => `${Math.round(100 * x)}%`;
+
+// ?region=springfield draws the Springfield-area counties (outlet_spillover_springfield_2026_03.json); default is the
+// three study counties. Counties are drawn in the order the data file lists them.
+const REGION = new URLSearchParams(location.search).get("region");
+d3.json(REGION ? `outlet_spillover_${REGION}_2026_03.json` : "outlet_spillover_2026_03.json").then((data) => {
+  const key = d3.select("#key");
+  key.append("span").attr("class", "item").html(
+    `<svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="${T.actual}"/></svg>Actual`);
+  key.append("span").attr("class", "item").html(
+    `<svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#fff" stroke="${T.expected}" stroke-width="1.6"/></svg>Expected`);
+
+  // rows: each county's total (and Boone's print-and-digital subtotal), then its outlets
+  const rows = [];
+  for (const county of Object.keys(data)) {
+    const c = data[county];
+    const hasBroadcast = c.outlets.some((o) => o.kind !== "print/digital");
+    rows.push({ kind: "county", label: `${county} County${hasBroadcast ? ", all outlets" : ""}`, ...c.all });
+    // a county with both kinds of outlet is shown as two groups, each with its subtotal (weighted by stories)
+    const groups = hasBroadcast
+      ? [["Newspapers and digital", c.outlets.filter((o) => o.kind === "print/digital")],
+         ["TV and radio", c.outlets.filter((o) => o.kind !== "print/digital")]]
+      : [[null, c.outlets]];
+    for (const [title, list] of groups) {
+      if (title) {
+        const n = d3.sum(list, (o) => o.stories);
+        rows.push({ kind: "subtotal", label: title, actual: d3.sum(list, (o) => o.stories * o.actual) / n,
+                    expected: d3.sum(list, (o) => o.stories * o.expected) / n });
+      }
+      for (const o of list) {
+        const tag = o.kind === "TV" ? " (TV)" : o.kind === "radio" ? " (radio)" : "";
+        // the outlet's own fields first: its "kind" (TV, radio, print) must not overwrite the row type
+        rows.push({ ...o, kind: "outlet", indent: !!title, label: o.name.replace(/ News$/, "") + tag });
+      }
+    }
+    rows.push({ kind: "gap" });
+  }
+  rows.pop();
+
+  const W = 528, LABEL = 200, NUM = 92, PAD = 10, plotL = LABEL + PAD, plotR = W - NUM - PAD;
+  const RH = 19, GAP = 9, HEAD = 22;
+  const yOf = []; let y = HEAD;
+  for (const r of rows) { yOf.push(y); y += r.kind === "gap" ? GAP : RH; }
+  const H = y + 4;
+  const x = d3.scaleLinear().domain([0, 0.7]).range([plotL, plotR]);
+  const svg = d3.select("#chart").append("svg").attr("width", W).attr("height", H).attr("viewBox", [0, 0, W, H]);
+
+  // axis and column headings
+  for (const t of [0, 0.2, 0.4, 0.6]) {
+    svg.append("line").attr("x1", x(t)).attr("x2", x(t)).attr("y1", HEAD - 4).attr("y2", H - 4)
+      .attr("stroke", T.grid).attr("stroke-width", 1);
+    svg.append("text").attr("x", x(t)).attr("y", HEAD - 8).attr("text-anchor", "middle").attr("font-size", 10)
+      .attr("fill", T.mute).text(pct(t));
+  }
+  const COL_A = W - 52, COL_E = W - 2;   // right edges of the two number columns
+  svg.append("text").attr("x", COL_A).attr("y", HEAD - 8).attr("text-anchor", "end").attr("font-size", 10)
+    .attr("fill", T.mute).text("Actual");
+  svg.append("text").attr("x", COL_E).attr("y", HEAD - 8).attr("text-anchor", "end").attr("font-size", 10)
+    .attr("fill", T.mute).text("Expected");
+
+  rows.forEach((r, k) => {
+    if (r.kind === "gap") return;
+    const cy = yOf[k] + RH / 2;
+    const strong = r.kind !== "outlet";
+    if (r.kind === "county") {
+      svg.append("rect").attr("x", 0).attr("y", yOf[k]).attr("width", W).attr("height", RH).attr("fill", T.band);
+    }
+    svg.append("text").attr("x", r.kind === "outlet" ? (r.indent ? 16 : 0) : 0).attr("y", cy + 4)
+      .attr("font-size", strong ? 11.5 : 11).attr("font-weight", r.kind === "county" ? 650 : r.kind === "subtotal" ? 550 : 400)
+      .attr("fill", T.ink).text(r.label);
+    svg.append("line").attr("x1", x(Math.min(r.actual, r.expected))).attr("x2", x(Math.max(r.actual, r.expected)))
+      .attr("y1", cy).attr("y2", cy).attr("stroke", T.expected).attr("stroke-width", 1.2);
+    svg.append("circle").attr("cx", x(r.expected)).attr("cy", cy).attr("r", strong ? 4.6 : 4)
+      .attr("fill", "#fff").attr("stroke", T.expected).attr("stroke-width", 1.6);
+    svg.append("circle").attr("cx", x(r.actual)).attr("cy", cy).attr("r", strong ? 5 : 4.4).attr("fill", T.actual);
+    svg.append("text").attr("x", COL_A).attr("y", cy + 4).attr("text-anchor", "end")
+      .attr("font-size", 11).attr("font-weight", strong ? 650 : 500).attr("fill", T.ink).text(pct(r.actual));
+    svg.append("text").attr("x", COL_E).attr("y", cy + 4).attr("text-anchor", "end")
+      .attr("font-size", 11).attr("fill", T.mute).text(pct(r.expected));
+  });
+  document.body.dataset.height = Math.ceil(document.querySelector("figure").getBoundingClientRect().height);
+  document.body.dataset.ready = "1";
+});
+</script>
+</body>
+</html>

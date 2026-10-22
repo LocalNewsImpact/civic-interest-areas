@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<base href="https://data.localnewsimpact.org/">
+<title>Where mid-Missouri newsrooms place their coverage</title>
+<link rel="stylesheet" href="/static/css/tokens.1e94ec252665.css">
+<link rel="stylesheet" href="/static/css/datadesk.eaee6c6d0bbd.css">
+<style>
+  body { margin: 0; background: var(--bg, #f4f5f7); }
+  .wrap { max-width: 56rem; margin: 24px auto; padding: 0 16px; }
+  .figure { background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px 18px; }
+  /* the counties are columns of their own: the heads sit over their numbers, the group heads above each county's publishers */
+  .dd-table th.num { text-align: right; }
+  .dd-table td.pub { white-space: nowrap; }
+  .dd-table tr.group th { padding-top: 1rem; font-size: var(--fs-sm); letter-spacing: .02em;
+    text-transform: uppercase; color: var(--text-3); border-bottom: 1px solid var(--border); }
+  .dd-table tr.subtotal td { font-weight: 600; border-bottom: 2px solid var(--border); }
+  .dd-table thead th { border-bottom: 2px solid var(--border); font-weight: 600; }
+  .dd-table thead th.counties { text-align: center; font-weight: 500; color: var(--text-3);
+    border-bottom: 1px solid var(--border); padding-bottom: .15rem; }
+</style>
+</head>
+<body>
+<div class="wrap"><div class="figure">
+<figure class="dd-visual">
+  <h2 class="dd-title">Where mid-Missouri newsrooms place their coverage</h2>
+  <p class="dd-subtitle">Articles published in March 2026 that name a place in each county, or the county itself. Counted once per
+    article per county, so a story naming two counties appears under both. Spillover is the share of a county's articles that
+    name one of the other four.</p>
+  <table class="dd-table">
+    <thead>
+      <tr><th></th><th></th><th class="counties" colspan="5">Articles naming a place in</th><th></th></tr>
+      <tr><th>Publisher</th><th class="num">Articles</th><th class="num">Audrain</th><th class="num">Boone</th>
+          <th class="num">Osage</th><th class="num">Cole</th><th class="num">Callaway</th><th class="num">Spillover</th></tr>
+    </thead>
+    <tbody>
+      <tr class="group"><th colspan="8" scope="rowgroup">Audrain County</th></tr>
+      <tr><td class="pub">The Mexico Ledger</td><td class="num">112</td><td class="num">83</td><td class="num">24</td><td class="num">1</td><td class="num">6</td><td class="num">11</td><td class="num"></td></tr>
+      <tr><td class="pub">Vandalia Leader</td><td class="num">26</td><td class="num">15</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num"></td></tr>
+      <tr class="subtotal"><td class="pub">All Audrain County</td><td class="num">138</td><td class="num">98 (71%)</td><td class="num">24 (17%)</td><td class="num">1 (1%)</td><td class="num">6 (4%)</td><td class="num">11 (8%)</td><td class="num">22%</td></tr>
+      <tr class="group"><th colspan="8" scope="rowgroup">Boone County</th></tr>
+      <tr><td class="pub">KOMU</td><td class="num">368</td><td class="num">6</td><td class="num">176</td><td class="num">9</td><td class="num">44</td><td class="num">22</td><td class="num"></td></tr>
+      <tr><td class="pub">ABC 17 KMIZ News</td><td class="num">332</td><td class="num">7</td><td class="num">158</td><td class="num">1</td><td class="num">51</td><td class="num">24</td><td class="num"></td></tr>
+      <tr><td class="pub">Columbia Missourian</td><td class="num">248</td><td class="num">2</td><td class="num">99</td><td class="num">0</td><td class="num">7</td><td class="num">5</td><td class="num"></td></tr>
+      <tr><td class="pub">Boone County Journal</td><td class="num">159</td><td class="num">1</td><td class="num">98</td><td class="num">2</td><td class="num">6</td><td class="num">2</td><td class="num"></td></tr>
+      <tr><td class="pub">Columbia Daily Tribune</td><td class="num">94</td><td class="num">0</td><td class="num">30</td><td class="num">0</td><td class="num">1</td><td class="num">3</td><td class="num"></td></tr>
+      <tr><td class="pub">KBIA</td><td class="num">66</td><td class="num">1</td><td class="num">16</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num"></td></tr>
+      <tr><td class="pub">Centralia Fireside Guard</td><td class="num">24</td><td class="num">1</td><td class="num">15</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num"></td></tr>
+      <tr class="subtotal"><td class="pub">All Boone County</td><td class="num">1,291</td><td class="num">18 (1%)</td><td class="num">592 (46%)</td><td class="num">12 (1%)</td><td class="num">109 (8%)</td><td class="num">56 (4%)</td><td class="num">13%</td></tr>
+      <tr class="group"><th colspan="8" scope="rowgroup">Osage County</th></tr>
+      <tr><td class="pub">The Unterrified Democrat</td><td class="num">51</td><td class="num">0</td><td class="num">0</td><td class="num">34</td><td class="num">7</td><td class="num">3</td><td class="num"></td></tr>
+      <tr class="subtotal"><td class="pub">All Osage County</td><td class="num">51</td><td class="num">0 (0%)</td><td class="num">0 (0%)</td><td class="num">34 (67%)</td><td class="num">7 (14%)</td><td class="num">3 (6%)</td><td class="num">16%</td></tr>
+    </tbody>
+  </table>
+  <figcaption class="dd-footer">
+    <span class="dd-source">Source: Missouri School of Journalism analysis of articles collected in March 2026. Wire copy, obituaries
+      and items removed in review are not counted. Counts cover only articles we geolocated: 90% of the local news these publishers
+      produced that month (Boone 90%, Audrain 88%, Osage 82%); the rest named no identifiable place.</span>
+  </figcaption>
+</figure>
+</div></div>
+</body>
+</html>

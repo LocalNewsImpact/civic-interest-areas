@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Civic interest area, print figure</title>
+<link rel="stylesheet" href="dd/css/fonts.css">
+<link rel="stylesheet" href="dd/css/tokens.css">
+<link rel="stylesheet" href="dd/css/datadesk.css">
+<style>
+  /* one town per figure, 528 CSS px = 5.5 in; rendered at 3.125x for 300 dpi */
+  html, body { margin: 0; background: #ffffff; }
+  body { width: 528px; padding: 0; }
+  .dd-visual { padding: 0; }
+  .dd-subtitle { margin-bottom: var(--s-2); }
+  .dd-ramp-strip { width: 16rem; }
+  .dd-legend { row-gap: var(--s-2); margin-bottom: var(--s-2); align-items: center; }
+  .dd-legend .item { display: inline-flex; align-items: center; color: var(--text-3); }
+  .dd-legend svg { margin-right: .35rem; }
+  .dd-swatch.base { background: #fafaf8; box-shadow: inset 0 0 0 1px #c3c2b7; }
+  .dd-footer { margin-top: var(--s-2); }
+  .dd-chart { min-height: 0; }
+  table.mk { border-collapse: collapse; font-size: 11px; margin-top: var(--s-2); width: 100%; color: var(--text-2); }
+  table.mk th { font-weight: 600; text-align: right; padding: 2px 4px; border-bottom: 1px solid #c3c2b7; }
+  table.mk td { text-align: right; padding: 2px 4px; border-bottom: 1px solid #ecebe5; }
+  table.mk th:first-child, table.mk td:first-child { text-align: left; }
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+</style>
+</head>
+<body>
+<figure class="dd-visual">
+  <h2 class="dd-title" id="title"></h2>
+  <p class="dd-subtitle" id="subtitle"></p>
+  <div class="dd-legend" id="key"></div>
+  <div class="dd-chart" id="map"></div>
+  <figcaption class="dd-footer">
+    <span class="dd-source">Source: Missouri School of Journalism analysis of local news stories (March 2026) and Advan
+      Research, Neighborhood Patterns Plus (Dewey Data), January–July 2026; U.S. Census Bureau 2020 block groups and places;
+      OpenStreetMap.</span>
+  </figcaption>
+</figure>
+<script src="d3.min.js"></script>
+<script>
+// A town's civic interest area (primary, secondary, tertiary), one travel pattern per figure (travel_patterns.py, market_patterns.py): residents'
+// travel decomposed into recurring patterns; the figure shows one pattern's places, its peak place = 100, and the table
+// its market test -- crossover (demand) and spillover both ways (supply) for each county in it.
+// ?town=Columbia|Mexico|Linn  ?rank=1|2|3 (primary, secondary, tertiary)
+const q = new URLSearchParams(location.search);
+const TOWN = q.get("town") || "Columbia", RANK = +(q.get("rank") || 1);
+// ?tri=1: every title two lines tall, so the maps line up across a triptych
+const TRI = !!q.get("tri");
+let HOME = { Columbia: "29019", Mexico: "29007", Linn: "29151" }[TOWN];   // set from the data below for other towns
+// ?region= one TV market (regions.json); its data file carries the market's counties, outline and town labels
+// REGION: ?region=, else the region whose towns include ?town= (regions.json) -- a Springfield map opened without
+// ?region=springfield drew an empty frame from the Columbia region's data (2026-10-21)
+let REGION = q.get("region") || "columbia";
+const dataUrl = (r) => r === "columbia" ? "reach/market_pattern_maps.json" : `reach/${r}/market_pattern_maps.json`;
+let DMA = [];
+const T = { seqLow: "#d3ecfa", seqHigh: "#003a56", boundary: "#c3c2b7", ink: "#0b0b0b", muted: "#898781", surface: "#ffffff" };
+const BASE = "#fafaf8", BASE_LINE = "#e6e5df";
+// one ladder for all three figures, so a shade means the same reach on each
+// SHOWN from 5. A TRANSIT corridor is the road itself, not a tract (a rural tract can cover half a county): the road
+// segments half or more of the town's block groups use to reach the shown tracts, where they cross unshaded land
+// (build_transit_lines.py)
+let FLOOR = 5, CUTS = [10, 20, 40, 80]; const TRANSIT = "#4f7a92";
+if (new URLSearchParams(location.search).get("measure") === "lift") { FLOOR = 2; CUTS = [5, 10, 20, 40]; }
+// ?layer=story: the STORY-MAP layer on the same grid and frame -- where the home county's outlets report (green), with a
+// white dot sized by central-focus stories; ?bare=1: the map alone, for the swipe page to stack two layers exactly
+const STORY_LAYER = new URLSearchParams(location.search).get("layer") === "story";
+const VOL = false;
+// the left layer is the BUILDER'S STORY MAP (renderStoryMap in datadesk-chart.js): counties shaded by stories mentioning
+// them, circles sized by stories centred on a place, overlapping and stacked largest first
+const PER_HEX = +(new URLSearchParams(location.search).get("per") || 5);
+const BARE = new URLSearchParams(location.search).get("bare") === "1";
+if (STORY_LAYER) { T.seqLow = "#8cc47e"; T.seqHigh = "#0b3a1c"; FLOOR = 1; CUTS = [3, 10, 30, 100]; }
+// ?measure=coverage: COVERAGE DENSITY (named by the user, 2026-10-20), the supply side of the civic interest area assessment (analysis/area_coverage_alignment.py) -- each footprint
+// hexagon shaded by the local stories a month whose area includes it (central focus 1, mention 0.5; each story's area set
+// by its geographic scope). Breaks at the tiers: under weekly < 2, weekly 2+ (2-3 a month), daily 9+ (2-3 a week).
+// ?cov=local leaves out stories placed only at county level and county mentions
+const COVM = new URLSearchParams(location.search).get("measure") === "coverage";
+const COVK = new URLSearchParams(location.search).get("cov") || "all";
+// below the weekly floor is not shaded: under 2 stories a month is not coverage (user, 2026-10-20)
+// TIERS NAMED BY FREQUENCY -- frequent, regular, sporadic, none -- never daily/weekly, which name publications (user,
+// 2026-10-20: the two "collide semantically and visually"). TIERS, NOT ONE RAMP (user, 2026-10-20: "one continuous color scale might be a mistake"): daily in greens whose steps
+// show volume (9-29, 30-99, 100+), weekly in ochre, occasional (under 2) in light grey, none empty
+if (COVM) { FLOOR = 0.005; CUTS = [2, 9, 30, 100]; }
+// FREQUENT IS ONE COLOUR (user, 2026-10-20): volume steps above 9 a month peaked in the population centres and showed
+// population size, not what a resident receives -- the scale stops at frequent
+// lines step back on the coverage map (user, 2026-10-20: the grid and borders "overwhelm" the green): a fainter, thinner
+// white grid; county borders in a light grey; home county and TV market thinner
+const COV_DAILY = ["#3f7d3a"], COV_WEEKLY = "#d9a441", COV_OCC = "#e4e2da", COV_LINE = "#c9c7be";
+const covFill = (v) => v >= 9 ? COV_DAILY[0] : v >= 2 ? COV_WEEKLY : COV_OCC;
+if (BARE) document.head.insertAdjacentHTML("beforeend", "<style>.dd-title,.dd-subtitle,.dd-legend,.dd-footer{display:none}</style>");
+function quantizeRamp(low, high, n) {   // datadesk-chart.js: steps spaced evenly in luminance
+  const parse = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const [a, b] = [parse(low), parse(high)];
+  const at = (k) => a.map((v, j) => v + (b[j] - v) * k);
+  const lum = (rgb) => { const lin = rgb.map((v) => { const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); });
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]; };
+  const [lo, hi] = [lum(at(0)), lum(at(1))];
+  const solve = (target) => { let l = 0, h = 1;
+    for (let i = 0; i < 20; i += 1) { const m = (l + h) / 2; const x = lum(at(m));
+      if (hi > lo ? x < target : x > target) l = m; else h = m; }
+    return (l + h) / 2; };
+  return Array.from({ length: n }, (_, i) => { const k = n === 1 ? 0 : solve(lo + ((hi - lo) * i) / (n - 1));
+    return "#" + at(k).map((v) => Math.round(v).toString(16).padStart(2, "0")).join(""); });
+}
+const RAMP = quantizeRamp(T.seqLow, T.seqHigh, CUTS.length + 2);
+const bandOf = (v) => { if (!(v >= FLOOR)) return 0; let k = 1; for (const c of CUTS) if (v >= c) k += 1; return k; };
+const shade = (v) => (bandOf(v) ? RAMP[bandOf(v)] : BASE);
+
+// ?conf=1: the approved map unchanged, with each shown hexagon marked by whether it holds in both halves of the year
+// (analysis/confidence_layer.py: the same network tie from odd months and from even months). Core = clears the map's
+// floor in both, drawn as approved; fringe = clears it in one half only, drawn lighter
+const CONFM = new URLSearchParams(location.search).get("conf") === "1";   // ?conf=1 on the approved map
+// ?corridors=1: the road from home to each place the map names as its direction (confidence_layer.py), drawn as the road
+const CORRM = new URLSearchParams(location.search).get("corridors") === "1";
+// ?outline=1: one line around the market as a connected, confident shape (confidence_layer.py)
+// STABILITY FILTER, ON BY DEFAULT (user, 2026-10-18: "random drives up route 63 can not possibly be enough signal to
+// appear on the map"): only the connected area of hexagons that hold whichever months of data are used is drawn, with
+// the ground between them filled (confidence_layer.py); ?outline=0 turns it off
+const OUTM = new URLSearchParams(location.search).get("outline") !== "0";
+const confUrl = (r) => r === "columbia" ? "reach/confidence_columbia.json" : `reach/${r}/confidence.json`;
+(q.get("region") ? Promise.resolve(REGION)
+  : d3.json("regions.json").then((C) => Object.keys(C).find((k) => TOWN in (C[k].towns || {})) || "columbia").catch(() => "columbia"))
+.then((r) => { REGION = r; return Promise.all([d3.json("cousub_29.geojson"), d3.json(dataUrl(REGION)), (CONFM || CORRM || OUTM || COVM) ? d3.json(confUrl(REGION)) : Promise.resolve({}),
+             COVM ? d3.json(`reach/coverage_${REGION}.json`) : Promise.resolve({}),
+             COVM ? d3.json(`reach/diet_${REGION}.json`) : Promise.resolve({})]).then(([geo, mp, CONF, COV, DIET]) => {
+  const data = { labels: mp.market.labels.slice(), block_groups: mp.market.block_groups };
+  const P0 = mp.towns[TOWN].find((p) => p.rank === RANK);
+  HOME = mp.home[TOWN].county;
+  if (!data.labels.some((l) => l.name === TOWN)) data.labels.push({ name: TOWN, lon: mp.home[TOWN].lon, lat: mp.home[TOWN].lat });
+  // ?measure=index (default): travel x spillover out x spillover in; ?measure=travel: the travel pattern alone
+  const MEASURE = q.get("measure") || "index", SX = q.get("s") || "net";   // ?s=net (network tie, default), 1 (earlier index), 0 (travel only)
+  // ?measure=lift: what news ties add -- the network tie's percentage above travel alone, where travel is 5+
+  const LIFT = MEASURE === "lift";
+  const liftOf = () => { const t = P0.index["0"], n = P0.index.net, o = {};
+    for (const [k, v] of Object.entries(t)) if (v >= 5 && v < 100 && n[k]) o[k] = Math.max(0, 100 * (n[k] / v - 1));
+    return o; };
+  const P = { ...P0, value: COVM ? COV[TOWN][RANK][COVK] : MEASURE === "travel" ? P0.value : LIFT ? liftOf() : P0.index[SX] };
+  const val = (id) => P.value[id] || 0;
+  const counties = geo.counties.features;   // all Missouri counties; the frame shows those in this town's market
+  const ORD = ["primary", "secondary", "tertiary"][RANK - 1];
+  const who = data.block_groups[TOWN] === 1 ? `the block group around ${TOWN}` : TOWN;
+  const dir = P0.toward && P0.toward.length ? `: toward ${P0.toward.join(" and ")}` : "";
+  document.getElementById("title").textContent = q.get("tri") === "town" ? `${TOWN}${dir.replace(": t", ": t")}`
+    : TRI ? `${ORD[0].toUpperCase() + ORD.slice(1)} market${dir}`
+    : mp.towns[TOWN].length > 1 ? `${TOWN}'s civic interest area ${["I", "II", "III"][RANK - 1]}`
+    : `${TOWN}'s civic interest area`;   // named 2026-10-20 (was "local information needs area", "information needs market", "revealed
+    // news market"); no "toward" in the title; I, II, III only when the town has more than one area
+  if (STORY_LAYER) document.getElementById("title").textContent = `Where ${TOWN}'s home-county news outlets report`;
+  if (COVM) document.getElementById("title").textContent = document.getElementById("title").textContent + ": coverage density";
+  if (LIFT) document.getElementById("title").textContent = TRI ? `What news ties add${dir ? "" : ""}` : `What news ties add to ${TOWN}'s market`;
+  const covShare = (lo, hi) => { const v = Object.values(P.value); return Math.round(100 * v.filter((x) => x >= lo && x < hi).length / v.length); };
+  document.getElementById("subtitle").textContent = COVM
+    ? `Coverage density: local news stories a month whose area includes each 3 km hexagon, March 2026; a story centred there ` +
+      `counts 1, one mentioning it 0.5; a story counts across the area its scope names (neighbourhood, town, region` +
+      `${COVK === "local" ? "; stories placed only at county level left out" : ", county"}), less in each hexagon the ` +
+      `larger that area (a town by the square root of its size; a county or region counted once, by where people live). ` +
+      `Frequent coverage (9+ a month): ${covShare(9, 1e9)}% of the area; regular (2\u20138): ${covShare(2, 9)}%; ` +
+      `sporadic (under 2): ${covShare(0.005, 2)}%; none: ${covShare(-1, 0.005)}%` +
+      (q.get("balance") !== "0" ? `. Colour shows how many stories; size shows breadth \u2013 full size only where at least 8 of the 10 civic ` +
+        `information categories (public safety, civic information, politics, education, environment, health, ` +
+        `transportation, economic development, civic life, sports) each get a story a month \u2013 ` +
+        `${Math.round(100 * Object.values((DIET[TOWN] || {})[RANK] || {}).filter((n) => n >= 8).length / Math.max(1, Object.keys(P.value).length))}% of the area` : "")
+    : STORY_LAYER
+    ? `${mp.story[TOWN].stories.toLocaleString()} local stories, March 2026: counties shaded by stories mentioning them; circles ` +
+      `sized by stories centred on a place`
+    : STORY_LAYER
+    ? `${mp.story[TOWN].stories.toLocaleString()} local stories, March 2026, by 3 km hexagon: shade = stories centred there ` +
+      `\u2013 a neighbourhood story shades its hexagon, a city story the city; shaded counties = stories mentioning the county or about it as a whole`
+    : LIFT
+    ? `How much the network tie raises each place above residents' travel alone: coverage each way, and places both visit ` +
+      `and report on; percent, by 3 km hexagon`
+    :
+    `About ${P.residents.toLocaleString()} residents of ${who} (${Math.round(100 * P.share)}%) travel in this pattern, ` +
+    (MEASURE === "travel" || SX === "0" ? `January\u2013July 2026. Travel only, no news coverage: how much they go to each place, by 3 km hexagon, home = 100`
+      : SX === "netcov" ? `January\u2013July 2026. How local each place is: their travel there, strengthened by news ties; and ` +
+        `where the newsrooms inside their market report (${Object.keys(P0.newsrooms || {}).join(", ")}), at up to 0.3 of a travel tie; by 3 km hexagon, home = 100`
+      : SX === "net" ? `January\u2013July 2026. How local each place is: their travel there, strengthened by news ties \u2013 ` +
+        `coverage each way, and places both visit and report on; by 3 km hexagon, home = 100`
+      : `January\u2013July 2026. How local each place is: their travel there, weighted by news coverage both ways ` +
+        `(home outlets' stories located there; its outlets' stories located in home); by 3 km hexagon, home = 100`);
+  const key = d3.select("#key");
+  const ramp = key.append("span").attr("class", "dd-ramp");
+  ramp.append("span").html(COVM ? `<span class="dd-swatch base"></span>under 2 a month &nbsp; Stories a month` : STORY_LAYER ? `Stories centred there` : LIFT ? `<span class="dd-swatch base"></span>under ${FLOOR}%`
+    : `<span class="dd-swatch base"></span>not shown: outside the ${Math.round(100 * (+(q.get("sel") || 0.5)))}% strongest ties`);
+  if (STORY_LAYER) ramp.html(`Stories centred there<svg width="150" height="34" style="margin-left:.4rem;vertical-align:middle">` +
+    `<circle cx="8" cy="17" r="2.6" fill="#0b0b0b" fill-opacity="0.55" stroke="#fff"/><text x="14" y="20.5" font-size="9" fill="currentColor">place</text>` +
+    `<circle cx="58" cy="17" r="2.6" fill="#d9822b" fill-opacity="0.55" stroke="#fff"/><text x="64" y="20.5" font-size="9" fill="currentColor">neighbourhood</text>` +
+    `</svg><span style="margin-left:4px">area by stories</span>`);
+  const strip = STORY_LAYER ? d3.select(document.createElement("span")) : ramp.append("span").attr("class", "dd-ramp-strip");
+  const blocks = strip.append("span").attr("class", "dd-ramp-blocks");
+  RAMP.slice(1).forEach((c) => blocks.append("span").attr("class", "dd-ramp-block").style("background", c));
+  const marks = strip.append("span").attr("class", "dd-ramp-marks");
+  const edges = [FLOOR, ...CUTS];
+  edges.forEach((v, i) => marks.append("span").attr("class", "dd-ramp-mark")
+    .attr("data-align", i === 0 ? "start" : null)
+    .style("left", `${(100 * i) / (CUTS.length + 1)}%`)
+    .text((i === edges.length - 1 ? `${v}+` : `${v}`) + (LIFT ? "%" : "")));
+  const item = (html) => key.append("span").attr("class", "item").html(html);
+  if (COVM) {
+    ramp.remove();
+    const sw = (c, line) => `<span style="display:inline-block;width:14px;height:10px;background:${c};${line ? "border:0.5px solid #c9c7bd;" : ""}margin-right:4px;vertical-align:baseline"></span>`;
+    const stops = d3.range(0, 1.001, 0.1).map((t) => d3.interpolateLab("#f1efe7", "#2f6b2f")(t)).join(",");
+    if (q.get("balance") !== "0") {
+      const hx = (cx, r) => d3.range(6).map((i) => { const a = Math.PI / 180 * (60 * i - 30);
+        return `${(cx + r * Math.cos(a)).toFixed(2)},${(7 + r * Math.sin(a)).toFixed(2)}`; }).join(" ");
+      item(`Breadth <svg width="66" height="14" style="vertical-align:middle;margin:0 4px"><polygon points="${hx(8, 2.8)}" fill="#2f6b2f"/>` +
+        `<polygon points="${hx(30, 4.6)}" fill="#2f6b2f"/><polygon points="${hx(54, 7)}" fill="#2f6b2f"/></svg>few kinds \u2192 8+ of 10 kinds of civic information`);
+    }
+    item(`Stories a month: rarely <span style="display:inline-block;width:120px;height:10px;margin:0 6px;vertical-align:middle;` +
+      `background:linear-gradient(to right,${stops})"></span> several a week or more`);
+  }
+  if (STORY_LAYER) item(`County in` + quantizeRamp("#d3ecfa", "#003a56", 5).slice(0, 4).map((c, i) =>
+    `<span style="display:inline-block;width:16px;height:10px;background:${c};margin-left:${i ? 0 : 6}px;border:0.5px solid #d6d5cc"></span>`).join("") +
+    `<span style="margin-left:4px">1, 5, 20, 60+ stories</span>`);
+  if (SX === "net" && !LIFT && !STORY_LAYER && !COVM) {
+    const hx = (cx, r) => d3.range(6).map((i) => { const a = Math.PI / 180 * (60 * i - 30);
+      return `${(cx + r * Math.cos(a)).toFixed(2)},${(7 + r * Math.sin(a)).toFixed(2)}`; }).join(" ");
+    const cells = [[0.3, "10%"], [0.5, "25%"], [0.7, "50%+"]].map(([f, t], i) => { const cx = 8 + i * 38;
+      return `<polygon points="${hx(cx, 7)}" fill="${RAMP[3]}"/><circle cx="${cx}" cy="7" r="${(7 * f).toFixed(2)}" fill="#b4501e"/>` +
+        `<text x="${cx + 10}" y="10.5" font-size="9" fill="currentColor">${t}</text>`; }).join("");
+    item(`News ties add<svg width="118" height="14" style="margin-left:.35rem">${cells}</svg>`);
+  }
+  if (OUTM && !COVM) {
+    document.getElementById("subtitle").textContent += `. Shown as one connected area: the places whose ties hold in both halves of the year, and the ground between them`;
+  }
+  if (CORRM) {
+    document.getElementById("subtitle").textContent += `. Sand: the road residents travel between the parts of their market \u2013 part of it`;
+    item(`<span style="display:inline-block;width:14px;height:10px;background:#cdb98a;margin-right:4px"></span>Road between`);
+  }
+  if (CONFM) {
+    document.getElementById("subtitle").textContent += `. Lighter: holds in only one half of the year (January, March, May, July or February, April, June)`;
+    item(`<span style="display:inline-block;width:14px;height:10px;background:${RAMP[3]};opacity:0.4;margin-right:4px"></span>One half of the year only`);
+  }
+  item(`<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="${OUTM ? T.muted : T.ink}" stroke-width="${COVM ? 1 : OUTM ? 1.3 : 1.6}"/></svg>Home county`);
+  item(`<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="${COVM ? COV_LINE : T.muted}" stroke-width="${COVM ? 0.8 : 1.2}"/></svg>County border`);
+  item(`<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="${T.ink}" stroke-width="1.4" stroke-dasharray="5 3"/></svg>${mp.market.name}`);
+
+  const W = 354, H = 338, OUT = 528;
+  // THE FRAME IS THE TV MARKET unless the town's market crosses it: if 10%+ of the town's index (hexagons of 5+) lies
+  // outside the TV market, the frame takes in the market's core too, and the TV market's outline shows the crossing
+  // DMA-SIZED for legibility: only hexagons of 10+ count toward crossing (occasional long trips do not), and an extended
+  // frame is capped at 1.5x the TV market's width and height, kept around the home county
+  // the frame comes from the area's own index on every measure, so a coverage map frames exactly as its area map does
+  // (Joplin's frames differed when coverage values set them, 2026-10-21)
+  const FRAMEV = (LIFT || COVM) ? P0.index[COVM ? SX : "net"] : P.value;
+  const shaded = Object.entries(FRAMEV).filter(([, v]) => v >= 20);   // only 20+ counts as crossing
+  const inMarket = new Set(mp.in_market);
+  const outside = d3.sum(shaded, ([id, v]) => (inMarket.has(id) ? 0 : v)) / d3.sum(shaded, ([, v]) => v);
+  const marketCounties = counties.filter((f) => mp.market.counties.includes(f.id));
+  let frame = { type: "FeatureCollection", features: marketCounties };
+  if (outside >= 0.10) {
+    // the core: the highest-value hexagons holding 90% of the index -- scattered low cells from occasional trips do not
+    // stretch the frame across the state
+    const sorted = shaded.slice().sort((a, b) => b[1] - a[1]), total = d3.sum(sorted, (d) => d[1]);
+    let acc = 0; const core = sorted.filter(([, v]) => (acc += v) - v < 0.9 * total);
+    const pts = core.flatMap(([id]) => mp.hexes[id].slice(0, 6));
+    marketCounties.forEach((f) => { const b = d3.geoBounds(f); pts.push(b[0], b[1]); });
+    let [x0, x1] = d3.extent(pts, (p) => p[0]), [y0, y1] = d3.extent(pts, (p) => p[1]);
+    const mb = d3.geoBounds({ type: "FeatureCollection", features: marketCounties });
+    const maxW = 1.0 * (mb[1][0] - mb[0][0]), maxH = 1.0 * (mb[1][1] - mb[0][1]);   // the TV market's size: shifted, not enlarged
+    const hb = d3.geoBounds(counties.find((f) => f.id === HOME)), hx = (hb[0][0] + hb[1][0]) / 2, hy = (hb[0][1] + hb[1][1]) / 2;
+    if (x1 - x0 > maxW) { const c = Math.min(Math.max(hx, x0 + maxW / 2), x1 - maxW / 2); x0 = c - maxW / 2; x1 = c + maxW / 2; }
+    if (y1 - y0 > maxH) { const c = Math.min(Math.max(hy, y0 + maxH / 2), y1 - maxH / 2); y0 = c - maxH / 2; y1 = c + maxH / 2; }
+    const px = 0.04 * (x1 - x0), py = 0.04 * (y1 - y0);
+    frame = { type: "MultiPoint", coordinates: [[x0 - px, y0 - py], [x1 + px, y0 - py], [x0 - px, y1 + py], [x1 + px, y1 + py]] };
+  }
+  document.body.dataset.outside = outside.toFixed(3);
+  // ZOOM IN A LARGE TV MARKET (2026-10-17): when the town's market (hexagons of 10+, its core holding 90% of the index)
+  // spans under a third of the TV market's width, frame the core and the home county with a margin instead
+  {
+    const all = Object.entries(FRAMEV).filter(([, v]) => v >= 10).sort((a, b) => b[1] - a[1]);
+    const tot = d3.sum(all, (d) => d[1]); let acc = 0;
+    const core = all.filter(([, v]) => (acc += v) - v < 0.9 * tot);
+    const pts = core.flatMap(([id]) => mp.hexes[id].slice(0, 6));
+    const hb = d3.geoBounds(counties.find((f) => f.id === HOME)); pts.push(hb[0], hb[1]);
+    let [x0, x1] = d3.extent(pts, (p) => p[0]), [y0, y1] = d3.extent(pts, (p) => p[1]);
+    const mb = d3.geoBounds({ type: "FeatureCollection", features: marketCounties });
+    if (x1 - x0 < 0.33 * (mb[1][0] - mb[0][0])) {
+      const px = Math.max(0.3 * (x1 - x0), (1.1 - (x1 - x0)) / 2), py = Math.max(0.3 * (y1 - y0), (0.8 - (y1 - y0)) / 2);
+      frame = { type: "MultiPoint", coordinates: [[x0 - px, y0 - py], [x1 + px, y0 - py], [x0 - px, y1 + py], [x1 + px, y1 + py]] };
+      document.body.dataset.zoom = "1";
+    }
+    document.body.dataset.ratio = ((x1 - x0) / (mb[1][0] - mb[0][0])).toFixed(2);
+  }
+  // ONE SCALE FOR EVERY MAP (2026-10-17): a fixed frame about 190 x 180 km (the size of the Columbia-Jefferson City TV
+  // market, some 12-16 counties), centred on the town's market -- the tie-weighted centre of its hexagons of 10+, shifted
+  // only as needed to keep the whole home county in view. The TV-market outline stays as a reference line.
+  {
+    const strong = Object.entries(COVM ? FRAMEV : P.value).filter(([, v]) => v >= 10);   // coverage: the area's frame
+    const wsum = d3.sum(strong, (d) => d[1]);
+    let cx = d3.sum(strong, ([id, v]) => v * d3.mean(mp.hexes[id].slice(0, 6), (p) => p[0])) / wsum;
+    let cy = d3.sum(strong, ([id, v]) => v * d3.mean(mp.hexes[id].slice(0, 6), (p) => p[1])) / wsum;
+    const HW = 1.15, HH = 0.82;                           // half-width (deg lon) and half-height (deg lat)
+    const hb = d3.geoBounds(counties.find((f) => f.id === HOME)), m = 0.08;
+    cx = Math.min(Math.max(cx, hb[1][0] + m - HW), hb[0][0] - m + HW);
+    cy = Math.min(Math.max(cy, hb[1][1] + m - HH), hb[0][1] - m + HH);
+    frame = { type: "MultiPoint", coordinates: [[cx - HW, cy - HH], [cx + HW, cy - HH], [cx - HW, cy + HH], [cx + HW, cy + HH]] };
+  }
+  const proj = d3.geoConicEqualArea().parallels([36.5, 40.5]).rotate([92.4, 0]).fitExtent([[4, 4], [W - 4, H - 4]], frame);
+  const path = d3.geoPath(proj);
+  const svg = d3.select("#map").append("svg").attr("width", OUT).attr("height", Math.round(OUT * H / W)).attr("viewBox", [0, 0, W, H]);
+  svg.append("defs").append("clipPath").attr("id", "clip").append("rect").attr("width", W).attr("height", H);
+  const g = svg.append("g").attr("clip-path", "url(#clip)");
+  g.append("rect").attr("width", W).attr("height", H).attr("fill", T.surface);
+  // HEXAGONS, 3 km across (market_patterns.py): those of 5+ shaded, one ring of empty hexagons around them as a border
+  const hexPath = (id) => path({ type: "Polygon", coordinates: [mp.hexes[id].slice().reverse()] });
+  // shown: 5+ inside the TV market, 10+ outside it -- one-off distant trips and rural destination clusters stay off
+  // SHOWN, WITH A FLOOR THAT RISES WITH ISOLATION: a hexagon joined to the market's body (grown out from home) shows
+  // at 5+; each blank hexagon between it and the body raises its floor toward 10 -- reached after 2 blank hexagons
+  // outside the TV market, after 4 inside it -- so stray cells from one-off trips stay off
+  const NB = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]];
+  const qr = (id) => id.split(",").map(Number);
+  const hexDist = (a, b) => { const dq = a[0] - b[0], dr = a[1] - b[1]; return (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2; };
+  // STORY VOLUME (?vol=1, default): a hex waffle -- one hexagon per PER_HEX stories centred on a place, grown outward
+  // from the place's centre hexagon, largest places first, so area is proportional to the number of stories
+  if (STORY_LAYER && VOL) {
+    P.value = {};                                    // the grid is not filled: places are drawn as sized hexagons below
+  } else if (false) {
+    const taken = new Map();
+    const ringOf = (q0, r0, n) => { if (n === 0) return [[q0, r0]]; const out = []; let q = q0 - n, r = r0 + n;
+      for (const [dq, dr] of [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]]) for (let i = 0; i < n; i++) { out.push([q, r]); q += dq; r += dr; }
+      return out; };
+    for (const a of mp.story[TOWN].anchors) {
+      let need = Math.ceil(a.n / PER_HEX); const [q0, r0] = a.hex.split(",").map(Number);
+      const share = a.n / need;
+      for (let n = 0; need > 0 && n < 40; n++) for (const [q, r] of ringOf(q0, r0, n)) {
+        if (need <= 0) break; const id = `${q},${r}`; if (taken.has(id) || !mp.hexes[id]) continue;
+        taken.set(id, Math.min(PER_HEX, share)); need -= 1; }
+    }
+    P.value = Object.fromEntries(taken);
+  } else if (STORY_LAYER) P.value = mp.story[TOWN].central;  // the frame above is the market's, so the two layers align
+  // SELECTIVITY (?sel=, default 0.5, adopted 2026-10-17 to cut the long tail): the floor is set so the hexagons shown hold 50% of the market's ties outside home --
+  // a compact market and a diffuse one are drawn at the same selectivity; never below 5
+  const SEL = +(q.get("sel") || 0.5);
+  const ext_ = Object.values(P.value).filter((v) => v < 100).sort((a, b) => b - a);
+  let acc_ = 0, f80 = FLOOR; const tot_ = d3.sum(ext_);
+  for (const v of ext_) { acc_ += v; f80 = v; if (acc_ >= SEL * tot_) break; }
+  const BASEF = (LIFT || STORY_LAYER) ? FLOOR : Math.max(FLOOR, f80), TOPF = STORY_LAYER ? FLOOR : Math.max(10, 2 * BASEF);
+  document.body.dataset.floor = BASEF.toFixed(1);
+  const floorAt = (id, gap) => { const ramp = inMarket.has(id) ? 4 : 2; return BASEF + (TOPF - BASEF) * Math.min(1, gap / ramp); };
+  const vals = Object.entries(P.value).filter(([, v]) => v >= BASEF);
+  const on = new Set(vals.filter(([, v]) => STORY_LAYER || v >= 100).map(([id]) => id));     // home seeds the body
+  if (!on.size) vals.filter(([, v]) => v >= 80).forEach(([id]) => on.add(id));   // no home cells (travel view): the top cells
+  let grew = true;
+  while (grew) {
+    grew = false;
+    const body = [...on].map(qr);
+    for (const [id, v] of vals) {
+      if (on.has(id)) continue;
+      const c = qr(id);
+      let d = Infinity;
+      for (const b of body) { const x = hexDist(c, b); if (x < d) d = x; if (d <= 1) break; }
+      if (v >= floorAt(id, Math.max(0, d - 1))) { on.add(id); grew = true; }
+    }
+  }
+  if (COVM) { on.clear(); for (const [id, v] of Object.entries(P.value)) if (v >= FLOOR) on.add(id); }
+  const HALF = CONFM ? CONF[TOWN][RANK] : null;
+  const FR = new Set(CONFM ? [...on].filter((id) => P.value[id] < 100 && !((HALF.odd[id] || 0) >= BASEF && (HALF.even[id] || 0) >= BASEF)) : []);
+  // the empty border ring is drawn only around hexagons with another shaded hexagon within 3 -- an outlier gets no ring
+  const onQR = [...on].map((id) => [id, qr(id)]);
+  const near3 = (id) => { const c = qr(id); return onQR.some(([o, b]) => o !== id && hexDist(c, b) <= 3); };
+  const ring = new Set();
+  on.forEach((id) => { if (STORY_LAYER || !near3(id)) return; const [q, r] = id.split(",").map(Number);
+    NB.forEach(([dq, dr]) => { const n = `${q + dq},${r + dr}`; if (!on.has(n) && mp.hexes[n]) ring.add(n); }); });
+  // MENTIONS BY COUNTY: the counties, shaded in a light warm grey by the stories that mention them -- the weaker signal,
+  // a background the green hexagons (stories centred there) stand on
+  // the lightest step must read as a shade, not as empty ground: a warm tan from the first story
+  const MEN_RAMP = quantizeRamp("#d3ecfa", "#003a56", 5).slice(0, 4), MEN_CUTS = [1, 5, 20, 60];
+  const menShade = (n) => { let k = -1; for (const c of MEN_CUTS) if (n >= c) k += 1; return k < 0 ? null : MEN_RAMP[k]; };
+  if (STORY_LAYER) {
+    // county fill: the builder's sequential ramp (lnic theme) by stories mentioning the county or about it as a whole
+    const cmn = { ...(mp.story[TOWN].county_mentions || {}) };
+    for (const [c, n] of Object.entries(mp.story[TOWN].county_stories || {})) cmn[c] = (cmn[c] || 0) + n;
+    g.append("g").selectAll("path").data(counties.filter((f) => menShade(cmn[f.id] || 0))).join("path").attr("d", path)
+      .attr("fill", (f) => menShade(cmn[f.id])).attr("stroke", "none");
+  }
+  // ?outline=1: only the market is drawn -- hexagons outside the outline are left off (not relevant to these residents)
+  if (OUTM) for (const id of [...on]) { const c = mp.hexes[id].slice(0, 6);
+    if (P.value[id] < 100 && !d3.geoContains(CONF[TOWN][RANK].outline, [d3.mean(c, (p) => p[0]), d3.mean(c, (p) => p[1])])) on.delete(id); }
+  if (OUTM) ring.clear();
+  // ?outline=1: the market area is filled -- every grid hexagon whose centre lies inside the outline and is not shaded is
+  // drawn empty, as the border ring is, so the market reads as one area on the grid
+  if (OUTM) for (const id of Object.keys(mp.hexes)) {
+    if (on.has(id) || ring.has(id)) continue;
+    const c = mp.hexes[id].slice(0, 6);
+    if (d3.geoContains(CONF[TOWN][RANK].outline, [d3.mean(c, (p) => p[0]), d3.mean(c, (p) => p[1])])) ring.add(id);
+  }
+  // COVERAGE AS A SURFACE (user, 2026-10-20: colour on a layer beneath the hexagons, so it reads as a gradient; a key of
+  // counts defeats the purpose): each hexagon's stories a month on a log scale capped at frequent (9+), painted and
+  // blurred over about a hexagon, clipped to the area; the hexagon grid is drawn over it in white outline
+  const covT = (v) => Math.max(0, Math.min(1, Math.log1p(v) / Math.log1p(9)));
+  // BALANCE FILTER (user, 2026-10-20: "volume is not enough, balance is also required"): coverage is shaded only where the
+  // diet is balanced -- any 8 of the 10 CIN categories at 1+ story a month (analysis/cin_diet.py); elsewhere pale
+  const DIETM = COVM && q.get("balance") !== "0";
+  // graded, not a switch (user: the binary filter was "too flat"): shade = volume score x balance, balance = categories
+  // met / 8, capped at 1 -- full colour needs 9+ stories a month across 8+ of the 10 categories
+  const balanceOf = (id) => !DIETM ? 1 : Math.min(1, ((((DIET[TOWN] || {})[RANK] || {})[id]) || 0) / 8);
+  const covFillB = (id) => covC(covT(P.value[id]) * balanceOf(id));
+  // VOLUME AS COLOUR, BREADTH AS SIZE (user, 2026-10-20: "a visual that hints there is volume but not breadth"): the
+  // hexagon's colour is its stories a month; its size is its breadth -- full size at 8+ of the 10 categories, shrinking
+  // to 40% with fewer -- so a small dark hexagon reads as plenty of news of a narrow kind
+  const breadthScale = (id) => 0.4 + 0.6 * balanceOf(id);
+  const hexPathScaled = (id, k) => { const pts = mp.hexes[id].slice(0, 6).map((p) => proj(p));
+    const cx = d3.mean(pts, (p) => p[0]), cy = d3.mean(pts, (p) => p[1]);
+    return "M" + pts.map(([x, y]) => `${(cx + (x - cx) * k).toFixed(2)},${(cy + (y - cy) * k).toFixed(2)}`).join("L") + "Z"; };
+  const covC = d3.interpolateLab("#f1efe7", "#2f6b2f");
+  // CRISP BY DEFAULT (user, 2026-10-20: the blur "just does not work" beside the clean civic interest area maps): each
+  // hexagon filled with the same continuous green, white gaps between, as the area maps; ?surface=1 keeps the blurred surface
+  const COV_SURFACE = q.get("surface") === "1";
+  if (COVM && COV_SURFACE) {
+    const v0 = mp.hexes[Object.keys(P.value)[0]].slice(0, 6).map((p) => proj(p));
+    const rpx = Math.hypot(v0[0][0] - v0[3][0], v0[0][1] - v0[3][1]) / 2;
+    const defs = svg.append("defs");
+    defs.append("filter").attr("id", "covblur").attr("x", "-20%").attr("y", "-20%").attr("width", "140%").attr("height", "140%")
+      .append("feGaussianBlur").attr("stdDeviation", rpx * 0.5);   // half a hexagon: a wider blur washed out small towns (Linn: 33 stories a month read as pale)
+    defs.append("clipPath").attr("id", "covclip").append("path").attr("d", path(CONF[TOWN][RANK].outline));
+    // EDGE PADDING: the area's outline is smooth and its hexagons are not, so the colour is carried two rings past the
+    // edge hexagons (each new hexagon takes the mean of its neighbours inside) and cut at the outline -- no white notches
+    // or faded rims where the blur meets empty ground
+    const padded = { ...P.value };
+    for (let pass = 0; pass < 2; pass += 1) {
+      const add = {};
+      for (const id of Object.keys(padded)) {
+        const [q, r] = id.split(",").map(Number);
+        for (const [dq, dr] of NB) {
+          const n = `${q + dq},${r + dr}`;
+          if (n in padded || n in add || !mp.hexes[n]) continue;
+          const [nq, nr] = [q + dq, r + dr];
+          const vs = NB.map(([a, b]) => padded[`${nq + a},${nr + b}`]).filter((v) => v !== undefined);
+          add[n] = d3.mean(vs);
+        }
+      }
+      Object.assign(padded, add);
+    }
+    const surf = g.append("g").attr("clip-path", "url(#covclip)");
+    for (const blur of [false, true]) {          // solid underneath so the blur does not fade at the area's edge
+      const layer = surf.append("g").attr("filter", blur ? "url(#covblur)" : null);
+      layer.selectAll("path").data(Object.keys(padded)).join("path").attr("d", hexPath)
+        .attr("fill", (id) => covC(covT(padded[id]))).attr("stroke", (id) => covC(covT(padded[id]))).attr("stroke-width", 1);
+    }
+  }
+  g.append("g").selectAll("path").data([...ring]).join("path").attr("d", hexPath)
+    .attr("fill", "none").attr("stroke", "#d6d5cc").attr("stroke-width", 0.3);   // empty border ring: outline only, ground shows through
+  if (DIETM && !COV_SURFACE) g.append("g").selectAll("path").data([...on]).join("path").attr("d", hexPath)   // the grid the
+    .attr("fill", "#f6f5f0").attr("stroke", "#ffffff").attr("stroke-width", 0.3);                          // smaller ones sit in
+  g.append("g").attr("clip-path", COVM && COV_SURFACE ? "url(#covclip)" : null).selectAll("path").data([...on]).join("path")
+    .attr("d", (id) => (DIETM && !COV_SURFACE ? hexPathScaled(id, breadthScale(id)) : hexPath(id)))
+    .attr("fill", (id) => (VOL ? "#1f5c2e" : COVM ? (COV_SURFACE ? "none" : DIETM ? covC(covT(P.value[id])) : covFillB(id)) : shade(P.value[id]))).attr("fill-opacity", (id) => (FR.has(id) ? 0.4 : 1))
+    .attr("stroke", "#ffffff").attr("stroke-width", COVM && COV_SURFACE ? 0.25 : 0.3).attr("stroke-opacity", COVM && COV_SURFACE ? 0.4 : 1);
+  // ROAD CORRIDORS (?corridors=1): the hexagons the road from home crosses to reach each separate part of the market --
+  // part of the market, in their own colour, so the market is one connected shape (confidence_layer.py)
+  const ROAD_HEX = "#cdb98a";
+  if (CORRM) g.append("g").selectAll("path").data(CONF[TOWN][RANK].corridor_hexes.filter((id) => mp.hexes[id] && !on.has(id))).join("path")
+    .attr("d", hexPath).attr("fill", ROAD_HEX).attr("stroke", "#ffffff").attr("stroke-width", 0.3);
+  if (STORY_LAYER && VOL) {
+    // ONE HEXAGON PER PLACE, centred on it, area proportional to the stories centred there (a neighbourhood story counts
+    // to the hexagon holding it); largest drawn first so smaller places stay visible on top
+    const unitR = (() => { const id = Object.keys(mp.hexes)[0]; const c = mp.hexes[id].slice(0, 6).map((p) => proj(p));
+      const cx = d3.mean(c, (p) => p[0]), cy = d3.mean(c, (p) => p[1]); return Math.hypot(c[0][0] - cx, c[0][1] - cy); })();
+    const rOf = d3.scaleSqrt().domain([0, PER_HEX]).range([0, unitR]);         // PER_HEX stories = one 3 km hexagon
+    const hexPts = (cx, cy, r) => d3.range(6).map((i) => { const a = Math.PI / 180 * (60 * i - 30); return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; });
+    const placeHexes = mp.story[TOWN].anchors.map((a) => { const c = mp.hexes[a.hex]; if (!c) return null;
+      const cc = c.slice(0, 6).map((p) => proj(p)); return { ...a, x: d3.mean(cc, (p) => p[0]), y: d3.mean(cc, (p) => p[1]) }; })
+      .filter(Boolean).sort((a, b) => b.n - a.n);
+    g.append("g").selectAll("polygon").data(placeHexes).join("polygon")
+      .attr("points", (d) => hexPts(d.x, d.y, Math.max(unitR * 0.55, rOf(d.n))).map((p) => p.join(",")).join(" "))
+      .attr("fill", "#1f5c2e").attr("fill-opacity", 0.92).attr("stroke", "#ffffff").attr("stroke-width", 0.6);
+  }
+  // WHERE NEWS TIES LIFT THE TIE: a dark orange dot at the centre of each hexagon where news coverage adds 10%+ to
+  // travel alone, in three sizes (10%, 25%, 50%+); the legend draws them inside hexagons as on the map
+  const LIFT_INK = "#b4501e";
+  // news ties only: coverage-amplified tie (before adjacency and direction) against travel alone
+  const liftAt = (id) => { const t = (P0.index["0"] || {})[id], n = (P0.index.cov || {})[id];
+    return t && n && t < 100 ? n / t - 1 : 0; };
+  const hexRpx = (() => { const id = [...on][0]; if (!id) return 2; const c = mp.hexes[id].slice(0, 6).map((p) => proj(p));
+    const cx = d3.mean(c, (p) => p[0]), cy = d3.mean(c, (p) => p[1]); return Math.hypot(c[0][0] - cx, c[0][1] - cy); })();
+  // dot area grows with lift; the smallest (10%) still reads at print size
+  // dot area grows with the lift: 10% -> 0.3, 25% -> 0.5, 50%+ -> 0.7 of the hexagon's radius
+  const dotR = (l) => hexRpx * (l >= 0.5 ? 0.7 : l >= 0.25 ? 0.5 : 0.3);
+  if (SX === "net" && !LIFT && !STORY_LAYER && !COVM) {
+    // dots mark news ties BETWEEN places: none in the home county, whose own outlets' coverage is the baseline (it stays in
+    // the blue); a dot outside it is coverage reaching, or shared with, another county
+    g.append("g").selectAll("circle").data([...on].filter((id) => liftAt(id) >= 0.10 && (mp.hex_county || {})[id] !== HOME)).join("circle")
+      .attr("cx", (id) => d3.mean(mp.hexes[id].slice(0, 6), (p) => proj(p)[0]))
+      .attr("cy", (id) => d3.mean(mp.hexes[id].slice(0, 6), (p) => proj(p)[1]))
+      .attr("r", (id) => dotR(liftAt(id))).attr("fill", LIFT_INK).attr("stroke", "none");
+  }
+  g.append("g").selectAll("path").data(counties).join("path").attr("d", path)
+    .attr("fill", "none").attr("stroke", COVM ? COV_LINE : T.muted).attr("stroke-width", COVM ? 0.5 : 0.75);
+  g.append("path").datum(mp.market.outline).attr("d", path).attr("fill", "none").attr("stroke", COVM ? T.muted : T.ink)
+    .attr("stroke-width", COVM ? 0.7 : 1.05).attr("stroke-dasharray", "3.4 2");
+  // ?outline=1 draws no line (user, 2026-10-18): the area it encloses decides which hexagons are drawn, and fills the
+  // gaps with empty hexagons, so the market shows as one connected area of hexagons
+  // with the market outline on, the home county steps back to a county border, a little heavier -- the outline leads
+  g.append("path").datum(counties.find((f) => f.id === HOME)).attr("d", path).attr("fill", "none")
+    .attr("stroke", COVM ? T.muted : OUTM ? T.muted : T.ink).attr("stroke-width", COVM ? 0.8 : OUTM ? 1.1 : 1.4);
+  // SERVICE ZONES (user, 2026-10-20): each outlet that is the largest single source for 3+ hexagons of the area, as a
+  // circle on its newsroom holding half its story weight (analysis/area_coverage_alignment.py); named at
+  // the circle's top so outlets sharing a town stay apart
+  if (COVM && COV[TOWN][RANK].outlets && q.get("zones") === "1") {   // circles rejected (user, 2026-10-20); ?zones=1 only
+    const zones = COV[TOWN][RANK].outlets.slice().sort((a, b) => b.r_km - a.r_km);
+    const zg = g.append("g");
+    zg.selectAll("path").data(zones).join("path")
+      .attr("d", (z) => path(d3.geoCircle().center([z.lon, z.lat]).radius(z.r_km / 111.2).precision(2)()))
+      .attr("fill", "none").attr("stroke", T.ink).attr("stroke-width", 0.6).attr("stroke-opacity", 0.75);
+    zg.selectAll("circle").data(zones).join("circle")
+      .attr("cx", (z) => proj([z.lon, z.lat])[0]).attr("cy", (z) => proj([z.lon, z.lat])[1]).attr("r", 1.6).attr("fill", T.ink);
+    zg.selectAll("text").data(zones).join("text")
+      .attr("x", (z) => proj([z.lon, z.lat + z.r_km / 111.2])[0]).attr("y", (z) => proj([z.lon, z.lat + z.r_km / 111.2])[1] - 2)
+      .attr("text-anchor", "middle").attr("font-size", 7.5).attr("fill", T.ink)
+      .text((z) => z.outlet.replace(/\/News Tribune$/, "").replace(/ News$/, ""));
+  }
+  if (STORY_LAYER) {   // circles, the builder's way: area by stories, place = solid ink, neighbourhood = orange; stacked
+    const pts = mp.story[TOWN].points;
+    const rS = d3.scaleSqrt().domain([0, d3.max(pts, (p) => p.n) || 1]).range([0, 26]);
+    g.append("g").selectAll("circle").data(pts.slice().sort((a, b) => b.n - a.n)).join("circle")
+      .attr("cx", (p) => proj([p.lon, p.lat])[0]).attr("cy", (p) => proj([p.lon, p.lat])[1])
+      .attr("r", (p) => Math.max(1.6, rS(p.n)))
+      .attr("fill", (p) => (p.level === "block" ? "#d9822b" : "#0b0b0b")).attr("fill-opacity", 0.55)
+      .attr("stroke", "#ffffff").attr("stroke-width", 0.6);
+  }
+  // TOWN NAMES IN PLAIN INK, never haloed, and never on a dark hexagon (20+): a dot at the town and its name beside it;
+  // where the dark cells leave no room beside the dot, the name sits clear of them with a hairline to the dot
+  const dark = [...on].filter((id) => P.value[id] >= 20).map((id) => {
+    const c = mp.hexes[id].slice(0, 6).map((p) => proj(p));
+    return [d3.mean(c, (p) => p[0]), d3.mean(c, (p) => p[1])]; });
+  const hexR = (() => { const id = Object.keys(mp.hexes)[0]; const c = mp.hexes[id].slice(0, 6).map((p) => proj(p));
+    const cx = d3.mean(c, (p) => p[0]), cy = d3.mean(c, (p) => p[1]); return Math.hypot(c[0][0] - cx, c[0][1] - cy); })();
+  const overDark = (b) => dark.some(([cx, cy]) => cx > b[0] - hexR && cx < b[2] + hexR && cy > b[1] - hexR && cy < b[3] + hexR);
+  // every sample point of the box within a dark (40+) hexagon
+  const dark40 = [...on].filter((id) => P.value[id] >= 40).map((id) => { const c = mp.hexes[id].slice(0, 6).map((p) => proj(p));
+    return [d3.mean(c, (p) => p[0]), d3.mean(c, (p) => p[1])]; });
+  const allDark = (b) => { for (let i = 0; i <= 6; i++) for (let j = 0; j <= 2; j++) {
+      const x = b[0] + ((b[2] - b[0]) * i) / 6, y = b[1] + ((b[3] - b[1]) * j) / 2;
+      if (!dark40.some(([cx, cy]) => Math.hypot(cx - x, cy - y) <= hexR * 0.95)) return false; }
+    return true; };
+  const placed = [];
+  const clear = (b) => b[0] >= 2 && b[1] >= 2 && b[2] <= W - 2 && b[3] <= H - 2 && !overDark(b)
+    && !placed.some((o) => b[0] < o[2] + 1 && b[2] > o[0] - 1 && b[1] < o[3] + 1 && b[3] > o[1] - 1);
+  // LABEL HIERARCHY: the home town bold; towns standing on a shaded hexagon in ink, the 8 most local x populous; for
+  // orientation, up to 4 unshaded towns of 20,000+ in small grey; no other labels
+  const onCentres = [...on].map((id) => { const c = mp.hexes[id].slice(0, 6).map((p) => proj(p));
+    return [d3.mean(c, (p) => p[0]), d3.mean(c, (p) => p[1]), P.value[id]]; });
+  const localAt = (x, y) => { let best = 0;
+    for (const [cx, cy, v] of onCentres) if (Math.hypot(cx - x, cy - y) <= hexR && v > best) best = v;
+    return best; };
+  const inView = (x, y) => x >= 0 && x <= W && y >= 0 && y <= H;
+  const cand = data.labels.map((l) => { const [x, y] = proj([l.lon, l.lat]); return { ...l, x, y, v: localAt(x, y) }; })
+    .filter((l) => inView(l.x, l.y));
+  const home = cand.filter((l) => l.name === TOWN);
+  const market = cand.filter((l) => l.name !== TOWN && l.v >= FLOOR).sort((a, b) => b.v * Math.sqrt(b.pop || 1) - a.v * Math.sqrt(a.pop || 1)).slice(0, 8);
+  const context = cand.filter((l) => l.name !== TOWN && l.v < FLOOR && (l.pop || 0) >= 20000).sort((a, b) => b.pop - a.pop).slice(0, 4);
+  // CLUSTER LABELS: a group of 5+ shaded hexagons with no label inside it is named -- a landmark from the market's config
+  // if one lies in it, else its most populous town -- in ink, like the market towns
+  const comp = new Map(); let cid = 0;
+  for (const id of on) {
+    if (comp.has(id)) continue;
+    const stack = [id]; comp.set(id, cid);
+    while (stack.length) { const [q, r] = qr(stack.pop());
+      for (const [dq, dr] of NB) { const n = `${q + dq},${r + dr}`; if (on.has(n) && !comp.has(n)) { comp.set(n, cid); stack.push(n); } } }
+    cid += 1;
+  }
+  const hexOf = (lon, lat) => { const [x, y] = proj([lon, lat]);
+    let best = null, bd = Infinity;
+    for (const id of on) { const c = mp.hexes[id].slice(0, 6).map((p) => proj(p)); const cx = d3.mean(c, (p) => p[0]), cy = d3.mean(c, (p) => p[1]);
+      const d = Math.hypot(cx - x, cy - y); if (d < bd) { bd = d; best = id; } }
+    return bd <= hexR * 1.2 ? best : null; };
+  const labelled = new Set([...home, ...market, ...context].map((l) => { const h = hexOf(l.lon, l.lat); return h ? comp.get(h) : -1; }));
+  const sizes = d3.rollup([...comp.values()], (v) => v.length, (d) => d);
+  const clusterLabels = [];
+  for (const [c, n] of sizes) {
+    if (n < 5 || labelled.has(c)) continue;
+    const lm = (mp.landmarks || []).find((l) => comp.get(hexOf(l.lon, l.lat)) === c);
+    const town = (mp.places || []).filter((l) => comp.get(hexOf(l.lon, l.lat)) === c).sort((a, b) => b.pop - a.pop)[0];
+    const pick = lm || town;
+    if (pick) { const [x, y] = proj([pick.lon, pick.lat]); clusterLabels.push({ ...pick, x, y, tier: 1, landmark: !!lm }); }
+  }
+  const tiers = [...home.map((l) => ({ ...l, tier: 0 })), ...market.map((l) => ({ ...l, tier: 1 })), ...clusterLabels,
+    ...context.map((l) => ({ ...l, tier: 2 }))];
+  for (const l of tiers) {
+    const [x, y] = [l.x, l.y];
+    const size = [8, 6.8, 6][l.tier], weight = [700, 500, 400][l.tier], ink = l.tier === 2 ? T.muted : T.ink;
+    const t = g.append("text").attr("font-size", size).attr("font-weight", weight).attr("fill", ink)
+      .attr("font-style", l.landmark ? "italic" : null).text(l.name);
+    const w = t.node().getBBox().width;
+    const box = (tx, ty, an) => { const x0 = an === "end" ? tx - w : an === "middle" ? tx - w / 2 : tx; return [x0, ty - size, x0 + w, ty + 2]; };
+    let pick = null;
+    // beside the dot first, then further out at 15-degree steps
+    for (const dist of [3, 8, 13, 19, 26, 34, 44, 56]) {
+      for (let deg = 0; deg < 360 && !pick; deg += dist === 3 ? 90 : 15) {
+        const rad = (deg * Math.PI) / 180, dx = Math.cos(rad), dy = Math.sin(rad);
+        const an = Math.abs(dx) < 0.3 ? "middle" : dx > 0 ? "start" : "end";
+        const tx = x + dist * dx, ty = y + dist * dy + (Math.abs(dx) < 0.3 ? (dy > 0 ? size : 0) : size * 0.35);
+        const b = box(tx, ty, an);
+        // the home town's name may sit on its own dark hexagons (white ink there) rather than far off on a leader
+        // the home name sits either wholly on dark hexagons (white ink) or wholly clear of them (ink) -- never across both
+        const inFrame = b[0] >= 2 && b[1] >= 2 && b[2] <= W - 2 && b[3] <= H - 2
+          && !placed.some((o) => b[0] < o[2] + 1 && b[2] > o[0] - 1 && b[1] < o[3] + 1 && b[3] > o[1] - 1);
+        const ok = l.tier === 0 ? inFrame && (clear(b) || allDark(b)) : clear(b);
+        if (ok) pick = { tx, ty, an, b, dist };
+      }
+      if (pick) break;
+    }
+    if (!pick) { t.remove(); continue; }
+    placed.push(pick.b);
+    t.attr("x", pick.tx).attr("y", pick.ty).attr("text-anchor", pick.an);
+    if (l.tier === 0 && allDark(pick.b)) t.attr("fill", "#ffffff");
+    if (pick.dist > 3) {
+      const lx = Math.max(pick.b[0], Math.min(x, pick.b[2])), ly = Math.max(pick.b[1], Math.min(y, pick.b[3]));
+      g.append("line").attr("x1", x).attr("y1", y).attr("x2", lx).attr("y2", ly).attr("stroke", T.ink).attr("stroke-width", 0.45);
+    }
+    g.append("circle").attr("cx", x).attr("cy", y).attr("r", l.tier === 2 ? 0.9 : 1.2).attr("fill", ink).attr("stroke", T.surface).attr("stroke-width", 0.4);
+  }
+  if (q.get("dump")) {   // the computed figure, for the swipe artifact: frame, shaded and ring hexagons, dots, placed labels
+    const lifted = [...on].filter((id) => liftAt(id) >= 0.10 && (mp.hex_county || {})[id] !== HOME);
+    const out = { frame: frame.type === "MultiPoint" ? frame.coordinates : null, home: HOME, W, H,
+      on: [...on].map((id) => [id, +P.value[id].toFixed(1)]), ring: [...ring],
+      lift: lifted.map((id) => [id, +liftAt(id).toFixed(3)]),
+      labels: [...g.selectAll("text").nodes()].map((t) => ({ text: t.textContent, x: +t.getAttribute("x"), y: +t.getAttribute("y"),
+        anchor: t.getAttribute("text-anchor"), size: +t.getAttribute("font-size"), weight: +t.getAttribute("font-weight"),
+        fill: t.getAttribute("fill"), italic: t.getAttribute("font-style") === "italic" })),
+      leaders: [...g.selectAll("line").nodes()].map((l) => ["x1", "y1", "x2", "y2"].map((a) => +l.getAttribute(a))),
+      dots: [...g.selectAll("circle").nodes()].filter((c) => +c.getAttribute("r") <= 1.3).map((c) => [+c.getAttribute("cx"), +c.getAttribute("cy"), c.getAttribute("fill")]),
+      floor: BASEF, title: document.getElementById("title").textContent, subtitle: document.getElementById("subtitle").textContent };
+    const pre = document.createElement("pre"); pre.id = "dump"; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+  }
+  // ?table=1: THE CIVIC INTEREST AREA AS A DATA TABLE for the datadesk builder (2026-10-22, user: the Advan data is made
+  // here and uploaded as a table; the builder draws the map and computes coverage itself). One row per hexagon in the
+  // drawn area: shaded ones (shown = 1) and the empty ones inside the area's outline (shown = 0). Geometry is the hexagon
+  // id: a 3 km grid, 1.5 km circumradius, x = lon * 111.32 * cos(38.7), y = lat * 110.57 (km), pointy-top axial (q, r).
+  if (q.get("table") && !COVM) {
+    const centreLL = (id) => [+d3.mean(mp.hexes[id].slice(0, 6), (p) => p[0]).toFixed(5), +d3.mean(mp.hexes[id].slice(0, 6), (p) => p[1]).toFixed(5)];
+    const row = (id, shown) => { const [lon, lat] = centreLL(id); const v = +(P.value[id] || 0);
+      const l = shown && SX === "net" && (mp.hex_county || {})[id] !== HOME ? liftAt(id) : 0;
+      return { region: REGION, town: TOWN, area: RANK, residents: P0.residents, share: +(+P0.share).toFixed(3), hex: id,
+        lon, lat, travel: shown ? +v.toFixed(1) : 0, lift: l >= 0.10 ? +l.toFixed(3) : 0, shown: shown ? 1 : 0, home: v >= 100 ? 1 : 0 }; };
+    const rows = [...[...on].map((id) => row(id, true)), ...[...ring].map((id) => row(id, false))];
+    const pre = document.createElement("pre"); pre.id = "table"; pre.textContent = JSON.stringify(rows); document.body.appendChild(pre);
+  }
+  // ?figure=1: THE FIGURE FOR THE DATADESK BUILDER (civicarea / coveragemap kinds, 2026-10-21). Everything already
+  // projected into the W x H frame, so the builder draws it without the travel model and two maps of one area share the
+  // frame exactly (the swipe). Values travel with the hexagons so the builder colours them in its own themes.
+  if (q.get("figure")) {
+    const r1 = (d) => (d || "").replace(/(\d+\.\d)\d+/g, "$1");
+    const centreOf = (id) => { const pts = mp.hexes[id].slice(0, 6).map((p) => proj(p));
+      return [+d3.mean(pts, (p) => p[0]).toFixed(1), +d3.mean(pts, (p) => p[1]).toFixed(1)]; };
+    const inFrame = (f) => { const b = path.bounds(f); return b[1][0] >= 0 && b[0][0] <= W && b[1][1] >= 0 && b[0][1] <= H; };
+    const fig = {
+      figure: 1, measure: COVM ? "coverage" : "area", region: REGION, town: TOWN, rank: RANK,
+      areas_in_town: mp.towns[TOWN].length, W, H,
+      title: document.getElementById("title").textContent, subtitle: document.getElementById("subtitle").textContent,
+      residents: P0.residents, share: P0.share, tv_market: mp.market.name || null,
+      counties: counties.filter(inFrame).map((f) => ({ id: f.id, d: r1(path(f)), home: f.id === HOME })),
+      market: r1(path(mp.market.outline)),
+      ring: [...ring].map((id) => r1(hexPath(id))),
+      hexes: [...on].map((id) => {
+        const h = { id, d: r1(hexPath(id)), c: centreOf(id), v: +(+P.value[id]).toFixed(2) };
+        if (COVM) h.n = (((DIET[TOWN] || {})[RANK] || {})[id]) || 0;
+        else if (SX === "net" && !LIFT && (mp.hex_county || {})[id] !== HOME) { const l = liftAt(id); if (l >= 0.10) h.lift = +l.toFixed(3); }
+        return h; }),
+      labels: [...g.selectAll("text").nodes()].map((t) => ({ text: t.textContent, x: +t.getAttribute("x"), y: +t.getAttribute("y"),
+        anchor: t.getAttribute("text-anchor"), size: +t.getAttribute("font-size"), weight: +t.getAttribute("font-weight") || 400,
+        muted: t.getAttribute("fill") !== T.ink, italic: t.getAttribute("font-style") === "italic" })),
+      leaders: [...g.selectAll("line").nodes()].map((l) => ["x1", "y1", "x2", "y2"].map((k) => +(+l.getAttribute(k)).toFixed(1))),
+      dots: [...g.selectAll("circle").nodes()].filter((c) => +c.getAttribute("r") <= 1.3)
+        .map((c) => [+(+c.getAttribute("cx")).toFixed(1), +(+c.getAttribute("cy")).toFixed(1), c.getAttribute("fill") === T.ink ? "ink" : "muted"]),
+      scale: COVM ? { kind: "log", cap: 9, tiers: { frequent: 9, regular: 2 }, breadth_full: 8 }
+                  : { kind: "bands", floor: FLOOR, cuts: CUTS },
+      shares: COVM ? { frequent: covShare(9, 1e9), regular: covShare(2, 9), sporadic: covShare(0.005, 2), none: covShare(-1, 0.005),
+        balanced: Math.round(100 * Object.values((DIET[TOWN] || {})[RANK] || {}).filter((n) => n >= 8).length / Math.max(1, Object.keys(P.value).length)) } : null,
+      source: (document.querySelector(".dd-footer") || {}).textContent || "",
+    };
+    const pre = document.createElement("pre"); pre.id = "figure"; pre.textContent = JSON.stringify(fig); document.body.appendChild(pre);
+  }
+  document.body.dataset.height = Math.ceil(document.querySelector("figure").getBoundingClientRect().height);
+  document.body.dataset.ready = "1";
+});
+});
+</script>
+</body>
+</html>

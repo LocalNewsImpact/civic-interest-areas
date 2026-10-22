@@ -1,0 +1,294 @@
+<!doctype html>
+
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Columbia-Jefferson City Designated Market Area</title>
+  <link rel="stylesheet" href="/static/css/tokens.1e94ec252665.css">
+  <link rel="stylesheet" href="/static/css/datadesk.eaee6c6d0bbd.css">
+  <style>
+    /* Tokens carry both themes and all three of its states already, so
+       nothing here names a colour that is not one of them. */
+    body { background: var(--bg); color: var(--text); margin: 0;
+           font-family: var(--font-sans); }
+    .wrap { max-width: 56rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem;
+            display: flex; flex-direction: column; gap: 1.5rem; }
+    /* A table is read across: a headline, the outlets it names, who owns
+       them. At a chart's 56rem the headline wrapped to three lines. */
+    .wrap.wide { max-width: 80rem; }
+    /* Inside the data panel, above the tables: its own block rather
+       than loose notes, so what is about the data reads as one thing. */
+    .takeaway { display: flex; flex-direction: column; gap: 0.4rem; }
+    /* A class beats the browser's own `[hidden] { display: none }`, so
+       `display: flex` above made the attribute do nothing and the block
+       sat under the figure -- the footer it was moved out of being. */
+    .takeaway[hidden] { display: none; }
+    /* The snippet is folded away: a reader wants the numbers, and a
+       newsroom that wants to embed this will open one thing to find it. */
+    .embed-offer > summary { cursor: pointer; color: var(--text-2);
+                             font-size: var(--fs-sm); }
+    .embed-offer > summary:hover { color: var(--text); }
+    .embed-pair { display: grid; gap: 1rem; margin-top: .75rem;
+                  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
+    .embed-snippet { background: var(--bg); border: 1px solid var(--border);
+                     border-radius: var(--r-sm); padding: .6rem;
+                     font-size: var(--fs-xs); overflow-x: auto;
+                     white-space: pre-wrap; word-break: break-all; margin: .3rem 0 0; }
+    .figure { background: var(--surface); border: 1px solid var(--border);
+              border-radius: var(--r-lg); padding: 1.5rem;
+              overflow-x: auto; }
+    .note { color: var(--text-2); font-size: var(--fs-sm); margin: 0; }
+    .credit { font-size: var(--fs-sm); }
+    .files-lead { font-size: var(--fs-sm); }
+    .dim { color: var(--text-3); }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  
+  <div class="wrap">
+    <div class="figure">
+
+
+
+
+<figure class="dd-visual">
+  <h2 class="dd-title">Columbia-Jefferson City Designated Market Area</h2>
+  
+  
+  <div class="dd-chart" id="dd-chart-columbia-jefferson-city-designated-marke">Loading…</div>
+  <figcaption class="dd-footer">
+    
+    <span class="dd-source">Source:
+      
+      <a href="https://localnewsimpact.org">Local News Impact Consortium</a>
+      
+      <span class="dd-version" hidden></span>
+    </span>
+    <button type="button" class="dd-toggle" data-target="dd-chart-columbia-jefferson-city-designated-marke">View data</button>
+  </figcaption>
+</figure>
+<script id="dd-config" type="application/json">{"x": "", "y": "", "to": "", "lat": "", "lon": "", "area": "fips", "from": "", "kind": "locator", "size": "", "focus": "", "frame": [], "label": "", "place": "", "theme": "datadesk", "title": "Columbia-Jefferson City Designated Market Area", "value": "", "credit": "", "series": "", "to_geo": "", "from_geo": "", "geo_join": "", "subtitle": "", "taxonomy": "", "geo_value": "", "theme_mode": "", "series_scale": "", "locator_frame": "", "locator_labels": false}</script>
+
+<script defer src="/static/js/d3.min.69faba9d2fff.js"></script>
+<script defer src="/static/js/plot.min.dce7f487647a.js"></script>
+<script defer src="/static/js/topojson-client.min.7561eb0097a8.js"></script>
+
+<script defer src="/static/js/datadesk-chart.353bb2831ae6.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const config = JSON.parse(document.getElementById("dd-config").textContent);
+  const el = document.getElementById("dd-chart-columbia-jefferson-city-designated-marke");
+  const toggle = document.querySelector('.dd-toggle[data-target="' + el.id + '"]');
+  // Where each of these lives when the chart is showing, so both can be
+  // put back after a spell at the top of the data panel. Redrawing the
+  // chart replaces everything inside it, so anything left in there is
+  // destroyed -- which took the download links with it the first time
+  // somebody went back to the chart, and there was no second time.
+  const caption = toggle.parentNode;
+  const takeaway = document.getElementById("dd-takeaway");
+  const takeawayHome = takeaway && takeaway.parentNode;
+  // Wired before the fetch, not inside it. Attached in the `.then` the
+  // button did nothing at all when the feed failed -- no error, no
+  // explanation, a control that looked live and was not.
+  let chart = null;
+  let data = null;
+  let credits = null;
+  let showingTable = false;
+
+  toggle.addEventListener("click", () => {
+    if (data === null) {
+      el.textContent = "No data to show yet.";
+      return;
+    }
+    showingTable = !showingTable;
+    if (showingTable) {
+      // The way back goes with the panel, at the top of it: a control
+      // that leaves the table is not a caption on the figure the table
+      // has replaced.
+      //
+      // The takeaway is whatever this page wants above the tables. The
+      // embed has none -- it is the visual and a way into its numbers,
+      // and nothing else belongs inside somebody else's article.
+      toggle.textContent = "View chart";
+      // Through the mount, so a resize or a theme change while the table
+      // is up does not redraw the chart over it and take the way back.
+      const show = () =>
+        DatadeskChart.renderTable(el, data, credits, takeaway, toggle);
+      if (chart) chart.table(show); else show();
+    } else if (chart) {
+      // Back to the caption before the redraw, or `replaceChildren`
+      // takes the button with the table and there is no way in again.
+      toggle.textContent = "View data";
+      caption.appendChild(toggle);
+      if (takeaway) {
+        takeaway.hidden = true;
+        takeawayHome.appendChild(takeaway);
+      }
+      chart.redraw();
+    }
+  });
+
+  function draw(payload) {
+    data = payload.data;
+    const stamp = el.closest("figure").querySelector(".dd-version");
+    if (stamp && payload.version) {
+      // 08/25/2026 -- the form the request asked for, built from the
+      // date parts rather than through a locale, which would render it
+      // the other way round for half the world's readers.
+      const [y, m, d] = String(payload.taken || "").split("-");
+      stamp.textContent =
+        "v" + payload.version + (y ? " " + m + "/" + d + "/" + y : "");
+      stamp.hidden = false;
+    }
+    // Travels with the rows, so the embed on somebody else's page can
+    // say whose data it is without a page of ours to say it on.
+    credits = payload.attribution;
+    chart = DatadeskChart.mount(el, config, data, {
+      // A base for the per-state files, whose names come from the data.
+      geoBase: "/static/geo/",
+      // ...and resolved, hashed URLs for the fixed levels.
+      geoUrls: {
+        nation: "/static/geo/nation-10m.66524ae18760.json",
+        states: "/static/geo/states-10m.76b547057327.json",
+        counties: "/static/geo/counties-10m.25fc7999aa36.json",
+      },
+    });
+  }
+
+  // The stamp names the question this preview asks -- the spec, the
+  // datasets the asker may read, and the version of the corpus. Between
+  // panels the question does not change, so neither does its answer:
+  // walking Chart → Look → Data → Newsrooms asked the corpus the same
+  // question four times, and the four ran together inside one container
+  // until each was waiting on the other three. One of them took 128
+  // seconds.
+  //
+  // What the answer is held in is this tab, for this author, until the
+  // tab closes. It cannot go stale: change a step and the stamp changes
+  // with it, and an answer under the old name is never read again. A
+  // visual's output is still cached by publishing it, and this is not
+  // that -- nothing here is served to a reader.
+  const stamp = "";
+  const held = "datadesk.preview.columbia\u002Djefferson\u002Dcity\u002Ddesignated\u002Dmarke";
+
+  function answered() {
+    if (!stamp) return null;
+    try {
+      const raw = sessionStorage.getItem(held);
+      if (!raw) return null;
+      const entry = JSON.parse(raw);
+      return entry && entry.stamp === stamp ? entry.payload : null;
+    } catch (e) {
+      return null;  // private window, or something else's key
+    }
+  }
+
+  function keep(payload) {
+    if (!stamp) return;
+    try {
+      sessionStorage.setItem(held, JSON.stringify({stamp: stamp, payload: payload}));
+    } catch (e) {
+      // Full, or storage refused. The next panel asks again, which is
+      // what every panel did before this.
+    }
+  }
+
+  const already = answered();
+  
+  if (already) {
+    draw(already);
+  } else {
+    
+    
+    
+    
+    // A 202 means another request is computing this answer; ask again
+    // in a few seconds rather than holding a server thread for it.
+    const load = (attempt) => fetch("/visuals/3a9e6a8e\u002De7ad\u002D4e4e\u002D8633\u002D2815b100a668/data.json?v\u003D1")
+      .then((r) => {
+        if (r.status === 202 && attempt < 120) {
+          el.textContent = "Computing\u2026";
+          return r.json().catch(() => ({})).then((body) =>
+            new Promise((resolve) => setTimeout(resolve, ((body.retry_after || 3) * 1000)))
+              .then(() => load(attempt + 1)));
+        }
+        // The server says what is wrong in the body; the status alone is
+        // "502 from the feed", which sent somebody to read Cloud Run logs
+        // to discover the pivot had been refusing ten columns and saying
+        // so the whole time.
+        if (!r.ok) {
+          return r
+            .json()
+            .catch(() => ({}))
+            .then((body) => {
+              throw new Error(body.error || r.status + " from the feed");
+            });
+        }
+        return r.json();
+      });
+    load(0)
+      .then((payload) => {
+        keep(payload);
+        draw(payload);
+      })
+      .catch((err) => {
+        // What went wrong, not that something did: a reader who cannot see
+        // the reason cannot tell a missing snapshot from a broken query.
+        el.textContent = "The data could not be loaded — " + err.message + ".";
+      });
+  }
+  
+});
+</script>
+</div>
+
+    
+    <div id="dd-takeaway" class="takeaway" hidden>
+      
+      
+      
+      <p class="note files-lead">Take the data — snapshot v1:</p>
+      <div class="dd-export">
+        
+        <a class="dd-download" href="/visuals/3a9e6a8e-e7ad-4e4e-8633-2815b100a668/data.json?v=1"
+           download="columbia-jefferson-city-designated-marke-v1.json"
+           role="button">JSON</a>
+        
+        <a class="dd-download" href="/visuals/3a9e6a8e-e7ad-4e4e-8633-2815b100a668/data.csv?v=1"
+           download="columbia-jefferson-city-designated-marke-v1.csv"
+           role="button">CSV</a>
+        
+        <span class="dd-export-note">14 September 2026</span>
+      </div>
+      
+
+      
+      
+      <details class="embed-offer">
+        <summary>Embed this visual</summary>
+        <div class="embed-pair">
+          <div>
+            <p class="note"><strong>Follows what is published.</strong>
+              Republish this visual and the chart in the article changes
+              with it.</p>
+            <pre class="embed-snippet"><code>&lt;div class=&quot;datadesk-visual&quot; data-visual=&quot;3a9e6a8e-e7ad-4e4e-8633-2815b100a668&quot;&gt;&lt;a href=&quot;https://data.localnewsimpact.org/visuals/3a9e6a8e-e7ad-4e4e-8633-2815b100a668/&quot;&gt;Columbia-Jefferson City Designated Market Area&lt;/a&gt;&lt;/div&gt;
+&lt;script src=&quot;https://data.localnewsimpact.org/static/js/datadesk-embed.js&quot; async&gt;&lt;/script&gt;</code></pre>
+          </div>
+          <div>
+            <p class="note"><strong>Fixed to v1.</strong>
+              Stays these exact numbers, whatever is published later.</p>
+            <pre class="embed-snippet"><code>&lt;div class=&quot;datadesk-visual&quot; data-visual=&quot;3a9e6a8e-e7ad-4e4e-8633-2815b100a668&quot; data-version=&quot;1&quot;&gt;&lt;a href=&quot;https://data.localnewsimpact.org/visuals/3a9e6a8e-e7ad-4e4e-8633-2815b100a668/?v=1&quot;&gt;Columbia-Jefferson City Designated Market Area&lt;/a&gt;&lt;/div&gt;
+&lt;script src=&quot;https://data.localnewsimpact.org/static/js/datadesk-embed.js&quot; async&gt;&lt;/script&gt;</code></pre>
+          </div>
+        </div>
+      </details>
+      
+
+      
+    </div>
+  </div>
+</body>
+</html>

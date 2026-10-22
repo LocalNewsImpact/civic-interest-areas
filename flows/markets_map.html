@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Revealed media markets</title>
+<link rel="stylesheet" href="https://data.localnewsimpact.org/static/css/tokens.1e94ec252665.css">
+<link rel="stylesheet" href="https://data.localnewsimpact.org/static/css/datadesk.eaee6c6d0bbd.css">
+<style>
+  body { margin: 0; background: var(--bg, #f4f5f7); }
+  .wrap { max-width: 76rem; margin: 24px auto; padding: 0 16px; }
+  .figure { background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px 18px; }
+  svg { display: block; }
+  svg text { font-family: inherit; }
+</style>
+</head>
+<body>
+<div class="wrap"><div class="figure">
+<figure class="dd-visual">
+  <h2 class="dd-title">Revealed media markets in mid-Missouri</h2>
+  <p class="dd-subtitle">A <i>revealed</i> media market is drawn from where people live and travel.
+    The pie represents the county's residents, the annotated slices are the neighbouring counties they travel to in a month.
+    The grey slice reflects &lsquo;other&rsquo; counties not in this study.</p>
+  <div id="map"></div>
+  <figcaption class="dd-footer">
+    <span class="dd-source">Mobility: GeoDS Lab county-to-county flows built on SafeGraph phone data, daily files for March
+      2021 (Kang et al., <i>Scientific Data</i>, 2020). Commuting: U.S. Census Bureau LODES 8, 2023. Boundaries: Nielsen
+      designated market area; U.S. Office of Management and Budget delineations of 21 July 2023.</span>
+  </figcaption>
+</figure>
+</div></div>
+<script src="d3.min.js"></script>
+<script src="topojson-client.min.js"></script>
+<script>
+const W = 1180, H = 700;
+const C = {
+  land: "#f6f6f5", msa: "#edf0f1", line: "#ffffff", dma: "#6f7681", cbsa: "#8a9199",
+  stay: "#71dbdc", go: "#3880a1", rest: "#9aa6ae", ring: "#2b6a86", ink: "#0b0b0b", mute: "#5a616b",
+};
+const DMA = ["29007","29019","29027","29041","29051","29053","29089","29125","29131","29135","29139","29141","29151","29175"];
+// Only the statistical areas that contain one of the three study counties: Columbia's metro holds Boone,
+// Jefferson City's holds Osage, and Audrain is a micropolitan area -- a "mini-MSA", a core urban cluster of
+// 10,000 to 50,000 delineated on the same footing as an MSA -- in its own right. Moberly's micro, which
+// holds none of the three, was another dotted line to decode for nothing.
+const MSA = {
+  "Columbia": ["29019", "29053", "29089"],
+  "Jefferson City": ["29051", "29027", "29135", "29151"],
+};
+// Audrain is the Mexico micropolitan area, but that boundary is Audrain's own county line; drawing it
+// again only doubled a line the reader has already followed. It is named in the credit, not on the map.
+const USA = {};
+// Circles sit on county seats rather than geometric centroids: the newsroom and the population are both there.
+const SEAT = {
+  Mexico: { lon: -91.8832, lat: 39.1695 },
+  Columbia: { lon: -92.3341, lat: 38.9517 },
+  "Jefferson City": { lon: -92.1735, lat: 38.5767 },
+  Linn: { lon: -91.8515, lat: 38.4864 },
+};
+// home county, its seat, its population, the neighbour most of its travel goes to, and the residents present
+// there on an average day in March 2021. `at` places the block of type in longitude and latitude, over open
+// ground; left to a rule the three blocks landed on each other and on the circles.
+// For each county: where its residents are recorded. `to` lists the destinations drawn as their own slice --
+// the largest one always, plus any other at 3% or more -- with the share of all that county's recorded
+// presence that falls there. `other` is every remaining county, which with the home share makes 100%.
+// The shares come from GeoDS visitor counts within one origin, where the panel cancels; the dataset's
+// population-scaled field is not used, because on a single day it does not return a count of residents.
+// ONE measure throughout, the crossover floor used in the table and the paper: the greater of residents
+// employed in a county and the busiest single-day crossing rate into it. `pct` is that floor for the one
+// county the annotation names; `other` is the same floor for every county outside the study group.
+const COUNTIES = [
+  { name: "Audrain", seat: "Mexico", pop: 24548, other: 11.2, crossover: 18,
+    to: [{ county: "Boone", fips: "29019", pct: 18.3 }],
+    atPx: [-30, -122], anchor: "start",
+    namePrefs: ["left", "nw", "sw", "above", "below", "se", "ne", "right"] },
+  { name: "Boone", seat: "Columbia", pop: 188043, other: 7.8, crossover: 3,
+    to: [{ county: "Cole", fips: "29051", pct: 3.2 }],
+    at: [-93.14, 38.86], anchor: "end",
+    namePrefs: ["above", "nw", "left", "below", "ne", "se", "right", "sw"] },
+  { name: "Osage", seat: "Linn", pop: 13402, other: 13.5, crossover: 48,
+    to: [{ county: "Cole", fips: "29051", pct: 48.3 }],
+    at: [-91.40, 38.19], anchor: "start",
+    namePrefs: ["below", "se", "ne", "above", "right", "nw", "left", "sw"] },
+];
+// Every county's circle is the same size on the ground: the figure compares each county with itself, not
+// with its neighbours, so a common population scale would only bury Audrain and Osage under Boone. The
+// radius is capped by the tightest seat: Mexico sits 12.0 km from the Callaway line, Linn 13.8 from Osage's
+// and Columbia 14.1 from Boone's, so 10.5 keeps every pie clear of its own county's border.
+const R_KM = 10.5;
+// bottom left, where the key has always sat. Any county name it would cover is moved out of its way.
+const KEY_AT = [40, 494];
+
+const PROBE = [], LABELBOX = [], LEADERSEG = [], SLICEPOLY = [];
+const Q = new URLSearchParams(location.search);
+const BARE = Q.get("bare") === "1";          // the map with no map-labels, for measuring what ground is free
+// the key's plate, sized to its own longest line: measured once, before anything is placed against it
+const KEY_LINES = [[14, "County residents"], [14, "Revealed crossover interest"],
+  [14, "Other counties"],
+  [14, "Columbia\u2013Jefferson City television market"], [14, "Metropolitan statistical area"],
+  [12.5, "Columbia: Boone, Cooper, Howard"], [12.5, "Jefferson City: Cole, Callaway, Moniteau, Osage"]];
+let KEY_W = 0, KEY_H = 183;
+d3.json("counties-10m.json").then((topo) => {
+  {
+    const m = d3.select("body").append("svg").attr("width", 0).attr("height", 0);
+    for (const [size, t] of KEY_LINES)
+      KEY_W = Math.max(KEY_W, 40 + m.append("text").attr("font-size", size).text(t)
+        .node().getComputedTextLength());
+    m.remove();
+    KEY_W = Math.ceil(KEY_W) + 18;
+  }
+  const mo = topojson.feature(topo, topo.objects.counties).features.filter((f) => String(f.id).startsWith("29"));
+  const byId = new Map(mo.map((f) => [String(f.id), f]));
+  const inDma = new Set(DMA);
+  const cbsaOf = new Set([...Object.values(MSA).flat(), ...Object.values(USA).flat()]);
+
+  const svg = d3.select("#map").append("svg").attr("width", W).attr("height", H).attr("viewBox", [0, 0, W, H]);
+  const frame = { type: "FeatureCollection", features: DMA.map((f) => byId.get(f)) };
+  const proj = d3.geoConicEqualArea().parallels([36.5, 40.5]).rotate([92.4, 0])
+    .fitExtent([[150, 26], [W - 150, H - 26]], frame);
+  const path = d3.geoPath(proj);
+  // kilometres to pixels, measured off the projection rather than assumed
+  const PX_PER_KM = (() => {
+    const a = proj([-92.2, 38.8]), b = proj([-92.2, 38.8 + 1 / 111]);
+    return Math.hypot(b[0] - a[0], b[1] - a[1]);
+  })();
+  const merge = (list) => topojson.merge(topo, topo.objects.counties.geometries.filter((g) => list.includes(String(g.id))));
+
+  svg.append("g").selectAll("path").data(mo).join("path").attr("d", path)
+    .attr("fill", (f) => cbsaOf.has(String(f.id)) ? C.msa : C.land)
+    .attr("stroke", C.line).attr("stroke-width", 1.1);
+  // One dash for every statistical area, and every boundary drawn ONCE. Outlining each area separately
+  // inked Boone's southern county line twice -- it is both the Columbia metro's south edge and the
+  // Jefferson City metro's north edge, since Boone abuts Moniteau, Cole and Callaway -- and two dash
+  // patterns out of phase fill in to what reads as a solid rule. A mesh over the counties' area membership
+  // draws each shared edge a single time.
+  const areaOf = new Map();
+  for (const [name, list] of [...Object.entries(MSA), ...Object.entries(USA)])
+    for (const f of list) areaOf.set(f, name);
+  svg.append("path").attr("fill", "none").attr("stroke", C.cbsa).attr("stroke-width", 1.9)
+    .attr("stroke-dasharray", "8,4")
+    .attr("d", path(topojson.mesh(topo, topo.objects.counties, (a, b) => {
+      const x = areaOf.get(String(a.id)) || null, y = areaOf.get(String(b.id)) || null;
+      return x !== y && (x !== null || y !== null);
+    })));
+  const dmaPath = svg.append("path").attr("d", path(merge(DMA))).attr("fill", "none")
+    .attr("stroke", C.dma).attr("stroke-width", 2.4);
+
+  // county names, small and grey, so the circles sit on a readable base. The three counties that carry a
+  // circle are named beside their pie instead, or the pie prints over the name.
+  const circled = new Set(["29007", "29019", "29151"]);
+  const names = svg.append("g");
+  // A name whose centroid falls under the key is walked around inside its own county until it is clear.
+  // The key is drawn last but its footprint has to be known first, so the plate is measured here.
+  const over = (bx, by, bw, bh) =>
+    !(KEY_AT[0] - 10 + KEY_W < bx || bx + bw < KEY_AT[0] - 10
+      || KEY_AT[1] - 22 + KEY_H < by || by + bh < KEY_AT[1] - 22);
+  const RING = [[0, 0], [0, -1], [0, 1], [1, 0], [-1, 0], [0.7, -0.7], [-0.7, -0.7], [0.7, 0.7], [-0.7, 0.7]];
+  const moves = [];
+  for (const f of mo.filter((x) => inDma.has(String(x.id)) && !circled.has(String(x.id)))) {
+    const c0 = path.centroid(f);
+    const t = names.append("text").attr("text-anchor", "middle").attr("font-size", 13)
+      .attr("fill", C.mute).text(f.properties.name);
+    const tw = t.node().getComputedTextLength();
+    let x = c0[0], y = c0[1];
+    if (over(x - tw / 2, y - 12, tw, 16))
+      outer: for (const step of [34, 48, 62, 76, 90, 104, 118]) {
+        for (const [dx, dy] of RING.slice(1)) {
+          const nx = c0[0] + dx * step, ny = c0[1] + dy * step;
+          if (over(nx - tw / 2, ny - 12, tw, 16)) continue;
+          if (!d3.geoContains(f, proj.invert([nx - tw / 2, ny]))) continue;
+          if (!d3.geoContains(f, proj.invert([nx + tw / 2, ny]))) continue;
+          x = nx; y = ny; moves.push([f.properties.name, Math.round(step)]); break outer;
+        }
+      }
+    t.attr("x", x).attr("y", y);
+    // padded 4px all round: a box drawn tight to the glyphs let Boone's leader graze the top of "Cooper"
+    LABELBOX.push([f.properties.name, x - tw / 2 - 4, y - 16, tw + 8, 24]);
+  }
+  PROBE.push({ nameMoves: moves });
+
+
+  svg.append("defs").html(
+    '<filter id="lift" x="-30%" y="-30%" width="160%" height="160%">'
+    + '<feDropShadow dx="0" dy="2.5" stdDeviation="3.5" flood-color="#0b1a24" flood-opacity="0.3"/></filter>');
+  const g = svg.append("g");
+  const FIPS = { Audrain: "29007", Boone: "29019", Osage: "29151" };
+  // the nearest point on a county's own boundary to a given point, in projected pixels
+  const nearestEdge = (fips, o) => {
+    const f = byId.get(fips);
+    let best = null, bd = Infinity;
+    for (const poly of (f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates))
+      for (const ring of poly)
+        for (let i = 1; i < ring.length; i++) {
+          const A = proj(ring[i - 1]), B = proj(ring[i]);
+          const vx = B[0] - A[0], vy = B[1] - A[1], L2 = vx * vx + vy * vy;
+          const t = L2 ? Math.max(0, Math.min(1, ((o[0] - A[0]) * vx + (o[1] - A[1]) * vy) / L2)) : 0;
+          const q = [A[0] + t * vx, A[1] + t * vy], dd = Math.hypot(o[0] - q[0], o[1] - q[1]);
+          if (dd < bd) { bd = dd; best = q; }
+        }
+    return { q: best, d: bd };
+  };
+  // Every pie's anchor is resolved first, in a pass of its own, so that when a label is placed it can be
+  // tested against all three pies and not only the ones already drawn.
+  const ANCHOR = new Map();
+  for (const c of COUNTIES) {
+    const seat = proj([SEAT[c.seat].lon, SEAT[c.seat].lat]);
+    const o = [seat[0], seat[1]];
+    const WANT0 = (R_KM + 5) * PX_PER_KM;
+    for (let i = 0; i < 8; i++) {
+      const n = nearestEdge(FIPS[c.name], o);
+      if (n.d >= WANT0) break;
+      const k = (WANT0 - n.d) / n.d;
+      o[0] += (o[0] - n.q[0]) * k; o[1] += (o[1] - n.q[1]) * k;
+    }
+    ANCHOR.set(c.name, o);
+    PROBE.push({ moved: c.name, km: +(Math.hypot(o[0] - seat[0], o[1] - seat[1]) / PX_PER_KM).toFixed(1),
+                 clear: +(nearestEdge(FIPS[c.name], o).d / PX_PER_KM).toFixed(1) });
+  }
+
+  for (const c of COUNTIES) {
+    const o = ANCHOR.get(c.name);
+    // The destination slices sit TOGETHER, in bearing order, on the side of the pie that faces them, and
+    // the whole group is pulled out as one piece. Centring each slice on its own bearing put Audrain's
+    // Callaway slice away from its Boone slice with a wedge of home between them, and throwing each one
+    // its own distance broke every pie into loose fragments. "Everywhere else" follows the group; the
+    // home share is the rest, and the three sum to 360.
+    const r = R_KM * PX_PER_KM;
+    const TAU = 2 * Math.PI, norm = (x) => ((x % TAU) + TAU) % TAU;
+    const bear = (fips) => {
+      const t = path.centroid(byId.get(fips));
+      return Math.atan2(t[1] - o[1], t[0] - o[0]);
+    };
+    const named = c.to.map((t) => ({ ...t, a: bear(t.fips), th: TAU * t.pct / 100 }))
+      .sort((p1, p2) => p1.a - p2.a);
+    const awayTh = named.reduce((t, n) => t + n.th, 0);
+    // the group's axis: the bearings of its destinations, weighted by share
+    const mean = Math.atan2(named.reduce((t, n) => t + n.pct * Math.sin(n.a), 0),
+                            named.reduce((t, n) => t + n.pct * Math.cos(n.a), 0));
+    const wedge = (cx2, cy2, a0, a1) => {
+      const big = norm(a1 - a0) > Math.PI ? 1 : 0;
+      return `M${cx2},${cy2}L${cx2 + r * Math.cos(a0)},${cy2 + r * Math.sin(a0)}`
+        + `A${r},${r} 0 ${big} 1 ${cx2 + r * Math.cos(a1)},${cy2 + r * Math.sin(a1)}Z`;
+    };
+    const otherTh = TAU * c.other / 100;
+    const awayStart = mean - awayTh / 2;
+    // The grey slice goes on whichever side of the crossover slice faces AWAY from the annotation, so the
+    // leader never has to cross it: on Audrain's far side it sat between the slice and the block above.
+    if (c.atPx) c.at = proj.invert([o[0] + c.atPx[0], o[1] + c.atPx[1]]);
+    const B0 = proj(c.at), aB0 = Math.atan2(B0[1] - o[1], B0[0] - o[0]);
+    const angDist = (a, b) => { let d = Math.abs(norm(a) - norm(b)); return Math.min(d, TAU - d); };
+    const greyAfter = angDist(awayStart + awayTh + otherTh / 2, aB0) >= angDist(awayStart - otherTh / 2, aB0);
+    const greyFrom = greyAfter ? awayStart + awayTh : awayStart - otherTh, greyTo = greyFrom + otherTh;
+    const homeFrom = greyAfter ? greyTo : awayStart + awayTh;
+    const homeTo = greyAfter ? awayStart + TAU : greyFrom + TAU;
+    const sample = (cx2, cy2, a0, a1) => {
+      const pts = [[cx2, cy2]];
+      for (let i = 0; i <= 16; i++) { const a = a0 + (a1 - a0) * i / 16; pts.push([cx2 + r * Math.cos(a), cy2 + r * Math.sin(a)]); }
+      return pts;
+    };
+    // The residents who stay are not filled: the county's own tint shows through, and the outline alone
+    // says "this is the pie". Only the slices that leave carry colour, and both are pulled out.
+    g.append("path").attr("d", wedge(o[0], o[1], homeFrom, homeTo))
+      .attr("fill", "none").attr("stroke", C.ring).attr("stroke-width", 1.6);
+    {
+      const mid = (greyFrom + greyTo) / 2, eo = r * 0.32;
+      const ox = o[0] + Math.cos(mid) * eo, oy = o[1] + Math.sin(mid) * eo;
+      g.append("path").attr("d", wedge(ox, oy, greyFrom, greyTo)).attr("filter", "url(#lift)")
+        .attr("fill", C.rest).attr("fill-opacity", 0.6).attr("stroke", C.ring).attr("stroke-width", 1.6);
+      SLICEPOLY.push(sample(ox, oy, greyFrom, greyTo));
+    }
+    // The group is pulled out half a radius: at a sixth of one it sat on the rim and read as part of the
+    // pie. Inside the group each slice keeps its own share of the angle, and a hairline gap is taken out
+    // of the joins only, so Audrain's Callaway sliver reads as its own piece beside the Boone slice
+    // instead of a darker stripe on top of it.
+    // How far the group must travel to LOOK pulled out depends on how wide it is: the visible gap along
+    // its edges is the throw times sin(half-angle). A wide slice shows that gap at half a radius; Boone's
+    // 6-degree sliver thrown the same half radius moved sideways by almost nothing and still sat inside
+    // the rim. The throw is set so every edge shows the same gap, never under half a radius, and capped
+    // where a thin slice would otherwise fly off on its own.
+    const half = awayTh / 2;
+    const ex = r * Math.min(1.15, Math.max(0.5, 0.22 / Math.sin(half)));
+    const ux = Math.cos(mean), uy = Math.sin(mean);
+    const gx = o[0] + ux * ex, gy = o[1] + uy * ex;
+    const JOIN = 0.035;                       // radians shaved from each side of an internal join
+    let at2 = awayStart;
+    named.forEach((n, i) => {
+      const a0 = at2 + (i > 0 ? JOIN : 0), a1 = at2 + n.th - (i < named.length - 1 ? JOIN : 0);
+      g.append("path").attr("d", wedge(gx, gy, a0, a1)).attr("filter", "url(#lift)")
+        .attr("fill", C.go).attr("fill-opacity", 0.62).attr("stroke", C.ring).attr("stroke-width", 1.6);
+      SLICEPOLY.push(sample(gx, gy, a0, a1));
+      at2 += n.th;
+    });
+    PROBE.push({ obj: c.name, cx: Math.round(o[0]), cy: Math.round(o[1]), r: Math.round(r) });
+
+    // the block of type, on a leader that leaves the cohort circle on the side facing it
+
+    // The leader leaves the pulled-out slice at its own mid-angle, so it always starts on the slice. Where
+    // it would run through a county's name, the block is walked up or down its own meridian until the line
+    // is clear: Boone's ran straight through "Cooper".
+    const sx = c.anchor === "start" ? -8 : 8;
+
+    // The leader starts ON THE SLICE it describes -- the middle of the pulled-out group's outer arc. Where
+    // a straight line from there to the block would cut across the pie, it bends once at a point just off
+    // the pie's edge, stepped round from the slice's side toward the block's until neither leg crosses.
+    // The leader ends on the part of the slice nearest its block, a few pixels inside the edge, so it
+    // arrives straight from the annotation. Fixed at the arc's far midpoint, Osage's leader had to climb
+    // round the slice's left side to reach a block that sits below and to the right of it.
+    let S = (() => {
+      const Bt = [B0[0] + (c.anchor === "start" ? -8 : 8), B0[1] - 6];
+      const edge = [[gx, gy]];
+      for (let i = 0; i <= 40; i++) {
+        const a = awayStart + awayTh * i / 40; edge.push([gx + r * Math.cos(a), gy + r * Math.sin(a)]);
+      }
+      edge.push([gx, gy]);
+      let best = null, bd = Infinity;
+      for (let i = 1; i < edge.length; i++) {
+        const A = edge[i - 1], Q = edge[i], vx = Q[0] - A[0], vy = Q[1] - A[1], L2 = vx * vx + vy * vy || 1;
+        const t = Math.max(0, Math.min(1, ((Bt[0] - A[0]) * vx + (Bt[1] - A[1]) * vy) / L2));
+        const P = [A[0] + t * vx, A[1] + t * vy], d = Math.hypot(Bt[0] - P[0], Bt[1] - P[1]);
+        if (d < bd) { bd = d; best = P; }
+      }
+      // pulled 6px toward the slice's centre of area, so the line visibly enters it
+      const mid = awayStart + awayTh / 2, cr = r * 0.55;
+      const cxs = gx + cr * Math.cos(mid), cys = gy + cr * Math.sin(mid);
+      const L = Math.hypot(cxs - best[0], cys - best[1]) || 1;
+      return [best[0] + (cxs - best[0]) / L * 6, best[1] + (cys - best[1]) / L * 6];
+    })();
+    const CLEAR = r + 5;
+    const crossesPie = (P, Q) => {
+      const vx = Q[0] - P[0], vy = Q[1] - P[1], L2 = vx * vx + vy * vy;
+      const t = Math.max(0, Math.min(1, ((o[0] - P[0]) * vx + (o[1] - P[1]) * vy) / L2));
+      return Math.hypot(o[0] - (P[0] + t * vx), o[1] - (P[1] + t * vy)) < CLEAR;
+    };
+    const segHitsLabel = (P, Q) => LABELBOX.some(([, lx, ly, lw, lh]) => {
+      // the segment clipped against the box, Liang-Barsky
+      let t0 = 0, t1 = 1; const dx = Q[0] - P[0], dy = Q[1] - P[1];
+      for (const [pp, qq] of [[-dx, P[0] - lx], [dx, lx + lw - P[0]], [-dy, P[1] - ly], [dy, ly + lh - P[1]]]) {
+        if (pp === 0) { if (qq < 0) return false; continue; }
+        const rr = qq / pp;
+        if (pp < 0) { if (rr > t1) return false; if (rr > t0) t0 = rr; }
+        else { if (rr < t0) return false; if (rr < t1) t1 = rr; }
+      }
+      return true;
+    });
+    const route = (B) => {
+      const clean = (P, Q) => !crossesPie(P, Q) && !segHitsLabel(P, Q);
+      if (clean(S, B)) return [S, B];
+      const aS = Math.atan2(S[1] - o[1], S[0] - o[0]), aB = Math.atan2(B[1] - o[1], B[0] - o[0]);
+      let dA = aB - aS; while (dA > Math.PI) dA -= TAU; while (dA < -Math.PI) dA += TAU;
+      // the short way round first, then the long way: Audrain's short way ran through its own name
+      for (const span of [dA, dA > 0 ? dA - TAU : dA + TAU]) {
+        for (let k = 1; k <= 24; k++) {
+          const a = aS + span * k / 24, W = [o[0] + (r + 16) * Math.cos(a), o[1] + (r + 16) * Math.sin(a)];
+          if (clean(S, W) && clean(W, B)) return [S, W, B];
+        }
+        // one bend cannot get round more than half the pie: hug it, a waypoint every 40 degrees
+        const n = Math.max(2, Math.ceil(Math.abs(span) / (TAU / 9))), pts = [S];
+        for (let i = 1; i <= n; i++) {
+          const a = aS + span * i / n;
+          pts.push([o[0] + (r + 16) * Math.cos(a), o[1] + (r + 16) * Math.sin(a)]);
+        }
+        pts.push(B);
+        if (pts.every((q, i) => i === 0 || clean(pts[i - 1], q))) return pts;
+      }
+      return [S, B];
+    };
+    const hits = (p2) => {
+      const pts = route([p2[0] + sx, p2[1] - 6]);
+      for (let i = 1; i < pts.length; i++) if (segHitsLabel(pts[i - 1], pts[i])) return true;
+      return false;
+    };
+    // Two places the leader can end: the point of the slice nearest the block, or the slice's tip. Take
+    // whichever gives the straighter line -- the nearest point is right for Osage, but for Boone it sits
+    // up against the pie and the line has to zigzag round to reach it.
+    {
+      const Bt = [B0[0] + sx, B0[1] - 6], near = S, tip = [gx + ux * r * 0.92, gy + uy * r * 0.92];
+      S = near; const nNear = route(Bt).length;
+      S = tip;  const nTip = route(Bt).length;
+      S = nTip < nNear ? tip : near;
+    }
+    let at = c.at;
+    if (!c.atPx && hits(proj(at)))
+      for (let d = 0.02; d <= 0.60; d += 0.02) {
+        if (!hits(proj([at[0], c.at[1] + d]))) { at = [at[0], c.at[1] + d]; break; }
+        if (!hits(proj([at[0], c.at[1] - d]))) { at = [at[0], c.at[1] - d]; break; }
+      }
+    const [bx2, by2] = proj(at);
+    const pts = route([bx2 + sx, by2 - 6]);
+    g.append("path").attr("d", "M" + pts.map((q) => q.join(",")).join("L"))
+      .attr("fill", "none").attr("stroke", C.ink).attr("stroke-width", 1.4).attr("stroke-linejoin", "round");
+    for (let i = 1; i < pts.length; i++) LEADERSEG.push([pts[i - 1], pts[i]]);
+    PROBE.push({ route: c.name, bends: pts.length - 2 });
+    PROBE.push({ leader: c.name, movedLat: +(at[1] - c.at[1]).toFixed(2) });
+    const bx = bx2, by = by2;
+    const blk = g.append("text").attr("x", bx).attr("y", by).attr("text-anchor", c.anchor)
+      .attr("font-size", 15).attr("fill", C.ink);
+    // The slice carries the share of recorded stops; it does not need saying in words too, and saying it
+    // produced a sentence nobody could parse. The block carries the number about people instead.
+    const first = c.to[0];
+    blk.append("tspan").attr("font-size", 24).attr("font-weight", 700).text(c.crossover + "%");
+    blk.append("tspan").attr("font-size", 15).attr("font-weight", 400)
+      .text("  of " + c.name + " residents");
+    blk.append("tspan").attr("x", bx).attr("dy", 22)
+      .text("travel to " + first.county + " County");
+    blk.append("tspan").attr("x", bx).attr("dy", 18).text("at least monthly.");
+
+    // the county's name is set off its own circle on the side that keeps it inside its own county: above
+    // Boone, below Osage (whose seat is in the county's north) and beside Audrain, whose north edge carries
+    // the market boundary. Placed by longitude instead, all three drifted onto a neighbour.
+    // Where each name goes is measured, not judged. The offline probe renders the map with no names and
+    // ranks eight positions by the dark ink -- county lines, dashed boundaries, the slice -- falling under
+    // each; that ranking is `namePrefs`. The page then takes the first of them whose WHOLE BOX, not just
+    // its anchor, sits inside the county it names: testing the anchor alone put "Audrain" over the line
+    // into Montgomery.
+    const rings = [];
+    const own = byId.get(FIPS[c.name]);
+    for (const poly of (own.geometry.type === "Polygon" ? [own.geometry.coordinates] : own.geometry.coordinates))
+      rings.push(poly[0].map((q) => proj(q)));
+    const inside = (x, y) => rings.some((R) => {
+      let w = false;
+      for (let i = 0, j = R.length - 1; i < R.length; j = i++)
+        if ((R[i][1] > y) !== (R[j][1] > y)
+            && x < (R[j][0] - R[i][0]) * (y - R[i][1]) / (R[j][1] - R[i][1]) + R[i][0]) w = !w;
+      return w;
+    });
+    {   // room for a name due west of the pie, inside its own county: walk west from the rim until outside
+      let w = 0; while (w < 200 && inside(o[0] - r - w, o[1])) w += 1;
+      PROBE.push({ westRoom: c.name, px: w });
+    }
+    const probe = g.append("text").attr("font-size", 13).text(c.name);
+    const tw = probe.node().getComputedTextLength(), th = 13;
+    probe.remove();
+    const D = 0.707 * (r + 14);
+    const SPOT = {
+      above: [0, -r - 13, "middle"], below: [0, r + 24, "middle"],
+      right: [r + 13, 5, "start"], left: [-r - 13, 5, "end"],
+      nw: [-D, -D + 5, "end"], ne: [D, -D + 5, "start"],
+      sw: [-D, D + 5, "end"], se: [D, D + 5, "start"],
+    };
+    const fits = (k) => {
+      const [dx, dy, anc] = SPOT[k];
+      const x = o[0] + dx, y = o[1] + dy;
+      const x0 = anc === "middle" ? x - tw / 2 : anc === "start" ? x : x - tw;
+      for (const [px2, py2] of [[x0, y - th], [x0 + tw, y - th], [x0, y + 3], [x0 + tw, y + 3]])
+        if (!inside(px2, py2)) return false;
+      const ndx = dx / Math.hypot(dx, dy), ndy = dy / Math.hypot(dx, dy);
+      if (ndx * ux + ndy * uy > 0.5) return false;          // never thrown the way the slice goes
+      // and never where a leader line runs: Osage's name sat across its own leader
+      const bx0 = x0 - 3, by0 = y - th - 3, bw = tw + 6, bh = th + 9;
+      const crossesBox = ([P, Q]) => {
+        let t0 = 0, t1 = 1; const ddx = Q[0] - P[0], ddy = Q[1] - P[1];
+        for (const [pp, qq] of [[-ddx, P[0] - bx0], [ddx, bx0 + bw - P[0]], [-ddy, P[1] - by0], [ddy, by0 + bh - P[1]]]) {
+          if (pp === 0) { if (qq < 0) return false; continue; }
+          const rr = qq / pp;
+          if (pp < 0) { if (rr > t1) return false; if (rr > t0) t0 = rr; }
+          else { if (rr < t0) return false; if (rr < t1) t1 = rr; }
+        }
+        return true;
+      };
+      if (LEADERSEG.some(crossesBox)) return false;
+      const inBox = ([px, py]) => px >= bx0 && px <= bx0 + bw && py >= by0 && py <= by0 + bh;
+      if (SLICEPOLY.some((poly) => poly.some(inBox)
+        || poly.slice(1).some((q, i) => crossesBox([poly[i], q])))) return false;
+      // and plainly nearer the pie it names than any other, or it reads as that other county's label
+      const mx = x0 + tw / 2, my = y - th / 2;
+      const mine = Math.hypot(mx - o[0], my - o[1]);
+      return COUNTIES.every((c2) => c2.name === c.name
+        || Math.hypot(mx - ANCHOR.get(c2.name)[0], my - ANCHOR.get(c2.name)[1]) - mine > 40);
+    };
+    // The eight fixed spots ran out for Osage once its own leader took the only one inside the county.
+    // Fall back to a ring search -- 16 directions at four distances, nearest first -- with the same tests.
+    let pick = c.namePrefs.find(fits), np = pick && SPOT[pick];
+    if (!pick) {
+      outer: for (const dist of [r + 22, r + 36, r + 50, r + 64])
+        for (let k = 0; k < 16; k++) {
+          const a = Math.PI / 2 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (TAU / 16);   // from straight below, outward
+          SPOT.ring = [dist * Math.cos(a), dist * Math.sin(a) + th / 2, "middle"];
+          if (fits("ring")) { pick = "ring@" + Math.round(dist) + "/" + k; np = SPOT.ring.slice(); break outer; }
+        }
+      if (!np) { pick = c.namePrefs[0] + "!"; np = SPOT[c.namePrefs[0]]; }
+    }
+    if (!BARE)
+      g.append("text").attr("x", o[0] + np[0]).attr("y", o[1] + np[1]).attr("text-anchor", np[2])
+        .attr("font-size", 13).attr("fill", C.mute).text(c.name);
+    PROBE.push({ name: c.name, pick: pick, fits: c.namePrefs.filter(fits) });
+
+  }
+
+  // a key, on a plate so the boundaries beneath it do not run through the type. KEY_AT is chosen by the
+  // same offline measurement as the labels: the map is rendered without it, and the plate goes where the
+  // least dark ink and no county name falls under it.
+  if (BARE) { document.body.dataset.ready = "1"; return; }
+  const key = svg.append("g").attr("transform", `translate(${KEY_AT[0]}, ${KEY_AT[1]})`);
+  key.append("rect").attr("x", -10).attr("y", -22).attr("width", KEY_W).attr("height", KEY_H)
+    .attr("fill", "#ffffff").attr("rx", 6);
+  // Every pie entry is drawn as a SLICE, because on the map every one of them is a slice of the same
+  // pie. A full circle in the key read as a separate object, which nothing on the map is.
+  const slice = (dy, fill, op, label) => {
+    // a quarter of a pie, apex at the lower left: the shape reads as a slice at swatch size, and it sits
+    // inside its own row instead of touching the entries above and below
+    const R = 15, ax = 6, ay = dy + 7;
+    key.append("path").attr("d", `M${ax},${ay}L${ax},${ay - R}A${R},${R} 0 0 1 ${ax + R},${ay}Z`)
+      .attr("fill", fill).attr("fill-opacity", op).attr("stroke", C.ring).attr("stroke-width", 1.6);
+    key.append("text").attr("x", 40).attr("y", dy + 5).attr("font-size", 14).attr("fill", C.mute).text(label);
+  };
+  const rule = (dy, stroke, width, dash, label) => {
+    key.append("line").attr("x1", 4).attr("y1", dy).attr("x2", 28).attr("y2", dy)
+      .attr("stroke", stroke).attr("stroke-width", width).attr("stroke-dasharray", dash)
+      .attr("stroke-linecap", dash === "1.5,4" ? "round" : "butt");
+    key.append("text").attr("x", 40).attr("y", dy + 5).attr("font-size", 14).attr("fill", C.mute).text(label);
+  };
+  slice(0, "none", 1, "County residents");
+  slice(28, C.go, 0.62, "Revealed crossover interest");
+  slice(56, C.rest, 0.5, "Other counties");
+  rule(86, C.dma, 2.4, "none", "Columbia–Jefferson City television market");
+  rule(110, C.cbsa, 1.9, "8,4", "Metropolitan statistical area");
+  const note = (dy, t) => key.append("text").attr("x", 40).attr("y", dy).attr("font-size", 12.5)
+    .attr("fill", C.cbsa).text(t);
+  note(129, "Columbia: Boone, Cooper, Howard");
+  note(146, "Jefferson City: Cole, Callaway, Moniteau, Osage");
+  // The canvas is cropped to what is drawn on it -- the market outline, the pies and their annotations,
+  // the key -- and the card is narrowed to match, so the caption wraps at the map's width instead of
+  // running out past it over empty county fill.
+  {
+    // getBBox on the translated key group answers in the group's own coordinates, so its offset is added
+    const kb = key.node().getBBox();
+    const boxes = [dmaPath.node().getBBox(), g.node().getBBox(),
+                   { x: kb.x + KEY_AT[0], y: kb.y + KEY_AT[1], width: kb.width, height: kb.height }];
+    const x0 = Math.min(...boxes.map((b) => b.x)) - 22, y0 = Math.min(...boxes.map((b) => b.y)) - 18;
+    const x1 = Math.max(...boxes.map((b) => b.x + b.width)) + 22;
+    const y1 = Math.max(...boxes.map((b) => b.y + b.height)) + 18;
+    const vw = Math.ceil(x1 - x0), vh = Math.ceil(y1 - y0);
+    svg.attr("viewBox", [x0, y0, vw, vh]).attr("width", vw).attr("height", vh);
+    document.querySelector(".wrap").style.maxWidth = (vw + 2 * 28 + 2 * 16 + 2) + "px";
+    PROBE.push({ viewBox: [Math.round(x0), Math.round(y0), vw, vh] });
+  }
+  // a probe, so label collisions are measured off the rendered type rather than judged from a crop
+  if (Q.get("probe")) {
+    const bb = svg.node().getBoundingClientRect();
+    PROBE.push({ svg: [Math.round(bb.left), Math.round(bb.top)], W: W, H: H, boxes: LABELBOX });
+    const rows = [];
+    svg.selectAll("text").each(function () {
+      const b = this.getBBox();
+      rows.push([this.textContent.slice(0, 38), Math.round(b.x), Math.round(b.y),
+                 Math.round(b.width), Math.round(b.height)]);
+    });
+    document.title = "PROBE" + JSON.stringify({ text: rows, geom: PROBE });
+  }
+  document.body.dataset.ready = "1";
+});
+</script>
+</body>
+</html>

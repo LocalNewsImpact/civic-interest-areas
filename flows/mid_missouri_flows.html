@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mid-Missouri cross-county flows</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --ink: #0b0b0b; --text-2: #4a5260; --text-3: #6b7380; --line: #e1e0d9;
+    --county: #f1f0eb; --county-edge: #ffffff; --primary: #c9dcea; --secondary: #e3ecf3; --state: #b9bec6;
+    --flow: #8fb8d6; --work: #0b5f8f; --halo: #ffffff;
+  }
+  :root[data-theme="dark"] {
+    --bg: #111214; --card: #1a1a19; --ink: #ffffff; --text-2: #c3c9d3; --text-3: #a5aebc; --line: #2c2c2a;
+    --county: #26272a; --county-edge: #1a1a19; --primary: #24465f; --secondary: #2c3a46; --state: #5c626b;
+    --flow: #4d84ad; --work: #9fd0f2; --halo: #1a1a19;
+  }
+  body { margin: 0; background: var(--bg); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); }
+  .card { width: 976px; margin: 24px auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 24px 28px 18px; box-sizing: border-box; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--text-2); font-size: 14px; line-height: 1.4; margin: 0 0 10px; max-width: 900px; }
+  .legend { display: flex; gap: 18px; align-items: center; font-size: 12.5px; color: var(--text-2); margin: 4px 0 2px; flex-wrap: wrap; }
+  .legend svg { vertical-align: middle; margin-right: 4px; }
+  .credit { color: var(--text-3); font-size: 11.5px; line-height: 1.45; margin-top: 6px; }
+  svg text { font-family: inherit; }
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <h1>Where Audrain, Boone and Osage residents go</h1>
+  <p class="sub">Approximate trips a week by residents of Audrain, Boone and Osage counties into neighbouring counties. Arrow width is trips a
+    week: the dark band is commuting to work, the light band all other trips (shopping, school, medical visits, leisure). Flows of 2,000
+    trips a week or more.</p>
+  <svg id="map" width="920" height="640"></svg>
+  <p class="credit" id="credit">
+    Sources: visits, GeoDS Lab mobility flows from SafeGraph phone data, weekly averages for 2021 (Kang et al., <i>Scientific Data</i>, 2020);
+    commuting, U.S. Census Bureau LEHD Origin-Destination Employment Statistics (LODES 8), 2023; hospital stays, Centers for Medicare &amp;
+    Medicaid Services Hospital Service Area File, 2023 (Medicare inpatients only); population, U.S. Census Bureau American Community
+    Survey 2020-2024 five-year estimates. A schematic: the sources cover different years, visits
+    count each person once per place per week, and all figures are rounded.
+  </p>
+</div>
+<script src="d3.min.js"></script>
+<script src="topojson-client.min.js"></script>
+<script>
+const theme = new URLSearchParams(location.search).get("theme");
+if (theme === "dark") document.documentElement.setAttribute("data-theme", "dark");
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+Promise.all([d3.json("counties-10m.json"), d3.json("flows.json")]).then(([topo, data]) => {
+  const W = 920, H = 640, svg = d3.select("#map");
+  const all = topojson.feature(topo, topo.objects.counties).features.filter((f) => String(f.id).startsWith("29"));
+  const byId = new Map(all.map((f) => [String(f.id), f]));
+  const focus = data.nodes.map((n) => byId.get(n.fips));
+  // fit the five counties, with room around them for the neighbours and the arrows
+  const proj = d3.geoConicEqualArea().parallels([36.5, 40.5]).rotate([92.2, 0])
+    .fitExtent([[250, 40], [W - 226, H - 40]], { type: "FeatureCollection", features: focus });
+  const path = d3.geoPath(proj);
+  const node = new Map(data.nodes.map((n) => [n.fips, { ...n, c: path.centroid(byId.get(n.fips)) }]));
+
+  // neighbouring counties, faint, then the five
+  svg.append("g").selectAll("path").data(all).join("path").attr("d", path)
+    .attr("fill", (f) => { const n = node.get(String(f.id)); return n ? (n.primary ? css("--primary") : css("--secondary")) : css("--county"); })
+    .attr("stroke", css("--county-edge")).attr("stroke-width", 1.2);
+
+  // where residents of the three counties go: trips starting in Audrain, Boone or Osage
+  const DROP = new Set(["29007>29051"]);   // Audrain -> Cole: a thin arrow across the middle, left off
+  const shown = data.flows.filter((f) => f.weekly >= 2000 && node.get(f.from).primary && !DROP.has(f.from + ">" + f.to))
+    .sort((a, b) => b.weekly - a.weekly);
+  const max = d3.max(shown, (f) => f.weekly);
+  const width = (v) => Math.max(2, 34 * v / max);
+  // An arrow crosses the border the two counties share, at its middle, square to it: it starts inside the county the
+  // trips leave and ends inside the county they reach. The two directions of a pair sit side by side along the border.
+  // Counties that share no border (Osage and Boone) get a curve between their centres instead.
+  const geomOf = new Map(topo.objects.counties.geometries.map((gm) => [String(gm.id), gm]));
+  const border = (a, b) => {
+    const m = topojson.mesh(topo, topo.objects.counties, (x, y) => (String(x.id) === a && String(y.id) === b) || (String(x.id) === b && String(y.id) === a));
+    const lines = (m.type === "MultiLineString" ? m.coordinates : [m.coordinates]).filter((l) => l && l.length > 1).map((l) => l.map(proj));
+    const segs = [];
+    for (const l of lines) for (let k = 1; k < l.length; k++) segs.push([l[k - 1], l[k], Math.hypot(l[k][0] - l[k - 1][0], l[k][1] - l[k - 1][1])]);
+    if (!segs.length) return null;
+    // the point of the border nearest the line between the two counties' centres: where a trip would cross it
+    const A = node.get(a).c, B = node.get(b).c, ab = [B[0] - A[0], B[1] - A[1]], ab2 = ab[0] ** 2 + ab[1] ** 2;
+    const dist = (q) => { const u = Math.max(0, Math.min(1, ((q[0] - A[0]) * ab[0] + (q[1] - A[1]) * ab[1]) / ab2));
+                          return Math.hypot(q[0] - A[0] - u * ab[0], q[1] - A[1] - u * ab[1]); };
+    // ...but at least END px along the border from either of its ends, so an arrow and its partner both cross this
+    // border and not a third county's (Boone -> Audrain had slipped past the corner into Callaway)
+    const total = d3.sum(segs, (x) => x[2]), END = Math.min(40, total / 2);
+    let best = null, run = 0;
+    for (const [p0, p1, len] of segs) {
+      for (let k = 0; k <= 10; k++) {
+        const along = run + len * k / 10;
+        if (along < END || along > total - END) continue;
+        const q = [p0[0] + (p1[0] - p0[0]) * k / 10, p0[1] + (p1[1] - p0[1]) * k / 10], dd = dist(q);
+        if (!best || dd < best.d) best = { d: dd, p: q, t: [(p1[0] - p0[0]) / len, (p1[1] - p0[1]) / len] };
+      }
+      run += len;
+    }
+    return best;
+  };
+  const pairShown = new Set(shown.map((f) => f.from + ">" + f.to));
+  const curve = (f) => {
+    const a = node.get(f.from).c, b = node.get(f.to).c, Wd = width(f.weekly);
+    const bd = border(f.from, f.to);
+    if (bd) {
+      // the arrow's direction: square to the border, pointing from the origin's side to the destination's
+      let [tx, ty] = bd.t, nx = -ty, ny = tx;
+      if ((b[0] - a[0]) * nx + (b[1] - a[1]) * ny < 0) { nx = -nx; ny = -ny; }
+      // side by side with the opposite direction, if it is drawn: each to its own side of the border's middle
+      // which side the arrow bows to: the pair's two directions take opposite sides, and FLIP names the arrows
+      // whose default side curves them back toward the county they came from
+      const FLIP = new Set(["29151>29051"]);   // Osage -> Cole: bowed into Cole, not back toward Boone
+      const both = pairShown.has(f.to + ">" + f.from);
+      const side = (f.from < f.to ? 1 : -1) * (FLIP.has(f.from + ">" + f.to) ? -1 : 1);
+      const shift = both ? side * (Wd / 2 + Math.max(4, Wd * 0.35) + 4) : 0;   // clear of the arrowheads, not just the shafts
+      const p = [bd.p[0] + tx * shift, bd.p[1] + ty * shift], half = 30 + Wd * 0.35;
+      const s = [p[0] - nx * half, p[1] - ny * half], e = [p[0] + nx * (half - 8), p[1] + ny * (half - 8)];
+      // a band t px across the arrow: along the border's direction, away from the partner arrow for positive t.
+      // The arrow bows a little to that same side, so the two of a pair curve away from each other.
+      const ox = tx * side, oy = ty * side, bow = 0.14 * Math.hypot(e[0] - s[0], e[1] - s[1]);
+      const m = [(s[0] + e[0]) / 2 + ox * bow, (s[1] + e[1]) / 2 + oy * bow];
+      const at = (t) => `M${s[0] + ox * t},${s[1] + oy * t}Q${m[0] + ox * t},${m[1] + oy * t} ${e[0] + ox * t},${e[1] + oy * t}`;
+      return { at, s, e, m, mid: [m[0] * 0.5 + (s[0] + e[0]) / 4, m[1] * 0.5 + (s[1] + e[1]) / 4], nx: ox, ny: oy };
+    }
+    const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy), nx = -dy / L, ny = dx / L, k = 0.16 * L + Wd / 2;
+    const s = [a[0] + dx * 0.2, a[1] + dy * 0.2], e = [b[0] - dx * 0.2, b[1] - dy * 0.2];
+    const m = [(s[0] + e[0]) / 2 + nx * k, (s[1] + e[1]) / 2 + ny * k];
+    const at = (t) => `M${s[0] + nx * t},${s[1] + ny * t}Q${m[0] + nx * t},${m[1] + ny * t} ${e[0] + nx * t},${e[1] + ny * t}`;
+    return { at, s, e, m, mid: [m[0] * 0.5 + (s[0] + e[0]) / 4, m[1] * 0.5 + (s[1] + e[1]) / 4], nx, ny };
+  };
+  const defs = svg.append("defs");
+  const g = svg.append("g");
+  for (const f of shown) {
+    const c = curve(f), primary = node.get(f.from).primary || node.get(f.to).primary;
+    // the arrow's width split across by reason, side by side: work on the outer edge of the bow, everything else inside
+    const Wd = width(f.weekly), ww = Math.min(Wd, Math.max(f.workers ? 1.2 : 0, Wd * f.workers / f.weekly)), wo = Wd - ww;
+    const op = primary ? 0.95 : 0.55;
+    g.append("path").attr("d", c.at(-Wd / 2 + wo / 2)).attr("fill", "none").attr("stroke", css("--flow")).attr("stroke-width", wo)
+      .attr("stroke-linecap", "butt").attr("opacity", op);
+    if (ww) g.append("path").attr("d", c.at(Wd / 2 - ww / 2)).attr("fill", "none").attr("stroke", css("--work")).attr("stroke-width", ww)
+      .attr("stroke-linecap", "butt").attr("opacity", op);
+    // the head, at the end of the whole arrow
+    const from = c.m === c.mid ? c.s : c.m, ang = Math.atan2(c.e[1] - from[1], c.e[0] - from[0]), hl = Math.max(8, Wd * 0.9), hw = Wd / 2 + Math.max(4, Wd * 0.35);
+    const tip = [c.e[0] + Math.cos(ang) * hl, c.e[1] + Math.sin(ang) * hl], px = -Math.sin(ang), py = Math.cos(ang);
+    g.append("path").attr("d", `M${c.e[0] + px * hw},${c.e[1] + py * hw}L${tip[0]},${tip[1]}L${c.e[0] - px * hw},${c.e[1] - py * hw}Z`)
+      .attr("fill", css("--flow")).attr("opacity", op);
+    f.label = { x: c.mid[0], y: c.mid[1], nx: c.nx, ny: c.ny };
+  }
+  // county names; where the destination holds a share of the origin's Medicare inpatient stays, the arrow says so
+  const placed = [];
+  for (const n of node.values()) {
+    const [x, y] = n.c;
+    svg.append("text").attr("x", x).attr("y", y).attr("text-anchor", "middle").attr("font-size", n.primary ? 15.5 : 14)
+      .attr("font-weight", n.primary ? 500 : 400).attr("fill", n.primary ? css("--ink") : css("--text-2"))
+      .text(n.county);
+    placed.push([x - n.county.length * 5.5, y - 16, x + n.county.length * 5.5, y + 5]);
+  }
+  const num = (v) => (v >= 10000 ? Math.round(v / 1000) * 1000 : Math.round(v / 100) * 100).toLocaleString("en-US");
+  const hospShare = (f) => {
+    const h = node.get(f.from).hospital.find((x) => x.county === node.get(f.to).county);
+    return h && f.from !== f.to ? Math.round(h.share * 100) : null;
+  };
+  // Each label sits at a set offset from its arrow's midpoint, in the open space around the arrows, joined to it by a
+  // hairline: [dx, dy] in px, and which side the text runs from.
+  const SPOT = {
+    "29007>29019": [-205, -55, "end"],    // Audrain -> Boone: up and left, over northern Boone
+    "29019>29007": [-205, 20, "end"],     // Boone -> Audrain: left of Boone
+    "29007>29027": [150, 15, "start"],    // Audrain -> Callaway: right
+    "29019>29027": [235, 5, "start"],     // Boone -> Callaway: right, below the last
+    "29019>29051": [-104, 20, "end"],     // Boone -> Cole: left, over western Boone and Cole
+    "29151>29019": [175, 40, "start"],    // Osage -> Boone: right, over eastern Osage
+    "29151>29051": [190, 25, "start"],    // Osage -> Cole: right of Osage
+  };
+  const TOTAL_ONLY = new Set(["29007>29027", "29019>29027"]);   // Audrain -> Callaway, Boone -> Callaway: the total alone
+  for (const f of shown) {
+    // the county's population, on its single largest outflow only
+    const o = node.get(f.from), biggest = shown.filter((x) => x.from === f.from).sort((a, b) => b.weekly - a.weekly)[0] === f;
+    const lines = [];
+    if (biggest && o.population) lines.push([`${o.county} population: `, (Math.round(o.population / 100) * 100).toLocaleString("en-US")]);
+    if (TOTAL_ONLY.has(f.from + ">" + f.to)) lines.push([`Total trips: ≈`, `${num(f.weekly)} a week`]);
+    else lines.push([`Commuters: `, num(f.workers)], [`All other trips: ≈`, `${num(f.weekly - f.workers)} a week`]);
+    const hs = hospShare(f);
+    if (hs) lines.push([`${hs}% of Medicare inpatient stays`, ""]);
+    const [dx, dy, anchor] = SPOT[f.from + ">" + f.to] || [0, 40, "middle"];
+    const x = f.label.x + dx, y = f.label.y + dy, h = lines.length * 15;
+    const top = y - h / 2;
+    // the hairline: from the arrow's midpoint to the label's near edge
+    const ex = anchor === "end" ? x + 4 : anchor === "start" ? x - 4 : x, ey = anchor === "middle" ? (dy > 0 ? top - 2 : top + h + 2) : y;
+    g.append("line").attr("x1", f.label.x).attr("y1", f.label.y).attr("x2", ex).attr("y2", ey).attr("stroke", css("--text-3")).attr("stroke-width", 0.8);
+    g.append("circle").attr("cx", f.label.x).attr("cy", f.label.y).attr("r", 2.2).attr("fill", css("--text-3"));
+    const t = g.append("text").attr("x", x).attr("y", top + 10).attr("text-anchor", anchor).attr("font-size", 12.5)
+      .attr("fill", css("--ink"));
+    lines.forEach(([lead, val], k) => {
+      const line = t.append("tspan").attr("x", x).attr("dy", k ? 15 : 0);
+      const kind = lead.startsWith("Commuters") ? "work" : lead.includes("Medicare") ? "note" : lead.includes("population") ? "pop" : "other";
+      line.append("tspan").attr("fill", kind === "work" ? css("--work") : kind === "note" || kind === "pop" ? css("--text-2") : css("--ink"))
+        .attr("font-weight", kind === "note" ? 400 : 600).text(lead);
+      if (val) line.append("tspan").attr("font-weight", 700).text(val);
+    });
+  }
+
+  // Missouri inset: where the five counties are
+  const inset = svg.append("g").attr("transform", `translate(6,${H - 118})`);
+  const ip = d3.geoConicEqualArea().parallels([36.5, 40.5]).rotate([92.2, 0]).fitSize([140, 110], { type: "FeatureCollection", features: all });
+  const ipath = d3.geoPath(ip);
+  inset.selectAll("path").data(all).join("path").attr("d", ipath)
+    .attr("fill", (f) => node.get(String(f.id)) ? css("--work") : css("--county")).attr("stroke", css("--county-edge")).attr("stroke-width", 0.3);
+  inset.append("path").attr("d", ipath(topojson.merge(topo, topo.objects.counties.geometries.filter((g) => String(g.id).startsWith("29")))))
+    .attr("fill", "none").attr("stroke", css("--state")).attr("stroke-width", 0.8);
+
+  document.body.dataset.ready = "1";
+});
+</script>
+</body>
+</html>

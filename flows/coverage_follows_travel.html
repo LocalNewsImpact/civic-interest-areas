@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<base href="https://data.localnewsimpact.org/">
+<title>Coverage follows travel</title>
+<link rel="stylesheet" href="/static/css/tokens.1e94ec252665.css">
+<link rel="stylesheet" href="/static/css/datadesk.eaee6c6d0bbd.css">
+<style>
+  body { margin: 0; background: var(--bg, #f4f5f7); }
+  .wrap { max-width: 62rem; margin: 24px auto; padding: 0 16px; }
+  .figure { background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px 18px; }
+  .panels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 30px; margin-top: 16px; }
+  /* each county's heading reads as a heading, not as a column of the table under it */
+  .panel h3 { font-size: var(--fs-sm); margin: 0 0 .5rem; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--text-3); font-weight: 600; }
+  .dd-table th { font-size: var(--fs-xs, .78rem); white-space: nowrap; }
+  .dd-table th.num { text-align: right; }
+  .dd-table td.pub { white-space: nowrap; }
+  .dd-table thead th { border-bottom: 2px solid var(--border); font-weight: 600; }
+  /* the rows where coverage does not follow travel */
+  .dd-table tr.off td { color: var(--text-3); }
+  .dd-table tr.off td.pub { font-weight: 600; color: var(--ink); }
+  .note { font-size: var(--fs-sm); color: var(--text-2); line-height: 1.45; margin: .6rem 0 0; }
+  /* the rule under the last row closed off a table that has nothing after it */
+  .dd-table tbody tr:last-child td { border-bottom: none; }
+</style>
+</head>
+<body>
+<div class="wrap"><div class="figure">
+<figure class="dd-visual">
+  <h2 class="dd-title">Coverage follows travel</h2>
+  <p class="dd-subtitle">For each county, the four neighbours its residents travel to, in order of how much they travel, beside the
+    number of articles its newsrooms placed in each.</p>
+  <div class="panels">
+  <div class="panel">
+    <h3>Audrain County</h3>
+    <table class="dd-table">
+      <thead><tr><th>Where they go</th><th class="num">Per 100</th><th class="num">Articles</th></tr></thead>
+      <tbody>
+        <tr><td class="pub">Boone</td><td class="num">13.8</td><td class="num">24</td></tr>
+        <tr><td class="pub">Callaway</td><td class="num">4.7</td><td class="num">11</td></tr>
+        <tr><td class="pub">Cole</td><td class="num">1.0</td><td class="num">6</td></tr>
+        <tr><td class="pub">Osage</td><td class="num">0.2</td><td class="num">1</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <h3>Boone County</h3>
+    <table class="dd-table">
+      <thead><tr><th>Where they go</th><th class="num">Per 100</th><th class="num">Articles</th></tr></thead>
+      <tbody>
+        <tr><td class="pub">Cole</td><td class="num">2.2</td><td class="num">109</td></tr>
+        <tr><td class="pub">Callaway</td><td class="num">1.4</td><td class="num">56</td></tr>
+        <tr><td class="pub">Audrain</td><td class="num">0.9</td><td class="num">18</td></tr>
+        <tr><td class="pub">Osage</td><td class="num">0.1</td><td class="num">12</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <h3>Osage County</h3>
+    <table class="dd-table">
+      <thead><tr><th>Where they go</th><th class="num">Per 100</th><th class="num">Articles</th></tr></thead>
+      <tbody>
+        <tr><td class="pub">Cole</td><td class="num">36.6</td><td class="num">7</td></tr>
+        <tr class="off"><td class="pub">Boone</td><td class="num">3.9</td><td class="num">0</td></tr>
+        <tr class="off"><td class="pub">Callaway</td><td class="num">2.0</td><td class="num">3</td></tr>
+        <tr class="off"><td class="pub">Audrain</td><td class="num">0.3</td><td class="num">0</td></tr>
+      </tbody>
+    </table>
+  </div>
+  </div>
+  <figcaption class="dd-footer">
+    <span class="dd-source">Travel: GeoDS Lab county-to-county flows from SafeGraph phone data, daily files for March 2021
+      (Kang et al., <i>Scientific Data</i>, 2020). For every 100 of a county's phones recorded at home on an average day, the
+      number also recorded in that neighbour; a ratio within one panel, not a count of residents. Coverage: Missouri School of
+      Journalism analysis of articles published in March 2026 and geolocated, counted once per article per county.</span>
+  </figcaption>
+</figure>
+</div></div>
+</body>
+</html>

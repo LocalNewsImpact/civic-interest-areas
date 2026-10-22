@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Columbia–Jefferson City market</title>
+<style>
+  html, body { margin: 0; background: #ffffff; }
+  :root[data-theme="dark"] body { background: #111214; }
+  #loc { width: 1650px; height: 1294px; }
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+</style>
+</head>
+<body>
+<div id="loc"></div>
+<script src="d3.min.js"></script>
+<script src="topojson-client.min.js"></script>
+<script>
+const dark = new URLSearchParams(location.search).get("theme") === "dark";
+if (dark) document.documentElement.setAttribute("data-theme", "dark");
+// the reference map's own colours
+const C = dark
+  ? { grey: "#3a3a38", market: "#3880a1", focus: "#71dbdc", line: "#111214", ink: "#ffffff" }
+  : { grey: "#dedede", market: "#3880a1", focus: "#71dbdc", line: "#ffffff", ink: "#0b0b0b" };
+const DMA = new Set(["29007","29019","29027","29041","29051","29053","29089","29125","29131","29135","29139","29141","29151","29175"]);
+const FOCUS = new Map([["29007", "Audrain"], ["29019", "Boone"], ["29151", "Osage"]]);
+// the weight the card's subhead uses: regular, not bold
+const FONT = 26, WEIGHT = 400;
+
+d3.json("counties-10m.json").then((ct) => {
+  const W = 1650, H = 1294;
+  const counties = topojson.feature(ct, ct.objects.counties).features.filter((f) => String(f.id).startsWith("29"));
+  const svg = d3.select("#loc").append("svg").attr("width", W).attr("height", H).attr("viewBox", [0, 0, W, H]);
+  const proj = d3.geoConicEqualArea().parallels([36.5, 40.5]).rotate([92.4, 0])
+    .fitExtent([[150, 60], [W - 150, H - 60]], { type: "FeatureCollection", features: counties });
+  const path = d3.geoPath(proj);
+  const fill = (f) => FOCUS.has(String(f.id)) ? C.focus : DMA.has(String(f.id)) ? C.market : C.grey;
+  svg.append("g").selectAll("path").data(counties).join("path").attr("d", path)
+    .attr("fill", fill).attr("stroke", C.line).attr("stroke-width", 1.6);
+
+  // Boone sits in the middle of the market, so there is no "outward" for it: every automatic rule sent its label
+  // across its neighbours. The three are placed by hand instead, each leaving the cluster on its own side --
+  // Boone west, Audrain north-east, Osage south-east -- into the grey, where a leader of a few hundred pixels
+  // reaches it. Offsets are from the county's own centre, in the map's units.
+  // [dx, dy, anchor] from the county's centre: Audrain straight up into the grey above it, Boone west, Osage
+  // south-east. Audrain's name was pushed north-east toward the state line when the room is directly north.
+  const SPOT = { Boone: [-250, -40, "end"], Audrain: [10, -185, "middle"], Osage: [210, 110, "start"] };
+  const g = svg.append("g");
+  for (const f of counties.filter((x) => FOCUS.has(String(x.id)))) {
+    const name = FOCUS.get(String(f.id)), [cx, cy] = path.centroid(f);
+    const [dx, dy, anchor] = SPOT[name], x = cx + dx, y = cy + dy;
+    const node = g.append("text").attr("x", x).attr("y", y + FONT * 0.35).attr("text-anchor", anchor)
+      .attr("font-size", FONT).attr("font-weight", WEIGHT).attr("fill", C.ink).text(name);
+    // the leader stops at the name's near edge: its side for a name set to one side, under it for a centred one
+    const ex = anchor === "start" ? x - 10 : anchor === "end" ? x + 10 : x;
+    const ey = anchor === "middle" ? y + FONT * 0.6 : y;
+    g.append("line").attr("x1", cx).attr("y1", cy).attr("x2", ex).attr("y2", ey)
+      .attr("stroke", C.ink).attr("stroke-width", 1.4);
+    g.append("circle").attr("cx", cx).attr("cy", cy).attr("r", 4).attr("fill", C.ink);
+    node.raise();
+  }
+  document.body.dataset.ready = "1";
+});
+</script>
+</body>
+</html>

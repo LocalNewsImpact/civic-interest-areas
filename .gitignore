@@ -1,0 +1,25 @@
+# ALLOWLIST. Everything is ignored; code and documentation are let in by pattern.
+# Data -- public, ours or licensed -- is never committed by default. A public
+# data file is committed only by adding it below AND to PUBLIC_DATA.txt, with its
+# citation in CITATIONS.md (README.md: Data).
+*
+!*/
+!*.py
+!*.sh
+!*.html
+!*.md
+!Makefile
+!.gitignore
+!PUBLIC_DATA.txt
+!flows/d3.min.js
+!flows/topojson-client.min.js
+
+# Scratch captures of rendered maps.
+flows/probe.html
+flows/_probe.html
+# datadesk's own CSS and fonts (README.md: Running the map pages).
+flows/dd/
+# Tooling.
+__pycache__/
+.venv/
+logs/
