@@ -4,13 +4,15 @@ Classes: k-means (k = 2, 3, 4) on standardised log population (ACS 2020-2024) an
 Missouri main file: employed residents working in another county / employed residents; St. Louis city + county one
 unit, as in crossover_compare.py). k-means is run from 50 seeds and the lowest within-class spread kept.
 
-Model: the adopted doubly constrained travel model, with every pair term (log distance and its square, shared border,
-rural x distance and its square, origin size x distance) interacted with the origin's class, so each class gets its
-own distance decay and border effect; destination fixed effects shared. Fitted on January-June, scored on
-July-September per origin class: share-weighted absolute error of destination shares (points), R^2. Reference: the
-pooled adopted model scored on the same classes; ceiling: the January-June observed shares.
+Model: the adopted doubly constrained travel model (gravity_terms.FACTORS), with every pair term interacted with the
+origin's class, so each class gets its own distance decay, border and commuting effect; destination fixed effects
+shared. Outcome: the adopted one (calibrated, pass-through discounted). Scored per origin class: leave-one-county-out
+(8 folds, seed 7; primary) share-weighted absolute error of destination shares (points) with a 95% bootstrap interval
+over home counties and the change against the pooled model; and the Jan-Jun -> Jul-Sep stability check (error; R^2 =
+1 - SSE/SST) beside persistence (Jan-Jun observed shares).
 """
 import sys
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +21,7 @@ import statsmodels.api as sm
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 exec(open(Path(__file__).resolve().parent / "travel_model_dc_test.py").read().split("models = [")[0])
+from gravity_terms import poisson_fit  # noqa: E402
 
 cc = pd.read_csv(root / "analysis/crossover_compare.csv", dtype={"Unnamed: 0": str}).rename(columns={"Unnamed: 0": "fips"}).set_index("fips")
 unit = lambda f: "29189" if f == "29510" else f
@@ -43,16 +46,23 @@ def kmeans(Z, k, seeds=50):
     return best[1]
 
 
-base = pair + ["log_dist_sq", "nonmetro_i_x_log_dist_sq", "log_pop_i_x_log_dist"]
-Xfe = pd.concat([X0[base + O], Dd], axis=1)
-pooled = sm.GLM(y6, Xfe, family=sm.families.Poisson()).fit(maxiter=300).predict(Xfe)
-s6, s3 = share(y6), share(y3)
+from gravity_terms import boot, county_stats, loco, summary  # noqa: E402
+warnings.filterwarnings("ignore")
+o = pairs.i.values
+a9, s6, s3 = share(y9), share(y6), share(y3)
+Xfe = Xof(FACTORS)
+pooled_loco = county_stats(a9, loco(y9, Xfe, o), o, y9)
+pooled_split = county_stats(s3, share(poisson_fit(y6, Xfe).predict(Xfe).values), o, y3)
+persist = county_stats(s3, s6, o, y3)
 
 
-def score(pred, mask):
-    ps = share(pred)
-    w = s3[mask]
-    return 100 * np.sum(w * np.abs(ps[mask] - s3[mask])) / np.sum(w), np.corrcoef(ps[mask], s3[mask])[0, 1] ** 2
+def cell(s, mk, ref=None):
+    lo, hi = boot(s, "werr", mask=mk)
+    t = f"{s[mk].werr.mean():.2f} [{lo:.2f}, {hi:.2f}]"
+    if ref is not None:
+        dl, dh = boot(s, "werr", ref=ref, mask=mk)
+        t += f"; {s[mk].werr.mean() - ref[mk].werr.mean():+.2f} [{dl:+.2f}, {dh:+.2f}]"
+    return t
 
 
 for k in (2, 3, 4):
@@ -67,16 +77,17 @@ for k in (2, 3, 4):
         print(f"  {c}: {m.sum()} counties; median population {int(np.exp(feat.log_pop[m].median())):,}; "
               f"median commuting out {feat.out[m].median():.0%}; e.g. {', '.join(cc.name[m.index[m]].head(5))}")
     D = pd.get_dummies(cls).astype(float)
-    inter = pd.concat({f"{t}__{c}": X0[t] * D[c] for t in base for c in D.columns}, axis=1)
+    inter = pd.concat({f"{t}__{c}": X0[t] * D[c] for t in FACTORS for c in D.columns}, axis=1)
     Xc = pd.concat([inter, X0[O], Dd], axis=1)
-    pc = sm.GLM(y6, Xc, family=sm.families.Poisson()).fit(maxiter=300).predict(Xc)
-    print("  | Origin class | ceiling | pooled model | class-specific model |")
-    print("  |---|---|---|---|")
-    for c in sorted(set(names.values())):
-        mk = (cls == c).values
-        ce = (100 * np.sum(s3[mk] * np.abs(s6[mk] - s3[mk])) / np.sum(s3[mk]), np.corrcoef(s6[mk], s3[mk])[0, 1] ** 2)
-        a, b = score(pooled, mk), score(pc, mk)
-        print(f"  | {c} | {ce[0]:.2f}, {ce[1]:.3f} | {a[0]:.2f}, {a[1]:.3f} | {b[0]:.2f}, {b[1]:.3f} |")
-    a, b = score(pooled, np.ones(len(pairs), bool)), score(pc, np.ones(len(pairs), bool))
-    print(f"  | all origins | | {a[0]:.2f}, {a[1]:.3f} | {b[0]:.2f}, {b[1]:.3f} |")
+    cl_loco = county_stats(a9, loco(y9, Xc, o), o, y9)
+    cl_split = county_stats(s3, share(poisson_fit(y6, Xc).predict(Xc).values), o, y3)
+    ccls = pd.Series(cls.values, index=o).groupby(level=0).first().reindex(pooled_loco.index)
+    print("  | Origin class | LOCO: pooled | LOCO: class-specific (change vs pooled) | Jul-Sep: persistence | "
+          "Jul-Sep: pooled | Jul-Sep: class-specific |")
+    print("  |---|---|---|---|---|---|")
+    for c in sorted(set(names.values())) + ["all origins"]:
+        mk = np.ones(len(ccls), bool) if c == "all origins" else (ccls == c).values
+        sp = [summary(x[mk]) for x in (persist, pooled_split, cl_split)]
+        print(f"  | {c} | {cell(pooled_loco, mk)} | {cell(cl_loco, mk, pooled_loco)} | "
+              + " | ".join(f"{r['werr']:.2f}, R^2 {r['r2']:.3f}" for r in sp) + " |", flush=True)
     lab.map(names).rename("class").to_csv(root / f"analysis/county_class_k{k}.csv")

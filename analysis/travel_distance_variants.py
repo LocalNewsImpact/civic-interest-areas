@@ -12,9 +12,12 @@ Distance variants from origin county i to destination county j's job hub:
   pop_median    worker-weighted median of the same
   near_border   distance from i's nearest county edge to j's hub
   far_border    distance from i's farthest county edge to j's hub
-Each replaces log distance in every distance term of the adopted model (log distance, its square, rural x distance and
-its square, origin size x distance). Scored as travel_tier_pull_cv.py: the 56 small rural counties held out in 8 folds,
-each predicted from all other counties; share-weighted absolute error of destination shares, and the top-3 error.
+Each replaces log distance in every distance term of the adopted model (gravity_terms.FACTORS: log distance, its
+square, rural x distance and its square, origin size x distance; centred at 25 miles). Outcome: the adopted one
+(calibrated, pass-through discounted). Scored as travel_tier_pull_cv.py: the 56 small rural counties held out in 8
+folds (seed 7), each predicted from all other counties; share-weighted absolute error of destination shares with a 95%
+bootstrap interval over the held-out counties and the change against the centroid distance, and the top-3 error (each
+county's three largest FORECAST destinations).
 """
 import csv
 import gzip
@@ -85,40 +88,41 @@ for i, j in zip(pairs.i, pairs.j):
     for k, v in zip(cols, cache[key]):
         cols[k].append(max(v, 1.0))
 
-base_terms = pair + ["log_dist_sq", "nonmetro_i_x_log_dist_sq", "log_pop_i_x_log_dist"]
+from gravity_terms import boot, county_stats, distance_terms, loco  # noqa: E402
+import warnings  # noqa: E402
+warnings.filterwarnings("ignore")
 
 
 def with_distance(miles_series):
     X = X0.copy()
-    ld = np.log(np.asarray(miles_series, float))
-    X["log_dist"] = ld
-    X["log_dist_sq"] = ld ** 2
-    X["nonmetro_i_x_log_dist"] = (1 - cov.metro.reindex(pairs.i).values) * ld
-    X["nonmetro_i_x_log_dist_sq"] = X["nonmetro_i_x_log_dist"] * ld
-    X["log_pop_i_x_log_dist"] = np.log(cov.population.reindex(pairs.i).values) * ld
-    return pd.concat([X[base_terms + O], Dd], axis=1)
+    D = distance_terms(np.log(np.asarray(miles_series, float)), pairs.i.values)
+    for c in D.columns:
+        X[c] = D[c].values
+    return pd.concat([X[FACTORS + O], Dd], axis=1)
 
 
-variants = {"centroid (current)": None, **{k: v for k, v in cols.items()}}
+variants = {"centroid (adopted)": None, **{k: v for k, v in cols.items()}}
 tier = pd.read_csv(root / "analysis/county_class_k4.csv", dtype={"fips": str}).set_index("fips")["class"]
 small = sorted(tier.index[tier == "class 1"])
-folds = np.array_split(np.random.default_rng(7).permutation(small), 8)
 iu = np.array([unit(i) for i in pairs.i])
 held = np.isin(iu, small)
+o = pairs.i.values
 a = share(y9)
-print("| Distance | small rural held out: weighted share error | top-3 destinations |")
-print("|---|---:|---:|")
+print("| Distance | small rural held out: weighted share error [95%] | change vs centroid [95%] | top-3 destinations |")
+print("|---|---:|---:|---:|")
+ref = None
 for label, dist in variants.items():
-    X = pd.concat([X0[base_terms + O], Dd], axis=1) if dist is None else with_distance(dist)
-    pred = np.zeros(len(pairs))
-    for f in folds:
-        test = np.isin(iu, f); train = ~test
-        cc = X.columns[(X[train] != 0).any()]
-        m = sm.GLM(y9[train], X.loc[train, cc], family=sm.families.Poisson()).fit(maxiter=300)
-        lin = X.loc[test, cc].values @ m.params.values
-        pred[test] = np.exp(lin - lin.max())
-    ps = pd.Series(pred).groupby(pairs.i.values).transform(lambda x: x / x.sum()).values
-    e = 100 * np.sum(a[held] * np.abs(ps[held] - a[held])) / np.sum(a[held])
-    top = held & (pd.Series(a).groupby(pairs.i.values).rank(ascending=False, method="first").values <= 3)
-    print(f"| {label} | {e:.2f} | {100 * np.mean(np.abs(ps[top] - a[top])):.2f} |", flush=True)
+    X = Xof(FACTORS) if dist is None else with_distance(dist)
+    ps = loco(y9, X, o, counties=sorted(set(o[held])))
+    st = county_stats(a, ps, o, y9)
+    lo, hi = boot(st, "werr")
+    diff = ""
+    if ref is None:
+        ref = st
+    else:
+        dl, dh = boot(st, "werr", ref=ref)
+        diff = f"{st.werr.mean() - ref.werr.mean():+.2f} [{dl:+.2f}, {dh:+.2f}]"
+    rk = pd.Series(np.nan_to_num(ps, nan=-1)).groupby(o).rank(ascending=False, method="first").values
+    top = held & (rk <= 3)
+    print(f"| {label} | {st.werr.mean():.2f} [{lo:.2f}, {hi:.2f}] | {diff} | {100 * np.mean(np.abs(ps[top] - a[top])):.2f} |", flush=True)
 pd.DataFrame({"i": pairs.i, "j": pairs.j, **cols}).to_csv(root / "analysis/pair_distances_jobhub.csv", index=False)

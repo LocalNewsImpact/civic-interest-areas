@@ -4,8 +4,11 @@ Hospitals: analysis/hospitals_mo.csv (CMS general acute, critical access, childr
 clinics; Capital Region added). County terms: has_hospital, hospitals (count). Pair terms (i -> j):
   nearest_hospital      j is the nearest other county with a hospital (2020 population centres)
   nearest_x_none        the same, when i has no hospital of its own
-Scored out of sample as before: crossover and spillover by leaving out one county; travel by fitting Jan-Jun and
-scoring Jul-Sep shares; coverage by leaving out one newsroom county.
+Scored out of sample: crossover and spillover by leaving out one county (crossover p-values HC1; spillover clustered
+by county); travel (outcome: the adopted one, calibrated and pass-through discounted) by leaving out one home county
+(8 folds, seed 7; 95% bootstrap intervals over counties for the change vs adopted), with the Jan-Jun -> Jul-Sep
+stability check (R^2 = 1 - SSE/SST) beside persistence, coefficients with errors clustered by home and destination
+county; coverage by leaving out one newsroom county.
 """
 import json
 import sys
@@ -49,7 +52,7 @@ def loo(f, d):
 B = "y ~ log_pop + nonmetro + commute_pop"
 print("\n## 1 CROSSOVER (share of residents seen outside the county)")
 for lab, f in (("baseline", B), ("+ has hospital", B + " + has_hospital"), ("+ hospitals (log count)", B + " + log_hospitals")):
-    m = smf.ols(f, c).fit()
+    m = smf.ols(f, c).fit(cov_type="HC1")
     t = [k for k in m.params.index if k in ("has_hospital", "log_hospitals")]
     print(f"  {lab}: error {loo(f, c):.1f} points" + "".join(f"; {k} {m.params[k]:+.2f} (p {m.pvalues[k]:.3f})" for k in t))
 
@@ -69,26 +72,26 @@ for lab, f in (("adopted", "rate ~ broadcast + travel_out"), ("+ has hospital", 
     print(f"  {lab}: error {loo_o(f):.1f} points" + (f"; has_hospital {m.params['has_hospital']:+.2f} (p {m.pvalues['has_hospital']:.3f})" if "has_hospital" in m.params else ""))
 
 # ---- 3 travel ------------------------------------------------------------------------------------------------------
+import gravity_terms as gt  # noqa: E402
 pairs = all_pairs()
 key = list(zip(pairs.i, pairs.j))
 pairs["nearest_hospital"] = [float(nearest[i] == j) for i, j in key]
 pairs["nearest_x_none"] = [float(nearest[i] == j and i not in hosp_counties) for i, j in key]
-od = pd.read_csv(root / "analysis/od_mo_2026.csv", dtype={"home_county": str, "dest_county": str})
-od = od[(od.home_county != "OUT") & (od.home_county != od.dest_county)]
-yf = lambda ms: (lambda v: np.array([v.get(k, 0) for k in key], float))(od[od.month.isin(ms)].groupby(["home_county", "dest_county"]).visits.sum())
-ALL = [f"2026-{m:02d}" for m in range(1, 10)]
-y6, y3 = yf(ALL[:6]), yf(ALL[6:])
-share = lambda x: x / pd.Series(x).groupby(pairs.i.values).transform("sum").values
-s3 = share(y3); big = s3 >= 0.05
+DISC = gt.stop_discount(pairs)
+y9, y6, y3 = (gt.travel_visits(pairs, m, disc=DISC) for m in (gt.MONTHS, gt.MONTHS[:6], gt.MONTHS[6:]))
 Xd = design(pairs)
-print("\n## 3 TRAVEL (fit Jan-Jun, score Jul-Sep)")
+print("\n## 3 TRAVEL (leave one home county out; stability: fit Jan-Jun, score Jul-Sep)")
+print(gt.persistence(pairs, y6, y3))
+ev0 = None
 for lab, extra in (("adopted", []), ("+ nearest hospital county", ["nearest_hospital"]),
                    ("+ nearest, and when home has none", ["nearest_hospital", "nearest_x_none"])):
-    X = Xd.assign(**{e: pairs[e].values for e in extra})
-    m = sm.GLM(y6, X, family=sm.families.Poisson()).fit(maxiter=300)
-    p3 = share(m.predict(X))
-    print(f"  {lab}: Jul-Sep explained {np.corrcoef(s3, p3)[0, 1] ** 2:.2%}, big-flow error {100 * np.mean(np.abs(s3 - p3)[big]):.2f}"
-          + "".join(f"; {e} {m.params[e]:+.2f}" for e in extra))
+    ev = gt.evaluate(Xd.assign(**{e: pairs[e].values for e in extra}), pairs, y9, y6, y3, extra=extra)
+    r = gt.summary(ev["loco"])
+    ev0 = ev0 or ev
+    d = "" if ev is ev0 else "; change {:+.2f} [{:+.2f}, {:+.2f}]".format(
+        r["werr"] - gt.summary(ev0["loco"])["werr"], *gt.boot(ev["loco"], "werr", ref=ev0["loco"]))
+    print(f"  {lab}: LOCO weighted share error {r['werr']:.2f}{d}, big-flow error {r['big']:.2f}; Jul-Sep R^2 "
+          f"{gt.summary(ev['split'])['r2']:.2%}" + "".join(f"; {e} {ev['m'].params[e]:+.2f} (2-way p {ev['m'].pvalues[e]:.3f})" for e in extra))
 
 # ---- 4 coverage ----------------------------------------------------------------------------------------------------
 tp = pd.read_csv(root / "analysis/od_predicted.csv", dtype={"i": str, "j": str})
