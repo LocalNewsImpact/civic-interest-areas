@@ -171,6 +171,10 @@ w(f"\nQuality set: {len(gin)} outlets newly well collected ({', '.join(sorted(gi
 d = oa.copy()
 for c in ("broadcast", "crowded_weekly", "log_border_mi", "log_print"):
     d[c] = d[c].astype(float)
+# HISTORICAL: this section scores the 2026-10-17 snapshot (after_spillover_outlets.csv) with the model and outlet set of
+# that day -- three outlets left out, border term for every outlet. The current model, its outlet set (Mid Rivers and
+# the Greene County Commonwealth fitted in the county they cover; campus papers out) and its floor-20 / floor-10
+# comparison are in spillover_outlets.py (held-out table) and spillover_common.py. Not used for current figures.
 NOT_FITTED = {"Greene County Commonwealth", "Three Rivers Publishing", "Mid Rivers Newsmagazine"}
 FINAL = "rate ~ broadcast + crowded_weekly + log_border_mi + log_print"
 
@@ -195,7 +199,7 @@ for floor in (10, 20):
     m, md = loo(g)
     rows.append({"Volume floor (placed stories)": floor, "Outlets fitted": len(g), "Counties": g.fips.nunique(),
                  "Held-out mean miss": round(m, 2), "median": round(md, 2)})
-w("### Volume floor for the fit\n")
+w("### Volume floor for the fit (2026-10-17 snapshot and model; current comparison: spillover_outlets.py)\n")
 w(table(pd.DataFrame(rows)))
 (R / "REPORT.md").write_text("\n".join(out) + "\n")
 print("\n".join(out))

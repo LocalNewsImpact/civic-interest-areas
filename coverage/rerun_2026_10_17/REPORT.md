@@ -154,7 +154,7 @@ Place rows: 29,776 before, 39,714 after. Articles with any place row: 4,295 befo
 
 Quality set: 14 outlets newly well collected (Citizen Observer, Columbia Daily Tribune, Columbia Missourian, El Dorado Springs Sun, KBIA, Memphis Democrat, Perryville Republic Monitor, Reynolds County Courier/Wayne County Journal Banner, Richmond Daily News, Shelby County Herald, Sheridan Express, The Arrow, The Kansas City Globe, The Nevada Daily Mail); 0 no longer (none).
 
-### Volume floor for the fit
+### Volume floor for the fit (2026-10-17 snapshot and model; current comparison: spillover_outlets.py)
 
 | Volume floor (placed stories) | Outlets fitted | Counties | Held-out mean miss | median |
 |---|---|---|---|---|

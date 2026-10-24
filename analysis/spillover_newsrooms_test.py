@@ -24,13 +24,15 @@ by_name = {n.lower(): f for f, n in cov.name.items()}
 by_name.update({"st. louis": "29189", "st louis": "29189", "st. louis city": "29510"})
 fips_of = lambda n: by_name.get((n or "").lower().replace(" county", "").strip())
 unit = lambda f: "29189" if f == "29510" else f
-EXCLUDE = {"The Maneater", "CoMoBuzz"}
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+from spillover_common import NOT_LOCAL as EXCLUDE, home_fips  # one outlet set (EXCLUDE + CAMPUS) and HOME_COUNTY for every count
 
 for version, file, keep in (("all outlets", "all", lambda a: True),
                             ("print and digital", "print", lambda a: "broadcast" not in (a["publisher_type"] or ""))):
     outlets = defaultdict(set)
     for a in data["articles"]:
-        f = fips_of(a["publisher_county"])
+        f = home_fips(a["publisher"], fips_of(a["publisher_county"]))
         if f and a["counties"] and a["publisher"] not in EXCLUDE and keep(a):
             outlets[unit(f)].add(a["publisher"])
     c = pd.read_csv(root / f"analysis/spillover_v2_{file}.csv", dtype={"Unnamed: 0": str}).rename(columns={"Unnamed: 0": "fips"}).set_index("fips")

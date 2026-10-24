@@ -86,21 +86,24 @@ by_name.update({"st. louis": "29189", "st louis": "29189", "st. louis city": "29
 fips_of = lambda n: by_name.get((n or "").lower().replace(" county", "").strip())
 import sys as _sys
 _sys.path.insert(0, str(Path(__file__).resolve().parent))
-from excluded_outlets import EXCLUDE  # one list for every county count
+from spillover_common import NOT_LOCAL, home_fips, home_set, registry  # one outlet set and one home rule for every count
 HOME = {"Audrain": "29007", "Boone": "29019", "Osage": "29151"}
+_reg = registry()
+_city = {(o, unit(c or "")): (t, s) for o, c, t, s in zip(_reg.outlet, _reg.county_fips, _reg.city, _reg.state)}
 
 for version, keep in (("all outlets", lambda a: True), ("print and digital", lambda a: "broadcast" not in (a["publisher_type"] or ""))):
     n = defaultdict(lambda: [0, 0, 0])            # placed, spill (MO or near other-state), MO only
     for a in data["articles"]:
         f = fips_of(a["publisher_county"])
-        if a["publisher"] in EXCLUDE or not f or not a["counties"] or not keep(a):
+        if a["publisher"] in NOT_LOCAL or not f or not a["counties"] or not keep(a):
             continue
+        f = home_fips(a["publisher"], f)
         i = unit(f)
         near = near_oos[f] | (near_oos["29510"] if i == "29189" else set())
-        if i == "29095":
-            # Kansas City, Kansas is Kansas City: not spillover for Jackson County (2026-10-17)
-            near = near - {"20209"}
-        mo = any(c.startswith("29") and unit(c) != i for c in a["counties"])
+        # HOME rule (spillover_common.home_set): counties of the outlet's city, and Kansas City, Kansas for Kansas City
+        hs = home_set(a["publisher"], i, *_city.get((a["publisher"], i), ("", "MO")))
+        near = near - hs
+        mo = any(c.startswith("29") and unit(c) not in hs for c in a["counties"])
         oos = any(c in near for c in a["counties"])
         r = n[i]; r[0] += 1; r[1] += mo or oos; r[2] += mo
     c = units.join(pd.DataFrame(n, index=["placed", "spill", "spill_mo"]).T, how="inner")

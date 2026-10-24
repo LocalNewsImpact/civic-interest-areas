@@ -1,10 +1,10 @@
 """Spillover from each outlet's own profile, aggregated to the county.  Missouri, March 2026.
 
-Unit: the 128 outlets of spillover_outlets.py (10+ placed stories; The Maneater and CoMoBuzz excluded; St. Louis city
-and county one unit). Two outcomes, each a share of the outlet's placed stories:
+Unit: the outlets of spillover_outlets.py (10+ placed stories; EXCLUDE and CAMPUS out; St. Louis city and county one
+unit; HOME rule of spillover_common: a story about a county of the outlet's own city is home). Two outcomes, each a share of the outlet's placed stories:
   touch    the story's places include another county (Missouri, or another state within 60 miles): the current measure
   centred  the story's central county is another county (Missouri, or another state within 60 miles)
-Outlet profile (src/lookups/mo_outlet_registry.csv for the town and its coordinates; sources frequency):
+Outlet profile (pinned registry, excluded_outlets.registry(), for the town and its coordinates; sources frequency):
   broadcast        video or audio broadcaster
   weekly           print published weekly or less often (daily and in-between are the reference)
   log_town_pop     log 2024 population of the outlet's town (Census place estimates; 500 if not a Census place)
@@ -18,7 +18,7 @@ county's expected spillover is its outlets' expectations weighted by their stori
 """
 import json
 import math
-import os
+import sys
 import warnings
 from collections import defaultdict
 from pathlib import Path
@@ -31,9 +31,12 @@ from shapely.geometry import Point, shape
 from shapely.ops import unary_union
 
 warnings.filterwarnings("ignore")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from spillover_common import MENTION_WEIGHT, frequency, outlet_rows, unit  # noqa: E402
+
 root = Path(__file__).resolve().parents[1]
-unit = lambda f: "29189" if f == "29510" else f
-so = pd.read_csv(root / "analysis/spillover_outlets.csv", dtype={"fips": str})
+so = pd.read_csv(root / "analysis/spillover_outlets.csv", dtype={"fips": str, "home_also": str})
+home_also = {o: set((h if isinstance(h, str) else "").split(";")) - {""} for o, h in zip(so.outlet, so.home_also)}
 
 # ---- outcomes: touch and centred, same 60-mile other-state rule as spillover_v2 ----
 arts = json.load(open(root / "coverage/storymap/statewide_2026_03_articles.json"))["articles"]
@@ -58,7 +61,8 @@ for a in arts:
     if o not in home.index or not a["counties"]:
         continue
     h = home[o]
-    away = lambda c: (c.startswith("29") and unit(c) != h) or c in near[h]
+    hs = {h} | home_also[o]
+    away = lambda c: ((c.startswith("29") and unit(c) not in hs) or c in near[h]) and c not in hs
     r = n[o]; r[0] += 1
     r[1] += any(away(c) for c in a["counties"])
     cen_away = bool(a["central"]) and away(a["central"])
@@ -68,19 +72,15 @@ oc = pd.DataFrame(n, index=["placed_n", "touch_n", "centred_n", "mention_n"]).T
 so = so.join(oc, on="outlet")
 so["touch"], so["centred"] = so.touch_n / so.placed_n, so.centred_n / so.placed_n
 # weighted: a story centred in another county counts 1; a story that only mentions another county counts W
-W = float(os.environ.get("MENTION_WEIGHT", "0.5"))
+W = MENTION_WEIGHT
 so["weighted"] = (so.centred_n + W * so.mention_n) / so.placed_n
 
 # ---- outlet profile ----
-reg = pd.read_csv("/Users/kiesowd/VSCode/NewsCrawler/MizzouNewsCrawler/src/lookups/mo_outlet_registry.csv", dtype=str)
-reg["u"] = reg.county_fips.fillna("").map(unit)
-reg = reg.drop(columns="fips").merge(so[["outlet", "fips"]], on="outlet")
-reg = reg[(reg.u == reg.fips) | ~reg.outlet.duplicated(keep=False)].drop_duplicates("outlet").set_index("outlet")
+reg = outlet_rows(so)
 so["city"] = so.outlet.map(reg.city)
 so["lat"], so["lon"] = so.outlet.map(reg.lat).astype(float), so.outlet.map(reg.lon).astype(float)
 
-rows = [l.rstrip("\n").rsplit("|", 1) for l in open(root / "coverage/source_frequency.csv") if "|" in l]
-freq = pd.DataFrame(rows, columns=["outlet", "f"]).drop_duplicates("outlet").set_index("outlet").f.str.strip()
+freq = frequency()
 so["weekly"] = (so.broadcast.eq(0) & so.outlet.map(freq).isin(["weekly", "monthly"])).astype(int)
 so["freq_known"] = so.broadcast.eq(1) | so.outlet.map(freq).fillna("").ne("")
 
@@ -110,7 +110,7 @@ def miles(p, geom):
     k = math.cos(math.radians(38.5))
     from shapely.affinity import scale
     return scale(geom, xfact=k, yfact=1, origin=(0, 0)).distance(scale(p, xfact=k, yfact=1, origin=(0, 0))) * MI
-so["border_mi"] = [miles(Point(x, y), county[f].boundary) for x, y, f in zip(so.lon, so.lat, so.fips)]
+# border_mi: from spillover_outlets.csv (registry point; 0 for an outlet outside its home county)
 # towns of 25,000+: their location from the place shapes
 big = []
 place_pop = pl.set_index("PLACE")["pop"]

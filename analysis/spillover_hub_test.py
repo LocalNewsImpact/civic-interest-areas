@@ -43,13 +43,15 @@ data = json.load(open(root / "coverage/storymap/statewide_2026_03_articles.json"
 by_name = {n.lower(): f for f, n in cov.name.items()}
 by_name.update({"st. louis": "29189", "st louis": "29189", "st. louis city": "29510"})
 fips_of = lambda n: by_name.get((n or "").lower().replace(" county", "").strip())
-EXCLUDE = {"The Maneater", "CoMoBuzz"}
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+from spillover_common import NOT_LOCAL as EXCLUDE, home_fips  # one outlet set (EXCLUDE + CAMPUS) and HOME_COUNTY for every count
 HUBS = ["29077", "29019", "29097", "29095", "29021", "29189", "29031"]   # Greene Boone Jasper Jackson Buchanan StL Cape
 
 for version, keep in (("all outlets", lambda a: True), ("print and digital", lambda a: "broadcast" not in (a["publisher_type"] or ""))):
     n = defaultdict(lambda: [0, 0])
     for a in data["articles"]:
-        i = fips_of(a["publisher_county"])
+        i = home_fips(a["publisher"], fips_of(a["publisher_county"]))
         if a["publisher"] in EXCLUDE or not i or not a["counties"] or not keep(a):
             continue
         n[i][0] += 1

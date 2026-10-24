@@ -1,18 +1,19 @@
 """Is spillover about the other outlets in the market rather than the border itself?  Missouri, March 2026.
 
-For each outlet, from the active outlets in src/lookups/mo_outlet_registry.csv (town coordinates; St. Louis city and
-county one unit):
+For each outlet, from the MARKET outlets (spillover_common.market: pinned registry, active or closed but publishing in
+March, not EXCLUDE or CAMPUS; registry coordinates; St. Louis city and county one unit):
   closer_any        other active outlets in the same county whose town is nearer the county edge than this one's
   closer_same       other active outlets in the same county whose town is nearer the neighbouring county THIS outlet's
                     town is nearest to -- the county it would cover across
   has_closer_same   at least one such outlet (0/1)
   border_rank       this outlet's rank by distance to the county edge among its county's active outlets, 0 = nearest,
                     divided by (outlets - 1); 0 where the county has one outlet
-Each added to, or in place of the border distance in, the adopted model
-(rate ~ broadcast + crowded_weekly + log_border_mi + log_print), on the same 83 fitted outlets. Scored by predicting
+Each added to, or in place of the border distance in, the border form (spillover_common.BORDER_FORM), on the fitted
+outlets (spillover_outlets.csv `fitted`). Term p from county-clustered t (G-1 df). Scored by predicting
 each county's outlets from all the others: mean and median miss, and mean miss by outlet type.
 """
 import math
+import sys
 import warnings
 from collections import defaultdict
 from pathlib import Path
@@ -26,8 +27,10 @@ from shapely.geometry import Point
 from shapely.ops import unary_union
 
 warnings.filterwarnings("ignore")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from spillover_common import BORDER_FORM, cluster_inference, market, unit  # noqa: E402
+
 root = Path(__file__).resolve().parents[1]
-unit = lambda f: "29189" if f == "29510" else f
 KX = math.cos(math.radians(38.5))
 flat = lambda geom: scale(geom, xfact=KX, yfact=1, origin=(0, 0))
 
@@ -42,8 +45,8 @@ edge = {f: g.boundary for f, g in county.items()}
 # neighbours: Missouri counties whose shapes touch (within 100 m)
 nbrs = {f: [h for h in county if h != f and county[f].distance(county[h]) < 0.001] for f in county}
 
-reg = pd.read_csv(Path.home() / "VSCode/NewsCrawler/MizzouNewsCrawler/src/lookups/mo_outlet_registry.csv", dtype=str)
-reg = reg[(reg.status == "active") & reg.lat.notna()].assign(u=lambda x: x.county_fips.fillna("").map(unit))
+reg = market()
+reg = reg[reg.lat.notna()]
 reg = reg[reg.u.isin(county)].drop_duplicates("outlet").copy()
 reg["pt"] = [flat(Point(float(x), float(y))) for x, y in zip(reg.lon, reg.lat)]
 reg["edge_mi"] = [69 * edge[f].distance(p) for f, p in zip(reg.u, reg.pt)]
@@ -71,14 +74,11 @@ d[["closer_any", "closer_same", "border_rank"]] = feat
 d["has_closer_same"] = (d.closer_same > 0).astype(float)
 d["log1p_closer_same"] = np.log1p(d.closer_same)
 d["log1p_closer_any"] = np.log1p(d.closer_any)
-rows = [l.rstrip("\n").rsplit("|", 1) for l in open(root / "coverage/source_frequency.csv") if "|" in l]
-freq = pd.DataFrame(rows, columns=["outlet", "f"]).drop_duplicates("outlet").set_index("outlet").f.str.strip()
-d["kind"] = np.where(d.broadcast == 1, "broadcast",
-                     d.outlet.map(freq).map({"daily": "daily", "weekly": "weekly"}).fillna("other print"))
+freq = reg.drop_duplicates("outlet").set_index("outlet").freq
+d["kind"] = np.where(d.broadcast == 1, "broadcast", d.outlet.map(freq).map({"daily": "daily", "weekly": "weekly"}).fillna("other print"))
 
-NOT_FITTED = {"Greene County Commonwealth", "Three Rivers Publishing", "Mid Rivers Newsmagazine"}
-g = d[d.good & ~d.outlet.isin(NOT_FITTED) & d.closer_any.notna()].copy()
-print(f"{len(g)} fitted outlets with registry coordinates (of {(d.good & ~d.outlet.isin(NOT_FITTED)).sum()})")
+g = d[d.fitted & d.closer_any.notna()].copy()
+print(f"{len(g)} fitted outlets with registry coordinates (of {d.fitted.sum()})")
 fit = lambda f, x: smf.glm(f, x, family=sm.families.Binomial()).fit()
 
 
@@ -91,9 +91,9 @@ def score(f):
     return e.mean(), e.median(), e.groupby(g.kind).mean()
 
 
-ADOPTED = "rate ~ broadcast + crowded_weekly + log_border_mi + log_print"
-NOBORDER = "rate ~ broadcast + crowded_weekly + log_print"
-SPECS = {"adopted": ADOPTED, "adopted without border": NOBORDER}
+ADOPTED = BORDER_FORM   # the border form: this test asks whether the border term stands for market position
+NOBORDER = BORDER_FORM.replace(" + log_border_np", "")
+SPECS = {"border form": ADOPTED, "border form without border": NOBORDER}
 for t in ["log1p_closer_any", "border_rank", "log1p_closer_same", "has_closer_same"]:
     SPECS[f"+ {t}"] = ADOPTED + f" + {t}"
     SPECS[f"{t} in place of border"] = NOBORDER + f" + {t}"
@@ -101,8 +101,8 @@ print("\n| Model | Mean | Median | Broadcast | Daily | Weekly | Other print | Te
 for lab, f in SPECS.items():
     m, md, k = score(f)
     term = f.split(" + ")[-1]
-    mm = smf.glm(f, g, family=sm.families.Binomial()).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(g.fips)[0]})
-    tc = f"{term} {mm.params[term]:+.2f} ({mm.pvalues[term]:.3f})" if lab != "adopted" and term in mm.params else ""
+    ci = cluster_inference(g, f, B=0)[1]
+    tc = f"{term} {ci.coef[term]:+.2f} ({ci.p_cluster_t[term]:.3f})" if lab != "border form" and term in ci.index else ""
     print(f"| {lab} | {m:.2f} | {md:.2f} | {k.get('broadcast', np.nan):.2f} | {k.get('daily', np.nan):.2f} | "
           f"{k.get('weekly', np.nan):.2f} | {k.get('other print', np.nan):.2f} | {tc} |")
 show = d[d.fips.isin(["29007", "29019", "29151"])]
