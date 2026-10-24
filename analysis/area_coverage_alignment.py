@@ -200,7 +200,7 @@ RDIR = flows / "reach" if REGION == "columbia" else flows / "reach" / REGION
 MAPS = json.load(open(RDIR / "market_pattern_maps.json"))
 CONF = json.load(open(RDIR / ("confidence_columbia.json" if REGION == "columbia" else "confidence.json")))
 # the study's three towns in the Columbia region; every town's areas elsewhere
-AREAS = ([("Columbia", 1), ("Columbia", 2), ("Mexico", 1), ("Linn", 1)] if REGION == "columbia"
+AREAS = ([(t, m["rank"]) for t in ("Columbia", "Mexico", "Linn") for m in MAPS["towns"][t]] if REGION == "columbia"
          else [(t, m["rank"]) for t, ms in MAPS["towns"].items() for m in ms if str(m["rank"]) in CONF.get(t, {})])
 SUFFIX = "" if REGION == "columbia" else f"_{REGION}"
 rows = []
@@ -279,9 +279,18 @@ for r in plc.drop_duplicates(["article_id", "geoid"]).itertuples():
         ll = _ll(r.geoid_level, r.geoid, None, float("nan"))
         if ll:
             STORY_PTS[o].append((*ll, 0.5 * (0.5 if CIN.get(r.article_id) == "Sports" else 1.0)))
-_reg = pd.read_csv(Path.home() / "VSCode/NewsCrawler/MizzouNewsCrawler/src/lookups/mo_outlet_registry.csv", dtype=str)
+sys.path.insert(0, str(root / "analysis"))
+from excluded_outlets import registry  # noqa: E402
+
+_reg = registry()                      # pinned (data/registry)
 _reg = _reg[_reg.state == "MO"].dropna(subset=["lat", "lon"]).drop_duplicates("outlet")
 REG_LL = {r.outlet: (float(r.lon), float(r.lat)) for r in _reg.itertuples()}
+# an outlet homed in the county it covers (excluded_outlets.HOME_COUNTY) is centred on that county's seat
+# (market_patterns.HOME_TOWN: St. Charles city, Springfield), not on its office in another county
+for o_, g_ in ns["HOME_TOWN"].items():
+    if g_ in pl_shapes:
+        c_ = pl_shapes[g_][1].representative_point()
+        REG_LL[o_] = (c_.x, c_.y)
 for town, rank in AREAS:
     outline = shape(CONF[town][str(rank)]["outline"])
     area = [k for k, v in MAPS["hexes"].items()

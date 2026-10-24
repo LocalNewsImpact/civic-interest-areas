@@ -3,11 +3,13 @@ confidence_layer.shown_set): the share of ties outside home the drawn hexagons h
 distance rule (a hexagon apart from the area's body needs a tie rising to top_mult x the base threshold at reach_in
 hexagons inside the TV market, reach_out outside; adopted 2x, 4, 2).
 
-For each variant and area:
-  shown       hexagons drawn (before the stability filter)
-  split_half  Jaccard of the hexagons the same rule draws from odd months and from even months -- whether the rule picks
-              out a repeatable area (the statistical criterion for the threshold)
-  stable      share of shown hexagons whose tie clears the threshold in both halves
+For each variant and area (home hexagons, value 100, left out of every count and overlap, as in market_stability.py:
+home is in every area by definition and would inflate the overlap):
+  shown                  hexagons drawn beyond home (before the stability filter)
+  shown_odd, shown_even  hexagons beyond home the same rule draws from odd months and from even months
+  replicability          Jaccard of those two sets -- whether the rule picks out the same area from either half of the
+                         year. REPLICABILITY, not validity: it says the area repeats, not that it is the right area
+  stable                 share of shown hexagons whose tie clears the threshold in both halves
   km2, iou    the published area (stability filter, connected, smoothed) and its overlap with the adopted rule's area
 Writes analysis/selection_sensitivity.csv. Usage: selection_sensitivity.py [region]"""
 import csv
@@ -22,7 +24,8 @@ region = sys.argv[1] if len(sys.argv) > 1 else "columbia"
 sys.argv = ["confidence_layer.py", region]
 C = runpy.run_path(str(root / "analysis/confidence_layer.py"), run_name="confidence_lib")
 ns, P, MAPS = C["ns"], C["P"], C["MAPS"]
-AREAS = [("Columbia", 1), ("Columbia", 2), ("Mexico", 1), ("Linn", 1)]
+# the published areas: every area of Columbia, Mexico and Linn (market_patterns.py decides how many each has)
+AREAS = [(t, m["rank"]) for t in ("Columbia", "Mexico", "Linn") for m in MAPS["towns"][t]]
 VARIANTS = {
     "adopted (50%, 2x at 4 hexagons)": {},
     "selectivity 40%": {"sel": 0.4},
@@ -48,12 +51,17 @@ for town, rank in AREAS:
         on, basef = C["shown_set"](net, in_market, **kw)
         on_odd, _ = C["shown_set"](half["odd"], in_market, **kw)
         on_even, _ = C["shown_set"](half["even"], in_market, **kw)
-        stable = sum(1 for k in on if net[k] >= 100 or (half["odd"].get(k, 0) >= basef and half["even"].get(k, 0) >= basef))
+        # beyond home only (home is 100 in every map, all months and both halves)
+        on = {k for k in on if net[k] < 100}
+        on_odd = {k for k in on_odd if half["odd"][k] < 100}
+        on_even = {k for k in on_even if half["even"][k] < 100}
+        stable = sum(1 for k in on if half["odd"].get(k, 0) >= basef and half["even"].get(k, 0) >= basef)
         geom, _, km2, _ = C["outline_for"](town, rank, half, **kw)
         g = shape(geom)
         base_geom = base_geom or g
         rows.append({"area": f"{town} {'I' * rank}", "variant": name, "threshold": round(basef, 1), "shown": len(on),
-                     "split_half": round(jac(on_odd, on_even), 3), "stable": round(stable / max(1, len(on)), 3),
+                     "shown_odd": len(on_odd), "shown_even": len(on_even),
+                     "replicability": round(jac(on_odd, on_even), 3), "stable": round(stable / max(1, len(on)), 3),
                      "km2": km2, "iou": round(g.intersection(base_geom).area / g.union(base_geom).area, 3)})
         print(rows[-1])
 out = root / "analysis/selection_sensitivity.csv"

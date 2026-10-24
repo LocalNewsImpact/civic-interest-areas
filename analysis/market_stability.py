@@ -16,7 +16,7 @@ for region in ("columbia", "springfield", "cape", "kirksville", "joplin", "kansa
     sys.argv = ["confidence_layer.py", region]
     src = open(root / "analysis/confidence_layer.py").read()
     g = {"__file__": str(root / "analysis/confidence_layer.py"), "__name__": "lib"}
-    exec(compile(src[:src.index("out = {}\nfor town in")], "confidence_layer.py", "exec"), g)
+    exec(compile(src[:src.index("if __name__ == \"__main__\":")], "confidence_layer.py", "exec"), g)
     C = json.load(open(root / ("flows/reach/confidence_columbia.json" if region == "columbia" else f"flows/reach/{region}/confidence.json")))
     for town, ms in g["MAPS"]["towns"].items():
         for m in ms:

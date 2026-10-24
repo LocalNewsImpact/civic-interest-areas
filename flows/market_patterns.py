@@ -21,7 +21,7 @@ REGION = sys.argv[1] if len(sys.argv) > 1 else "columbia"
 CFG = json.load(open(here / "regions.json"))[REGION]
 R = here.parent / CFG["out"]
 sys.path.insert(0, str(here.parent / "analysis"))
-from excluded_outlets import EXCLUDE  # noqa: E402
+from excluded_outlets import EXCLUDE, HOME_COUNTY, home_fips, registry  # noqa: E402
 
 P = json.load(open(R / "patterns.json"))
 cov = pd.read_csv(here.parent / "analysis/county_covariates.csv", dtype={"fips": str}).set_index("fips")
@@ -29,11 +29,19 @@ cname = cov.name.to_dict()
 by_name = {n.lower(): f for f, n in cname.items()}
 by_name.update({"st. louis": "29189", "st louis": "29189", "st. louis city": "29510"})
 fips_of = lambda n: by_name.get((n or "").lower().replace(" county", "").strip())
+# AN OUTLET'S HOME COUNTY (user, 2026-10-24): the county it is filed under, except the two outlets homed in the county
+# they cover (excluded_outlets.HOME_COUNTY: Mid Rivers Newsmagazine -> St. Charles, Greene County Commonwealth -> Greene)
+home_of = lambda a: home_fips(a["publisher"], fips_of(a["publisher_county"]))
+# ...and their home TOWN, for the incoming tie (outlets based in a hexagon's town): the covered county's seat --
+# St. Charles city (2964082; the county's largest town is O'Fallon) and Springfield (2970000, seat and largest)
+HOME_TOWN = {o_: g_ for o_, g_ in {"Mid Rivers Newsmagazine": "2964082", "Greene County Commonwealth": "2970000"}.items()
+             if o_ in HOME_COUNTY}
+assert set(HOME_TOWN) == set(HOME_COUNTY), "a HOME_COUNTY outlet without a home town"
 cin = pd.read_csv(here.parent / "coverage/cin_labels_2026_03.csv").set_index("id").primary_label
 arts = json.load(open(here.parent / "coverage/storymap/statewide_2026_03_articles.json"))["articles"]
 n_stories, about = defaultdict(int), defaultdict(float)
 for a in arts:
-    i = fips_of(a["publisher_county"])
+    i = home_of(a)
     if not i or not a["counties"] or a["publisher"] in EXCLUDE:
         continue
     n_stories[i] += 1
@@ -221,11 +229,10 @@ for r in plc.itertuples():
         spread(place_hexes(r.geoid), 0.5, acc)
     elif r.geoid_level == "county":
         spread(county_hexes.get(r.geoid, []), 0.5, acc)
-reg = pd.read_csv(Path.home() / "VSCode/NewsCrawler/MizzouNewsCrawler/src/lookups/mo_outlet_registry.csv", dtype=str)
-reg = reg.dropna(subset=["lat", "lon"]).drop_duplicates("outlet").set_index("outlet")
+reg = registry().dropna(subset=["lat", "lon"]).drop_duplicates("outlet").set_index("outlet")   # pinned (data/registry)
 # an outlet's town by its registry city (a 3 km cell at a river or a town edge can fall in the next county)
 place_by_name = {pl_shapes[g_][0]["NAME"].lower(): g_ for g_ in pl_shapes}
-outlet_place = {o: place_by_name.get((r.city or "").lower()) for o, r in reg.iterrows()}
+outlet_place = {o: HOME_TOWN.get(o) or place_by_name.get((r.city or "").lower()) for o, r in reg.iterrows()}
 by_outlet = defaultdict(list)
 for a in arts:
     if a["publisher"] not in EXCLUDE and a["counties"]:
@@ -269,7 +276,7 @@ for town, home in STUDY.items():
     home_hexes = set(place_hexes(HOME_PLACE[town]))
     dens = defaultdict(float)
     for o, al in by_outlet.items():
-        if fips_of(al[0]["publisher_county"]) != home:
+        if home_of(al[0]) != home:
             continue
         for a in al:
             sw = 0.5 if cin.get(a["id"]) == "Sports" else 1
@@ -288,7 +295,7 @@ for town, home in STUDY.items():
         hs = place_hexes(pg) if pg else []
         if not hs:
             continue
-        own = fips_of(al[0]["publisher_county"])
+        own = home_of(al[0])
         outlet_town_hexes[o] = hs
         for a in al:
             sw = 0.5 if cin.get(a["id"]) == "Sports" else 1
@@ -438,7 +445,7 @@ for town, pats in out.items():
                 idx[str(sx)][k] = 100.0
         own_u = {P["bg_unit"].get(h) for h in town_bgs(town)} | {HOME_PLACE[town]}
         OV = {X: overlap_of(Hk, own_u, X) for X in place_outlets if X not in own_u}
-        h_cov = cov_dist([o for o, al in by_outlet.items() if fips_of(al[0]["publisher_county"]) == STUDY[town] and o not in EXCLUDE])
+        h_cov = cov_dist([o for o, al in by_outlet.items() if home_of(al[0]) == STUDY[town] and o not in EXCLUDE])
         # shared coverage counts only places in this town's own market (travel 0.05+ of the busiest): two newsrooms both
         # reporting statewide news (the capital, the university) is not a local tie
         mkt = {u_ for u_, w in Hk.items() if w >= 0.05}
@@ -564,7 +571,7 @@ maps["story"] = {}
 for town, (c_, _) in TOWNS.items():
     val, cen = defaultdict(float), defaultdict(float)
     for o, al in by_outlet.items():
-        if fips_of(al[0]["publisher_county"]) != c_:
+        if home_of(al[0]) != c_:
             continue
         for a in al:
             for k, w in credit.get(a["id"], {}).items():
@@ -574,7 +581,7 @@ for town, (c_, _) in TOWNS.items():
     # CENTRAL FOCUS ON ITS FOOTPRINT, at full strength: a neighbourhood (block point) story shades its hexagon, a city
     # (place) story every hexagon of the city, a county story every hexagon of the county; each hexagon counts the stories
     # centred on it. MENTIONS likewise, kept apart -- the weaker signal, drawn faint. State-level focus has no footprint.
-    ids_ = {a["id"] for o, al in by_outlet.items() if fips_of(al[0]["publisher_county"]) == c_ for a in al}
+    ids_ = {a["id"] for o, al in by_outlet.items() if home_of(al[0]) == c_ for a in al}
     cfp, mfp = defaultdict(set), defaultdict(set)
     for r in pts[pts.article_id.isin(ids_)].itertuples():
         if r.point_geoid_level == "block" and r.point_lat == r.point_lat and hex_of(r.point_lon, r.point_lat):
@@ -607,7 +614,7 @@ for town, (c_, _) in TOWNS.items():
     # MENTIONS BY COUNTY: stories naming a county (or a place in it) without being centred there -- the county shade
     cm = defaultdict(int)
     for o, al in by_outlet.items():
-        if fips_of(al[0]["publisher_county"]) != c_:
+        if home_of(al[0]) != c_:
             continue
         for a in al:
             for cc in set(a["counties"]) - {a["central"]}:

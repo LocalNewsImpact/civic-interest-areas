@@ -2,6 +2,8 @@
 (market_patterns.py idx["net"]), computed from odd months (January, March, May, July 2026) and from even months
 (February, April, June) separately, with the same pattern weights (pattern_halves.py). The map (?conf=1) draws a shown
 hexagon lighter when it clears the map's floor in only one half. Nothing else on the approved map changes.
+Holding in both halves is REPLICABILITY (the same area from either half of the year), not validity: it does not show
+the area is the right one. The same pattern weights serve both halves, so the halves test the travel, not the fit.
 Corridors (?corridors=1): the road from home to each place the approved map names as its direction, and the hexagons
 it crosses (part of the market: travel along it makes crashes, closures, construction, fuel and food there information
 residents need).

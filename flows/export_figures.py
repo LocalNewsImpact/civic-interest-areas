@@ -23,12 +23,13 @@ from urllib.parse import quote
 HERE = Path(__file__).resolve().parent
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 BASE = "http://127.0.0.1:8765/market_pattern_print.html"
-AREAS = {
-    "columbia": [("Columbia", 1), ("Columbia", 2), ("Mexico", 1), ("Linn", 1)],
-    "springfield": [("Springfield", 1), ("Springfield", 2), ("Springfield", 3)],
-    "joplin": [("Joplin", 1), ("Joplin", 2), ("Joplin", 3)],
-    "kirksville": [("Kirksville", 1), ("Kirksville", 2)],
-}
+# the built towns; their areas are every market market_patterns.py keeps for them (the count follows the fit)
+BUILT = {"columbia": ("Columbia", "Mexico", "Linn"), "springfield": ("Springfield",), "joplin": ("Joplin",),
+         "kirksville": ("Kirksville",)}
+_REGIONS = json.load(open(HERE / "regions.json"))
+AREAS = {r_: [(t_, m_["rank"]) for t_ in towns_
+              for m_ in json.load(open(HERE.parent / _REGIONS[r_]["out"] / "market_pattern_maps.json"))["towns"][t_]]
+         for r_, towns_ in BUILT.items()}
 
 
 def figure(region, town, rank, measure):

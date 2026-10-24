@@ -19,7 +19,7 @@ os.environ["TIE_LIB"] = "1"
 sys.argv = ["confidence_layer.py", region]
 g = {"__file__": str(root / "analysis/confidence_layer.py"), "__name__": "lib"}
 src = open(root / "analysis/confidence_layer.py").read()
-exec(compile(src[:src.index("out = {}\nfor town in")], "confidence_layer.py", "exec"), g)
+exec(compile(src[:src.index("if __name__ == \"__main__\":")], "confidence_layer.py", "exec"), g)
 ns, MAPS, P = g["ns"], g["MAPS"], g["P"]
 C = json.load(open(root / ("flows/reach/confidence_columbia.json" if region == "columbia" else f"flows/reach/{region}/confidence.json")))
 Wa, Ha = np.array(P["W"]), np.array(P["H"])
