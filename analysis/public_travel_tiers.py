@@ -168,7 +168,7 @@ rucc = pd.read_csv(REF / "rucc2023.csv", dtype=str, encoding="latin-1")
 rucc = rucc[rucc.Attribute == "RUCC_2023"]
 rural = np.array([{r.FIPS.zfill(5): int(r.Value) >= 4 for r in rucc.itertuples()}.get(h, False) for h in home])
 if os.environ.get("URBAN_CLASSES"):
-    k4 = pd.read_csv(root / "analysis/county_class_k4.csv", dtype={"fips": str}).set_index("fips")["class"]
+    k4 = pd.read_csv(root / f"analysis/county_class_k4{SUF}.csv", dtype={"fips": str}).set_index("fips")["class"]   # the home state's classes
     to_urban = {c.strip() for c in os.environ["URBAN_CLASSES"].split(",")}
     rural &= ~np.array([k4.get("29189" if h == "29510" else h, "class 1") in to_urban for h in home])
 for c, n in ((("29151", "Osage"), ("29051", "Cole"), ("29019", "Boone"), ("29007", "Audrain"), ("29127", "Marion")) if ST == "29" else ()):

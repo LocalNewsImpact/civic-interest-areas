@@ -1,21 +1,32 @@
 """Like-for-like: the public models (no Advan) against the adopted Advan-fitted travel model, all scored on the same
-outcome -- Advan county -> county destination shares, January-September 2026, out-of-county Missouri pairs -- with the
-same measure (share-weighted absolute error, points) by county tier. The Advan-fitted model is scored with each county
-held out in 8 folds (travel_commute_pair_test.py); the public models never see Advan, so they need no holding out.
-Public tract shares are rolled up to counties, weighted by tract population (2020)."""
+outcome -- the adopted Advan outcome (calibrated, pass-through discounted; gravity_terms.travel_visits), county ->
+county destination shares, January-September 2026, out-of-county Missouri pairs -- with the same measures by county
+tier. The Advan-fitted model is the adopted one (gravity_terms.FACTORS, doubly constrained), each county held out in
+8 folds (gravity_terms.loco, seed 7: the same folds as travel_commute_pair_test.py); the public models never see
+Advan, so they need no holding out. Public tract shares are rolled up to counties, weighted by tract population (2020).
+Scores on the common destination set (the public model's destinations, Advan and the fitted model renormalised over
+it): share-weighted error and log-ratio error (public_scoring.py).
+Output: analysis/compare_shares.csv (advan = observed shares over all Missouri destinations; the Advan-fitted model;
+the public builds), read by every public_* script."""
 import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-src = open(Path(__file__).resolve().parent / "travel_commute_pair_test.py").read().split('print("| Model | "')[0]
-__file__ = str(Path(__file__).resolve().parent / "travel_commute_pair_test.py")
+here = Path(__file__).resolve().parent
+sys.path.insert(0, str(here))
+src = open(here / "travel_model_dc_test.py").read().split("models = [")[0]
+__file__ = str(here / "travel_model_dc_test.py")
 exec(src)
-X = pd.concat([X0[models["+ commuting out and in"] + O], Dd], axis=1)
-ps_advan = cv(X, sorted(set(iu)))
+from gravity_terms import loco  # noqa: E402
+from public_scoring import per_county, renorm  # noqa: E402
 
+ps_advan = loco(y9, Xof(FACTORS), pairs.i.values)
+a = share(y9)
+unit = lambda f: "29189" if f == "29510" else f
+tier = pd.read_csv(root / "analysis/county_class_k4.csv", dtype={"fips": str}).set_index("fips")["class"]
+names = {"class 1": "small rural", "class 2": "independent towns", "class 3": "commuter counties", "class 4": "hubs"}
 tr = pd.read_csv(root / "census_dl/ref/CenPop2020_Mean_TR29.txt", dtype=str, encoding="utf-8-sig")
 pop = dict(zip(tr.STATEFP + tr.COUNTYFP + tr.TRACTCE, tr.POPULATION.astype(float)))
 k = {(i, j): n for n, (i, j) in enumerate(zip(pairs.i, pairs.j))}
@@ -40,16 +51,21 @@ rows = {"Advan-fitted (adopted, counties held out)": ps_advan,
         "trade area: TAC leakage, Huff on sales, lambda 2 (Reilly)": roll_up("public_model_pairs_tiers_tac_l2.csv", "combined_share"),
         "trade area: TAC leakage, Huff on surplus sales, lambda 2": roll_up("public_model_pairs_tiers_tac_surplus_l2.csv", "combined_share"),
         "trade area + every kind at lambda 2 (visitation law)": roll_up("public_model_pairs_tiers_tac_all2.csv", "combined_share")}
-tiers = list(names) + ["all"]
-E = {lab: [err(ps, (cls == c) if c != "all" else np.ones(len(a), bool)) for c in tiers] for lab, ps in rows.items()}
+common = rows["trade area: TAC leakage, Huff on sales, survey decay"] > 0
+ac = renorm(pairs.i.values, a * common)
+cls = pd.Series({f: tier.get(unit(f), "class 1") for f in sorted(set(pairs.i))})
+E = {lab: per_county(pairs.i.values, ac, renorm(pairs.i.values, ps * common)) for lab, ps in rows.items()}
+print(f"common destination set: Advan share outside {100 * pd.Series(a * ~common).groupby(pairs.i.values).sum().mean():.2f}% per county")
 base = E["BASELINE public: work + non-work (employment draw, likelihood)"]
-print("| Factor | " + " | ".join(names.values()) + " | all |\n|---|" + "---:|" * len(tiers))
+print("| Factor | " + " | ".join(names.values()) + " | all |\n|---|" + "---:|" * 5)
+cell = lambda e, c: e[(cls.reindex(e.index) == c).values] if c != "all" else e
 for lab, e in E.items():
     if lab.startswith(("Advan", "BASELINE")):
-        print(f"| **{lab}** | " + " | ".join(f"{v:.2f}" for v in e) + " |")
+        print(f"| **{lab}** | " + " | ".join(f"{cell(e, c).sw.mean():.2f} / {cell(e, c).lr.mean():.2f}" for c in list(names) + ["all"]) + " |")
     else:
-        print(f"| {lab} | " + " | ".join(f"{v - b:+.2f}" for v, b in zip(e, base)) + " |")
-print("(factor rows: change in error against the baseline; negative = better)")
+        print(f"| {lab} | " + " | ".join(f"{cell(e, c).sw.mean() - cell(base, c).sw.mean():+.2f} / {cell(e, c).lr.mean() - cell(base, c).lr.mean():+.2f}"
+                                         for c in list(names) + ["all"]) + " |")
+print("(share-weighted error / log-ratio error; factor rows: change against the baseline; negative = better)")
 
 for h, n in (("29019", "Boone"), ("29077", "Greene"), ("29151", "Osage")):
     far = (pairs.i.values == h) & (pairs.dist.values > 60)

@@ -1,6 +1,7 @@
 """Kansas counties assigned to the Missouri county classes: nearest Missouri class centre (k = 4) on the same two
-measures, standardised with Missouri's mean and spread -- log population (Missouri: crossover_compare.csv; Kansas: 2020
-Census, CenPop2020_Mean_CO) and commuting outflow (employed residents working in another county of the state /
+measures, standardised with Missouri's mean and spread -- log population, ACS 2020-2024 5-year total population in
+both states (Missouri: crossover_compare.csv, datadesk census_value; Kansas: table B01003, census_dl/acs_tract/b01003.dat,
+the Census table-based summary file -- the same figures, e.g. Boone 188,043 in both) and commuting outflow (employed residents working in another county of the state /
 employed residents; LODES 2023 main file of each state). Output analysis/county_class_k4_20.csv."""
 import csv
 import gzip
@@ -28,12 +29,19 @@ with gzip.open(root / "free/ks/ks_od_main_JT00_2023.csv.gz", "rt") as fh:
             out[h] += n
 co = pd.read_csv(root / "census_dl/ref/CenPop2020_Mean_CO.txt", dtype=str, encoding="utf-8-sig")
 co = co[co.STATEFP == "20"]
-ks = pd.DataFrame({"log_pop": np.log(co.POPULATION.astype(float).values),
+acs = pd.read_csv(root / "census_dl/acs_tract/b01003.dat", sep="|", dtype=str)
+acs = acs[acs.GEO_ID.str.startswith("0500000US20")]
+acs = pd.Series(acs.B01003_E001.astype(float).values, index=acs.GEO_ID.str[-5:])
+ks = pd.DataFrame({"log_pop": np.log(acs.reindex(co.STATEFP + co.COUNTYFP).values),
                    "out": [out[f] / work[f] for f in co.STATEFP + co.COUNTYFP]}, index=co.STATEFP + co.COUNTYFP)
 d = (((ks - mu) / sd).values[:, None, :] - centre.values[None, :, :]) ** 2
 ks["class"] = centre.index[d.sum(2).argmin(1)]
-ks.rename_axis("fips")[["class"]].to_csv(A / "county_class_k4_20.csv")
 names = dict(zip(co.STATEFP + co.COUNTYFP, co.COUNAME))
+old = pd.read_csv(A / "county_class_k4_20.csv", dtype={"fips": str}).set_index("fips")["class"] if (A / "county_class_k4_20.csv").exists() else None
+if old is not None:
+    moved = ks.index[old.reindex(ks.index).values != ks["class"].values]
+    print("moved from the previous file:", [f"{f} {old.get(f)} -> {ks.loc[f, 'class']}" for f in moved])
 print(ks["class"].value_counts().sort_index().to_dict())
+ks.rename_axis("fips")[["class"]].to_csv(A / "county_class_k4_20.csv")
 for c in sorted(ks["class"].unique()):
     print(c, ", ".join(names[f] for f in ks.index[ks["class"] == c][:14]))

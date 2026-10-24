@@ -55,19 +55,24 @@ by_tier = lambda cols: pd.concat({f"{c}__{t}": X0[c] * T[t] for c in cols for t 
 
 X1 = pd.concat([X0[base + O], Dd], axis=1)
 X2 = pd.concat([X0[base + O], by_tier(pull), Dd], axis=1)
-_t = pd.concat([by_tier(base + pull + ["log_pop_j"]), X0[["fotheringham"]]], axis=1)
-_t = (_t - _t.mean()) / _t.std().replace(0, 1)          # standardised: the no-fixed-effects fit otherwise overflows
-X3 = pd.concat([_t, X0[O]], axis=1)
+_t_raw = pd.concat([by_tier(base + pull + ["log_pop_j"]), X0[["fotheringham"]]], axis=1)
 # 4: county-by-county pull
 jpr = {i: jobs[i] / popd[i] for i in fips}
 acc_j = {i: math.log(sum(jobs[k] / max(miles(i, k), 1.0) for k in fips if k != i)) for i in fips}
 acc_r = {i: math.log(sum(retail[k] / max(miles(i, k), 1.0) for k in fips if k != i)) for i in fips}
 oi = pd.DataFrame({"log_pop_i": [lg(popd[i]) for i in pairs.i], "jobs_per_res_i": [jpr[i] for i in pairs.i],
                    "access_jobs_i": [acc_j[i] for i in pairs.i], "access_retail_i": [acc_r[i] for i in pairs.i]}, index=pairs.index)
-oi = (oi - oi.mean()) / oi.std()
-cp = pd.concat({f"{d}_x_{o}": X0[d] * oi[o] for d in ("log_jobs_j", "log_retail_j") for o in oi.columns}, axis=1)
-X4 = pd.concat([X0[base + O], cp, Dd], axis=1)
-X5 = pd.concat([X0[base + O], by_tier(pull), cp, Dd], axis=1)
+oi_raw = oi
+
+
+def standardised(train):
+    """Models 3-5 with every standardised column centred and scaled on the training rows only (the held-out counties'
+    means and spreads stay out of the fit). 3 is standardised because the no-fixed-effects fit otherwise overflows."""
+    _t = (_t_raw - _t_raw[train].mean()) / _t_raw[train].std().replace(0, 1)
+    o = (oi_raw - oi_raw[train].mean()) / oi_raw[train].std()
+    cp = pd.concat({f"{d}_x_{c}": X0[d] * o[c] for d in ("log_jobs_j", "log_retail_j") for c in o.columns}, axis=1)
+    return (pd.concat([_t, X0[O]], axis=1), pd.concat([X0[base + O], cp, Dd], axis=1),
+            pd.concat([X0[base + O], by_tier(pull), cp, Dd], axis=1))
 
 small = sorted(tier.index[tier == "class 1"])
 rng = np.random.default_rng(7)
@@ -77,6 +82,7 @@ iu = np.array([unit(i) for i in pairs.i])
 for f in folds:
     test = np.isin(iu, f)
     train = ~test
+    X3, X4, X5 = standardised(train)
     for label, X in (("1 pooled", X1), ("2 tier pull", X2), ("3 theory", X3), ("4 county pull", X4), ("5 tier + local", X5)):
         cols = X.columns[(X[train] != 0).any()]                       # drop the held-out origins' own fixed effects
         try:
@@ -100,5 +106,6 @@ for label, p in pred.items():
     print(f"| {label} | {e:.2f} | {e3:.2f} |")
 m = sm.GLM(y9, X2, family=sm.families.Poisson()).fit(maxiter=300)
 print("tier pull, small rural (all counties):", {k: round(v, 3) for k, v in m.params.items() if "__" in k and "class 1" in k})
+X5 = standardised(np.ones(len(pairs), bool))[2]       # all counties, for the reported coefficients
 m5 = sm.GLM(y9, X5, family=sm.families.Poisson()).fit(maxiter=300)
 print("tier + local (all counties):", {k: round(v, 3) for k, v in m5.params.items() if "_x_" in k or "__" in k})
