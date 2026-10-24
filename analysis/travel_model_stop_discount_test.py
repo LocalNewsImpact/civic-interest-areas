@@ -1,10 +1,12 @@
 """Discount pass-through stops instead of modelling routes.
 
-The Neighborhood Patterns county counts cannot separate a gas stop from any other stop. The store-level data can: for
-each county pair, road_stop_share.csv gives the share of March visits at gas stations, convenience stores and fast
-food. Buying gas where you shop is normal, so only the EXCESS over the statewide out-of-county share (12.5%) is treated
-as pass-through:  adjusted visits_ij = visits_ij x (1 - max(0, road_stop_share_ij - 0.125)), for pairs with 200+
-store-level visitors (others unadjusted). Same adopted model (gravity_terms.design), refitted. Each row is scored
+The Neighborhood Patterns county counts cannot separate a gas stop from any other stop. The store-level data can
+(road_stop_share.csv, build_road_stop_share.py; pairs with 200+ store-level visitors): adjusted visits_ij = visits_ij x
+(1 - discount_ij) under each definition --
+  discount_old                2026-10-16: gas, fast food (old codes) share above the statewide 12.5%
+  discount_codes              codes fixed (+ convenience stores 445120), above the statewide share
+  discount_highway_statewide  road stops within 1 km of an Interstate or US highway, above the statewide share
+  discount (ADOPTED)          highway stops above the share expected from the destination's own residents' store mix Same adopted model (gravity_terms.design), refitted. Each row is scored
 against its own outcome, as travel_model.py scores (gravity_terms.HEAD; no change column: the outcomes differ).
 """
 import sys
@@ -20,11 +22,14 @@ from gravity_terms import HEAD, MONTHS, all_pairs, cov, design, evaluate, persis
 warnings.filterwarnings("ignore")
 pairs = all_pairs()
 X = design(pairs)
-excess = stop_discount(pairs)
 raw = travel_visits(pairs, MONTHS, discounted=False)
-print(f"pairs discounted: {np.sum(excess > 0):,}; visits removed: {np.sum(raw * excess) / raw.sum():.1%} of out-of-county visits")
+VARIANTS = [("undiscounted", np.zeros(len(pairs)))] + [(c, stop_discount(pairs, c)) for c in
+                                                      ("discount_old", "discount_codes", "discount_highway_statewide")] + [
+    ("discount (adopted)", stop_discount(pairs))]
+for label, adj in VARIANTS[1:]:
+    print(f"{label}: pairs discounted {np.sum(adj > 0):,}; visits removed {np.sum(raw * adj) / raw.sum():.2%} of out-of-county visits")
 EV, out = {}, []
-for label, adj in (("as recorded (calibrated)", np.zeros(len(pairs))), ("excess highway stops discounted (adopted)", excess)):
+for label, adj in VARIANTS:
     y9, y6, y3 = (travel_visits(pairs, m, disc=adj) for m in (MONTHS, MONTHS[:6], MONTHS[6:]))
     EV[label] = evaluate(X, pairs, y9, y6, y3)
     out.append(persistence(pairs, y6, y3))

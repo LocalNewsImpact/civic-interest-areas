@@ -69,34 +69,30 @@ models = [
     ("adopted + adjacent centre + nearest centre", FACTORS + ["adjacent_centre", "nearest_centre"], True),
 ]
 if __name__ == "__main__" and "selection" in sys.argv[1:]:
-    # SELECTION RULE (2026-10-24), a joint test: (1) the adopted set must beat the fixed-effects-only model (origin and
-    # destination effects, no pair terms) held out -- each home county left out, 8 folds; county-paired bootstrap,
-    # 1,000 draws; 95% interval excluding zero; (2) every adopted coefficient's 95% interval (two-way clustered) must
-    # exclude zero; drop-one gains are reported beside it, not used to drop; (3) a candidate is added only if its
-    # paired held-out gain against the adopted set excludes zero. Ties go to fewer terms.
-    from gravity_terms import boot, county_stats, fit_twoway, loco
+    # SELECTION (user, final, 2026-10-24): the core gravity terms are tested as BLOCKS, each against the adopted model
+    # without it -- distance (the five distance terms), border, commuting (out + in) -- held out (each home county left
+    # out, 8 folds, seed 7), county-paired bootstrap, 1,000 draws; never one term at a time. Also the whole set against
+    # fixed effects only. Coefficients with 2-way clustered intervals for reference. Exploratory additions are decided
+    # by the nested procedure only (combined_marginal_test.py travel_nested_all).
+    from gravity_terms import DIST_TERMS, boot, county_stats, fe_only_loco, fit_twoway, loco
     a9, o = share(y9), pairs.i.values
-    full = county_stats(a9, loco(y9, Xof(FACTORS), o), o, y9)
-    fe = county_stats(a9, loco(y9, pd.concat([X0[O], Dd], axis=1), o), o, y9)
-    lo, hi = boot(fe, "werr", ref=full)
-    print(f"(1) fixed effects only: held-out error {fe.werr.mean():.3f}; adopted {full.werr.mean():.3f}; gain "
-          f"{fe.werr.mean() - full.werr.mean():+.3f} [{lo:+.3f}, {hi:+.3f}] -> {'passes' if lo > 0 else 'FAILS'}")
+    pfe = fe_only_loco(y9, pairs)
+    full = county_stats(a9, loco(y9, Xof(FACTORS), o), o, y9, ref_ps=pfe)
+    fe = county_stats(a9, pfe, o, y9, ref_ps=pfe)
+    print("| Block removed from the adopted model | Held-out error | Change in error when removed (gain from the block) [95%] |")
+    print("|---|---:|---:|")
+    print(f"| none (adopted, 8 terms) | {full.werr.mean():.3f} | |")
+    for lab, blk in (("distance (log distance, its square, nonmetro x both, home population x distance)", DIST_TERMS),
+                     ("border", ["adjacent"]), ("commuting (out and in)", ["commute_out", "commute_in"]),
+                     ("all pair terms (fixed effects only)", FACTORS)):
+        st = fe if blk is FACTORS else county_stats(a9, loco(y9, Xof([c for c in FACTORS if c not in blk]), o), o, y9, ref_ps=pfe)
+        lo, hi = boot(st, "werr", ref=full)
+        print(f"| {lab} | {st.werr.mean():.3f} | {st.werr.mean() - full.werr.mean():+.3f} [{lo:+.3f}, {hi:+.3f}] |", flush=True)
     m = fit_twoway(y9, Xof(FACTORS), pairs)
     ci = m.conf_int()
-    print("\n(2) | Adopted term | Coef [95%, 2-way] | Coefficient rule | Drop-one held-out gain [95%] |")
-    print("|---|---:|---|---:|")
+    print("\n| Adopted term | Coef [95%, 2-way clustered] |\n|---|---:|")
     for t in FACTORS:
-        s_ = county_stats(a9, loco(y9, Xof([c for c in FACTORS if c != t]), o), o, y9)
-        dl, dh = boot(s_, "werr", ref=full)
-        ok = ci.loc[t, 0] > 0 or ci.loc[t, 1] < 0
-        print(f"| {t} | {m.params[t]:+.3f} [{ci.loc[t, 0]:+.3f}, {ci.loc[t, 1]:+.3f}] | {'keep' if ok else 'FAILS'} | "
-              f"{s_.werr.mean() - full.werr.mean():+.3f} [{dl:+.3f}, {dh:+.3f}] |", flush=True)
-    print("\n(3) | Candidate added to the adopted set | Held-out error | Gain [95%] | Rule |\n|---|---:|---:|---|")
-    for t in ("same_area", "nearest_centre", "adjacent_centre", "log_pop_j_x_log_dist"):
-        s_ = county_stats(a9, loco(y9, Xof(FACTORS + [t]), o), o, y9)
-        dl, dh = boot(full, "werr", ref=s_)
-        print(f"| {t} | {s_.werr.mean():.3f} | {full.werr.mean() - s_.werr.mean():+.3f} [{dl:+.3f}, {dh:+.3f}] | "
-              f"{'ADD' if dl > 0 else 'reject (tie)'} |", flush=True)
+        print(f"| {t} | {m.params[t]:+.3f} [{ci.loc[t, 0]:+.3f}, {ci.loc[t, 1]:+.3f}] |")
 elif __name__ == "__main__":
     EV = {}
     for label, cols, dc in models:

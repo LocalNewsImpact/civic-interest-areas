@@ -10,12 +10,21 @@ pair terms explain is how distance and borders distribute that travel or those s
   log_pop_i_x_log_dist       larger home counties travel farther: (log population - its mean over the 115 counties,
                              ACS 2020-2024; geometric mean 21,980) x centred log distance
   adjacent                   1 if the counties share a border
-  commute_out                log(1 + 1000 x workers living in i who work in j / all workers living in i)  (LODES 2023)
-  commute_in                 log(1 + 1000 x workers living in j who work in i / all workers living in j)  (LODES 2023)
+  commute_out                log(1 + 1000 x workers living in i who work in j / all workers living in i)
+  commute_in                 log(1 + 1000 x workers living in j who work in i / all workers living in j)
+                             LODES 2023 primary jobs (JT01; free/mo_od_main_JT01_2023.csv.gz + aux): one job per worker.
+                             The aux file adds out-of-state residents working in Missouri, so it changes no Missouri pair;
+                             "all workers living in i" = residents of i with a primary job in Missouri
 CENTRING. Distance is measured from 25 miles (REF_MILES; the visit-weighted geometric mean distance of out-of-county
 trips is 26 miles) and home-county population from its mean, so the log_dist coefficient is the distance elasticity of
 travel at 25 miles for a metropolitan home county of mean size, and log_dist + nonmetro_i_x_log_dist the same for a
 nonmetropolitan one. The constants are absorbed by the fixed effects: predictions and fit are unchanged by centring.
+
+SELECTION (user, 2026-10-24): core gravity terms by theory, tested as BLOCKS -- distance (the five distance terms),
+border, commuting (out + in) -- never one term at a time; no hypothesis terms; an exploratory addition is adopted only
+if the NESTED procedure's held-out gain (combined_marginal_test.py travel_nested_all) has a county-paired 95% interval
+excluding zero. Primary metric: share-weighted absolute share error over all Missouri destinations, each home county
+held out; R^2 reported against the uniform reference (1 - SSE/SST) and against the fixed-effects-only model.
 
 Validation (travel_model.py): leave-one-county-out (LOCO) -- each home county's out-of-county shares predicted from a
 model fitted without any of its travel (8 folds, seed 7). The Jan-Jun -> Jul-Sep split is a stability check, scored
@@ -35,15 +44,10 @@ cov = pd.read_csv(root / "analysis/county_covariates.csv", dtype={"fips": str}).
 FIPS = list(cov.index)
 FACTORS = ["log_dist", "log_dist_sq", "nonmetro_i_x_log_dist", "nonmetro_i_x_log_dist_sq", "log_pop_i_x_log_dist",
            "adjacent", "commute_out", "commute_in"]
-# SELECTION RULE (2026-10-24; travel_model_dc_test.py selection): the set must beat origin + destination effects alone
-# held out (each home county left out; county-paired bootstrap, 1,000 draws; 95% interval excluding zero) -- 16.76 ->
-# 3.26, gain +13.50 [+11.69, +15.14]; every coefficient's 2-way clustered 95% interval excludes zero (all eight do);
-# a candidate is added only if its paired held-out gain excludes zero, and the choice survives the nested test
-# (combined_marginal_test.py travel_nested_all, 24 candidates): none does -- the nearest comparable alternative passes
-# one at a time (+0.051 [+0.002, +0.100]) and fails nested (+0.041 [-0.112, +0.173]). Drop-one gains, reported, not used
-# to drop: log_dist +0.17 [-0.09, +0.45], log_dist_sq +0.28 [+0.01, +0.55], nonmetro x log_dist +0.13 [-0.01, +0.28],
-# nonmetro x log_dist_sq +0.18 [+0.04, +0.33], log_pop_i x log_dist +0.15 [-0.08, +0.39], adjacent +0.19
-# [-0.06, +0.42], commute_out +0.38 [+0.20, +0.55], commute_in +0.06 [-0.10, +0.20].
+# SELECTION (user, final, 2026-10-24): the three blocks -- distance (first five), border, commuting (out + in) -- are
+# core gravity terms by theory, tested as blocks against the model without them (travel_model_dc_test.py selection,
+# held out, county-paired intervals); never dropped one term at a time. Exploratory additions only through the nested
+# procedure (combined_marginal_test.py travel_nested_all). Results: MODEL_CHANGES.md, Travel model.
 DIST_TERMS = FACTORS[:5]
 REF_MILES = 25.0                                   # centring point of every distance term
 LOG_D0 = math.log(REF_MILES)
@@ -53,16 +57,17 @@ SINGLY = ["log_pop_j", "log_retail_pc_j", "log_dist", "adjacent", "nonmetro_i_x_
 
 
 def _lodes():
-    """LODES 2023 Missouri main OD: workers by home county -> work county, and workers by home county."""
+    """LODES 2023 Missouri OD, primary jobs (JT01), main + aux: workers by home county -> work county, and by home county."""
     import csv
     import gzip
     from collections import defaultdict
     flow, work = defaultdict(float), defaultdict(float)
-    with gzip.open(root / "free/od_2023.csv.gz", "rt") as fh:
-        for r in csv.DictReader(fh):
-            h, w, n = r["h_geocode"][:5], r["w_geocode"][:5], float(r["S000"])
-            work[h] += n
-            flow[(h, w)] += n
+    for f in ("free/mo_od_main_JT01_2023.csv.gz", "free/mo_od_aux_JT01_2023.csv.gz"):
+        with gzip.open(root / f, "rt") as fh:
+            for r in csv.DictReader(fh):
+                h, w, n = r["h_geocode"][:5], r["w_geocode"][:5], float(r["S000"])
+                work[h] += n
+                flow[(h, w)] += n
     return flow, work
 
 
@@ -124,40 +129,44 @@ def design(p):
 
 
 # ---- the travel outcome ----------------------------------------------------------------------------------------------
-# Visits by residents of county i to county j (i != j), Advan Neighborhood Patterns Plus, calibrated to population
-# (build_calibration.py), minus the pass-through excess: visits x (1 - max(0, road_stop_share - 0.125)) for pairs with
-# 200+ store-level visitors (travel_model_stop_discount_test.py). Every travel script scores this outcome.
+# Visits by residents of county i to county j (i != j), Advan Neighborhood Patterns Plus, on one device -> person scale
+# per month (visits_statewide: recorded / statewide units per resident, build_calibration.py; adopted 2026-10-24), minus
+# the pass-through discount: visits x (1 - discount), road_stop_share.csv `discount` = highway-stop share (stores within
+# 1 km of an Interstate or US highway) above the share expected from the destination's own store mix, pairs with 200+
+# store-level visitors (build_road_stop_share.py; removes 1.74%). Every travel script scores this outcome.
+# Sensitivities: discounted=False (the primary one); disc=stop_discount(p, "discount_old") (2026-10-16 definition);
+# col="visits" (county factor, 2026-10-16); src="od_mo_2026_uncapped.csv" (uncapped destinations only).
 MONTHS = [f"2026-{m:02d}" for m in range(1, 10)]
-STOP_NORM = 0.125
+OUTCOME = "visits_statewide"
 _OD = {}
 
 
-def stop_discount(p):
-    s = pd.read_csv(root / "analysis/road_stop_share.csv", dtype={"i": str, "j": str}).set_index(["i", "j"])
-    return np.array([max(0.0, s.road_stop_share[k] - STOP_NORM) if k in s.index and s.visitors[k] >= 200 else 0.0
-                     for k in zip(p.i, p.j)])
+def stop_discount(p, col="discount"):
+    s = pd.read_csv(root / "analysis/road_stop_share.csv", dtype={"i": str, "j": str}).set_index(["i", "j"])[col]
+    return np.array([s.get(k, 0.0) for k in zip(p.i, p.j)], float)
 
 
-def _od():
-    if "mo" not in _OD:
-        od = pd.read_csv(root / "analysis/od_mo_2026.csv", dtype={"home_county": str, "dest_county": str})
-        _OD["mo"] = od[(od.home_county != "OUT") & (od.home_county != od.dest_county)]
-    return _OD["mo"]
+def _od(src="od_mo_2026.csv"):
+    if src not in _OD:
+        od = pd.read_csv(root / "analysis" / src, dtype={"home_county": str, "dest_county": str})
+        _OD[src] = od[(od.home_county != "OUT") & (od.home_county != od.dest_county)]
+    return _OD[src]
 
 
-def travel_visits(p, months, discounted=True, col="visits", disc=None):
-    """The adopted outcome for pairs p over `months`: calibrated, pass-through discounted (discounted=False: not).
-    col="visits_recorded" gives the uncalibrated counts."""
-    v = _od()[lambda d: d.month.isin(months)].groupby(["home_county", "dest_county"])[col].sum()
+def travel_visits(p, months, discounted=True, col=OUTCOME, disc=None, src="od_mo_2026.csv"):
+    """The adopted outcome for pairs p over `months` (visits_statewide, pass-through discounted; discounted=False: not).
+    col="visits" gives the 2026-10-16 county-factor counts, col="visits_recorded" Advan's units."""
+    v = _od(src)[lambda d: d.month.isin(months)].groupby(["home_county", "dest_county"])[col].sum()
     y = np.array([v.get(k, 0) for k in zip(p.i, p.j)], float)
     if not discounted:
         return y
     return y * (1 - (stop_discount(p) if disc is None else disc))
 
 
-def calibration_factor(home, month):
-    """Population calibration factor (build_calibration.py) for each (home county, month) row."""
-    cal = pd.read_csv(root / "analysis/calibration_county_month.csv", dtype={"county": str}).set_index(["county", "month"]).factor
+def calibration_factor(home, month, col="factor_statewide"):
+    """Device -> person factor (build_calibration.py) for each (home county, month) row; factor_statewide (adopted) is
+    one value per month, "factor" the 2026-10-16 county factor."""
+    cal = pd.read_csv(root / "analysis/calibration_county_month.csv", dtype={"county": str}).set_index(["county", "month"])[col]
     return np.array([cal.get((h, m), np.nan) for h, m in zip(home, month)])
 
 
@@ -197,12 +206,27 @@ def loco(y, X, origins, counties=None, folds=8, seed=7, fit=None):
     return pred
 
 
-def county_stats(a, ps, origins, y=None, big=0.05):
+_FE_LOCO = {}
+
+
+def fe_only_loco(y, p):
+    """Held-out shares of the fixed-effects-only model (origin and destination effects, no pair terms): every held-out
+    county gets the destinations' overall draw. The reference for R^2 against fixed effects."""
+    k = hash(np.asarray(y, float).tobytes()) ^ hash(tuple(p.i)) ^ hash(tuple(p.j))
+    if k not in _FE_LOCO:
+        X = candidates(p)
+        _FE_LOCO[k] = loco(np.asarray(y, float), X[[c for c in X.columns if c.startswith(("o_", "d_"))]], p.i.values)
+    return _FE_LOCO[k]
+
+
+def county_stats(a, ps, origins, y=None, big=0.05, ref_ps=None):
     """Per-home-county pieces of every score, so scores can be bootstrapped over home counties. a: observed shares;
     ps: forecast shares (NaN = not scored); y: observed counts, for held-out deviance. Big flows and each county's top
     destination are selected by the FORECAST share (selection on the observed share, *_obs, is biased upward)."""
     ok = np.isfinite(ps)
     d = pd.DataFrame({"o": np.asarray(origins)[ok], "a": np.asarray(a)[ok], "p": np.asarray(ps)[ok]})
+    if ref_ps is not None:
+        d["sse_fe"] = (d.a - np.asarray(ref_ps)[ok]) ** 2
     n_per = d.groupby("o").a.transform("size")
     d["sse"] = (d.a - d.p) ** 2
     d["sst"] = (d.a - 1 / n_per) ** 2                         # shares average 1/(destinations) within every origin
@@ -219,6 +243,8 @@ def county_stats(a, ps, origins, y=None, big=0.05):
                         "bigo_abs": d.err.where(d.bigo, 0).groupby(d.o).sum(), "bigo_n": g.bigo.sum(),
                         "within": g.within.sum(), "off15": g.off15.sum(),
                         "top_pred": tp.a / tp.p, "top_obs": to.a / to.p})
+    if ref_ps is not None:
+        out["sse_fe"] = g.sse_fe.sum()
     if y is not None:
         yy = np.asarray(y, float)[ok]
         mu = d.p.values * pd.Series(yy).groupby(d.o.values).transform("sum").values
@@ -232,7 +258,8 @@ def summary(s):
     r2 = 1 - SSE/SST of shares; werr = share-weighted absolute share error (points; each county weighted equally);
     big = mean absolute share error (points) of pairs forecast at 5%+ (big_obs: pairs observed at 5%+);
     within / off15 = share of those pairs within 0.8-1.25x / off by 1.5x+; top = median observed / forecast for each
-    county's top forecast destination (top_obs: top observed destination); dev = held-out Poisson deviance."""
+    county's top forecast destination (top_obs: top observed destination); dev = held-out Poisson deviance;
+    r2_fe = 1 - SSE / SSE of the fixed-effects-only model (when county_stats was given ref_ps)."""
     r = {"r2": 1 - s.sse.sum() / s.sst.sum(), "werr": s.werr.mean(),
          "big": s.big_abs.sum() / max(s.big_n.sum(), 1), "big_obs": s.bigo_abs.sum() / max(s.bigo_n.sum(), 1),
          "within": s.within.sum() / max(s.big_n.sum(), 1), "off15": s.off15.sum() / max(s.big_n.sum(), 1),
@@ -240,6 +267,8 @@ def summary(s):
          "top_obs": s.top_obs.median(), "n_big": int(s.big_n.sum())}
     if "dev" in s:
         r["dev"] = s.dev.sum()
+    if "sse_fe" in s:
+        r["r2_fe"] = 1 - s.sse.sum() / s.sse_fe.sum()      # R^2 against the fixed-effects-only model
     return r
 
 
@@ -269,16 +298,16 @@ def term_table(m, terms):
 
 
 # ---- one comparison row, the same in every travel script ---------------------------------------------------------------
-HEAD = ("| Model | In-sample deviance | LOCO R^2 of shares | LOCO weighted share error [95%] | Change vs adopted [95%] | "
+HEAD = ("| Model | In-sample deviance | LOCO R^2 of shares | LOCO R^2 vs fixed effects only | LOCO weighted share error [95%] | Change vs adopted [95%] | "
         "LOCO held-out deviance | LOCO top forecast destination, actual / forecast | LOCO big flows within 0.8-1.25x | "
-        "Jul-Sep R^2 from Jan-Jun (stability) | Added terms, coef (2-way p) |\n|---|---:|---:|---:|---:|---:|---|---:|---:|---|")
+        "Jul-Sep R^2 from Jan-Jun (stability) | Added terms, coef (2-way p) |\n|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---|")
 
 
 def evaluate(X, p, y9, y6=None, y3=None, counties=None, extra=(), full=True):
     """LOCO county_stats on Jan-Sep (primary), Jan-Jun -> Jul-Sep county_stats (stability), the full Jan-Sep fit with
     two-way clustered errors (in-sample deviance; inference for `extra` terms)."""
     o = p.i.values
-    ev = {"loco": county_stats(shares(y9, o), loco(y9, X, o, counties), o, y9)}
+    ev = {"loco": county_stats(shares(y9, o), loco(y9, X, o, counties), o, y9, ref_ps=fe_only_loco(y9, p))}
     if y6 is not None:
         ev["split"] = county_stats(shares(y3, o), shares(poisson_fit(y6, X).predict(X), o), o, y3)
     if full:
@@ -305,5 +334,5 @@ def row(label, ev, ref=None):
     m = ev.get("m")
     terms = "; ".join(f"{t} {m.params[t]:+.3f} ({m.pvalues[t]:.3f})" for t in ev["extra"]) if m is not None else ""
     dev = f"{m.deviance / 1e6:,.1f}M" if m is not None else ""
-    return (f"| {label} | {dev} | {s['r2']:.1%} | {s['werr']:.2f} [{lo:.2f}, {hi:.2f}] | {diff} | {s['dev'] / 1e6:,.1f}M | "
+    return (f"| {label} | {dev} | {s['r2']:.1%} | {s['r2_fe']:.1%} | {s['werr']:.2f} [{lo:.2f}, {hi:.2f}] | {diff} | {s['dev'] / 1e6:,.1f}M | "
             f"{s['top']:.2f}x ({s['top_q1']:.2f}-{s['top_q3']:.2f}) | {s['within']:.0%} | {split} | {terms} |")

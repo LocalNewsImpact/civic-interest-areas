@@ -1,6 +1,6 @@
 """Pair-level commuting as a predictor of travel: does the LODES flow between two specific counties predict visits?
 
-Public data: LODES 2023 Missouri main origin-destination file (od_2023.csv.gz), jobs S000, home county -> work county,
+Public data: LODES 2023 Missouri origin-destination files, primary jobs (JT01, main + aux), S000, home -> work county,
 as built in gravity_terms.py:
   commute_out   log(1 + 1000 x workers living in i who work in j / all workers living in i)
   commute_in    log(1 + 1000 x workers living in j who work in i / all workers living in j)

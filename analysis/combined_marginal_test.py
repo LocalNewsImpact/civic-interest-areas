@@ -15,7 +15,7 @@ TRAVEL    adopted model vs + every rejected pair term at once (same metro/micro 
           two procedures scored on the outer counties: lowest inner error, and the selection rule applied inside the
           training counties (admit a candidate only if its inner county-paired gain interval excludes zero).
 COVERAGE  adopted coverage model (coverage_model.py) vs + rings, saturation terms and the travel-side extras. Leave one newsroom
-          county out; error in points on its destination shares (1%+ of visits or 2+ stories).
+          county out; error in points on its destination shares where it holds 1%+ of the residents' visits.
 SPILLOVER adopted outlet model (spillover_common.FINAL) vs + cohort, border, population, newsrooms, log outlet stories, travel out; plain and
           L2-shrunk (ridge). Leave one county out; mean absolute error in points.
 Every held-out error carries a 95% interval from 1,000 bootstrap resamples of the held-out counties (predictions held
@@ -157,8 +157,8 @@ def coverage_data(version):
 
 
 def coverage_loo(Xm, p, y):
-    """Leave one newsroom county out: absolute error (points) of its destination shares, pairs with 1%+ of its visits or
-    2+ stories. {county: errors}."""
+    """Leave one newsroom county out: absolute error (points) of its destination shares on the destinations holding 1%+
+    of its residents' out-of-county visits (the coverage primary metric; never selected on stories). {county: errors}."""
     errs = {}
     for f in p.i.unique():
         tr, te = (p.i != f).values, (p.i == f).values
@@ -166,7 +166,7 @@ def coverage_loo(Xm, p, y):
         Xt = Xt.loc[:, Xt[tr].abs().sum() > 0]
         pr = np.exp(Xt[te].values @ np.asarray(poisson_fit(y[tr], Xt[tr], 300)))
         sp, sy = pr / pr.sum(), y[te] / max(y[te].sum(), 1)
-        sel = (p.visits[te] / p.visits[te].sum() >= 0.01).values | (y[te] >= 2)
+        sel = (p.visits[te] / p.visits[te].sum() >= 0.01).values
         errs[f] = 100 * np.abs(sp - sy)[sel]
     return errs
 
@@ -354,11 +354,15 @@ if "travel_nested_all" in RUN:
   ref_ = gt.county_stats(a9, outer_all["adopted"], o, y9)
   out("| Procedure / model | Held-out error | Gain vs adopted [95%, county-paired, 1,000 draws] |\n|---|---:|---:|")
   out(f"| adopted (same folds) | {ref_.werr.mean():.3f} | |")
-  for lab, ps in (("nested: lowest inner error", outer["argmin"]), ("nested: selection rule inside the training counties", outer["rule"]),
-                  ("one at a time (not nested): + alt_ratio", outer_all["+ alt_ratio"])):
+  verdict = {}
+  for lab, ps in (("nested (DECIDING): lowest inner error", outer["argmin"]), ("nested: selection rule inside the training counties", outer["rule"]),
+                  ("one at a time, not nested (reference only): + alt_ratio", outer_all["+ alt_ratio"])):
     st = gt.county_stats(a9, ps, o, y9)
     lo, hi = gt.boot(ref_, "werr", ref=st)
+    verdict[lab] = lo > 0
     out(f"| {lab} | {st.werr.mean():.3f} | {ref_.werr.mean() - st.werr.mean():+.3f} [{lo:+.3f}, {hi:+.3f}] |")
+  out("DECISION (user's procedure: adopt only if the nested gain's interval excludes zero): "
+      + ("adopt the procedure's choices" if verdict["nested (DECIDING): lowest inner error"] else "no addition adopted"))
 
 # ---- coverage --------------------------------------------------------------------------------------------------------
 for version in ("all", "no_broadcast"):

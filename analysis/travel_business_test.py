@@ -47,8 +47,12 @@ names = {"class 1": "small rural", "class 2": "indep. towns", "class 3": "commut
 a = share(y9)
 idx = {(i, j): k for k, (i, j) in enumerate(zip(pairs.i, pairs.j))}
 S, out = {}, []
-for label, cols in models.items():
+for label, cols in list(models.items()):
     XX = X[cols]
+    if np.linalg.matrix_rank(XX.values) < XX.shape[1]:          # the gap is absorbed by the two sets of fixed effects
+        print(f"{label}: design rank {np.linalg.matrix_rank(XX.values)} of {XX.shape[1]} columns -- not identified, not fitted")
+        del models[label]
+        continue
     S[label] = county_stats(a, loco(y9, XX, o), o, y9)
     r2 = summary(county_stats(share(y3), share(poisson_fit(y6, XX).predict(XX).values), o, y3))["r2"]
     p9 = fit_twoway(y9, XX, pairs).predict(XX).values
@@ -72,6 +76,6 @@ for label, r2, am, ob in out:
         cells.append(cell)
     print(f"| {label} | {r2:.1%} | " + " | ".join(cells) + f" | {am:.2f} | {ob:.2f} |")
 print(persistence(pairs, y6, y3))
-XX = X[models["+ all six business gaps"]].values
+XX = X[basecols + [f"gap_{s_}" for s_ in SECT]].values
 print(f"design rank with all six gaps: {np.linalg.matrix_rank(XX)} of {XX.shape[1]} columns "
       f"(adopted alone: {np.linalg.matrix_rank(X[basecols].values)} of {len(basecols)}): the gaps are absorbed")

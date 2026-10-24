@@ -96,13 +96,17 @@ for lab, extra in (("adopted", []), ("+ nearest hospital county", ["nearest_hosp
 # ---- 4 coverage ----------------------------------------------------------------------------------------------------
 tp = pd.read_csv(root / "analysis/od_predicted.csv", dtype={"i": str, "j": str})
 pidx = {k: n for n, k in enumerate(key)}
-print("\n## 4 COVERAGE (leave one newsroom county out)")
+print("\n## 4 COVERAGE (coverage_model.py adopted specification; leave one newsroom county out; destinations with 1%+ of visits)")
 for version in ("all", "no_broadcast"):
     cp = pd.read_csv(root / f"analysis/coverage_predicted_{version}.csv", dtype={"i": str, "j": str})
-    p = cp[["i", "j", "stories"]].merge(tp[["i", "j", "ratio"]], on=["i", "j"])
+    p = cp[["i", "j", "stories"]].merge(tp[["i", "j", "visits"]], on=["i", "j"])
     p = p[p.groupby("i").stories.transform("sum") > 0].reset_index(drop=True)
     rows = [pidx[k] for k in zip(p.i, p.j)]
-    base = Xd.iloc[rows][FACTORS].reset_index(drop=True).assign(log_travel_beyond=np.log(p.ratio.clip(lower=1e-3)).values)
+    pos = (p.visits > 0).values
+    lv = np.where(pos, np.log(p.visits.where(pos, 1.0)), 0.0)
+    nonmetro = 1 - gt.cov.metro.reindex(p.i).values     # coverage_model.py adopted specification
+    base = Xd.iloc[rows][FACTORS].reset_index(drop=True).assign(log_visits=lv, zero_visits=(~pos).astype(float),
+                                                                log_visits_x_nonmetro=lv * nonmetro)
     FE = pd.concat([pd.get_dummies(p.i, prefix="o").astype(float), pd.get_dummies(p.j, prefix="d", drop_first=True).astype(float)], axis=1)
     y = p.stories.values.astype(float)
     for lab, extra in (("adopted", []), ("+ nearest hospital (and when home has none)", ["nearest_hospital", "nearest_x_none"])):
@@ -112,8 +116,9 @@ for version in ("all", "no_broadcast"):
         for f in p.i.unique():
             tr, te = (p.i != f).values, (p.i == f).values
             Xt = Xm.drop(columns=[f"o_{f}"])
+            Xt = Xt.loc[:, Xt[tr].abs().sum() > 0]
             mt = sm.GLM(y[tr], Xt[tr], family=sm.families.Poisson()).fit(maxiter=200)
             pr = mt.predict(Xt[te]); sp, sy = pr / pr.sum(), y[te] / max(y[te].sum(), 1)
-            errs += list(100 * np.abs(sp - sy)[(y[te] >= 2) | (sp >= 0.01)])
+            errs += list(100 * np.abs(sp - sy)[(p.visits[te] / p.visits[te].sum() >= 0.01).values])   # 1%+ of visits: not outcome-selected
         mf = sm.GLM(y, Xm, family=sm.families.Poisson()).fit(maxiter=300)
         print(f"  {version} {lab}: error {np.mean(errs):.2f} points" + "".join(f"; {e} {mf.params[e]:+.2f}" for e in extra))

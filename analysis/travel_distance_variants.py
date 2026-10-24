@@ -2,7 +2,7 @@
 
 Public data only:
   job hub of a county   the job-weighted median location (median latitude, median longitude) of its 2020 block groups,
-                        jobs = LODES 2023 workplace counts (od_2023.csv.gz, S000, by w_geocode block group)
+                        jobs = LODES 2023 primary jobs (JT01 main, S000, by w_geocode block group)
   people of a county    LODES 2023 workers by home block group (h_geocode), a public stand-in for where residents live
   block groups          Census 2020 cartographic boundaries, centre = representative point; county shapes the same
 
@@ -40,7 +40,7 @@ unit = lambda f: "29189" if f == "29510" else f
 bgs = read_shp(str(DL / "bg/cb_2020_29_bg_500k"), lambda r: r["GEOID"])
 bgc = {b: g.representative_point() for b, (_, g) in bgs.items()}
 jobs_bg, work_bg = defaultdict(float), defaultdict(float)
-with gzip.open(root / "free/od_2023.csv.gz", "rt") as fh:
+with gzip.open(root / "free/mo_od_main_JT01_2023.csv.gz", "rt") as fh:
     for r in csv.DictReader(fh):
         n = float(r["S000"])
         jobs_bg[r["w_geocode"][:12]] += n
