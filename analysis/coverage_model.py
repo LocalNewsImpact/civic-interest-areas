@@ -3,36 +3,49 @@ associated with residents' travel between the two counties.
 
 DATA. Story-county pairs from newsrooms in county i about county j (i != j): a story counts once for each Missouri county
 it is centred in or mentions (the story map's two layers per article, coverage/storymap/statewide_2026_03_articles.json,
-Mizzou-Missouri-State dataset), excluded_outlets.EXCLUDE left out. A newsroom's county is excluded_outlets.home_fips:
-the county it is filed under, except the HOME_COUNTY outlets (Mid Rivers Newsmagazine -> St. Charles, Greene County
-Commonwealth -> Greene), whose stories count with their covered county as the newsroom county.
+Mizzou-Missouri-State dataset), excluded_outlets.EXCLUDE left out (statewide outlets, campus newspapers). A newsroom's
+county is excluded_outlets.home_fips: the county it is filed under, except the HOME_COUNTY outlets, whose stories count
+with their covered county. Outlets filed under a county outside Missouri are not in the fit; they are listed in the
+output with their stories (to be homed in a Missouri county through HOME_COUNTY or excluded).
+Visits: gravity_terms.travel_visits, the travel model's adopted outcome (visits_statewide, Jan-Sep 2026, pass-through
+discounted) -- the same visits the travel model fits.
 
-ADOPTED SPECIFICATION (the figures to quote). PPML; the travel model's gravity terms (gravity_terms.py) with a fixed
-effect for every newsroom county and every county covered; plus
-  log_visits              log residents' visits i -> j, Jan-Sep 2026, pass-through discounted (od_predicted.csv),
-                          where visits > 0 (0 otherwise)
-  log_visits_x_nonmetro   log_visits x nonmetropolitan newsroom county (USDA RUCC 4-9, county_covariates.metro = 0)
-                          ADOPTED 2026-10-24 (coverage_saturation_test.py): held-out error on destinations with 1%+ of
-                          visits -0.14 points (95% CI -0.22 to -0.06), all destinations a tie (+0.002)
-  zero_visits             1 where no visit was recorded (201 of 13,110 Missouri pairs)
-The elasticity -- the percentage difference in stories associated with 1% more visits, holding the gravity terms and
-both sets of fixed effects fixed -- is reported for metro newsroom counties (log_visits) and nonmetro ones (log_visits
-+ log_visits_x_nonmetro). It is an association, not an effect of travel on coverage. The pooled elasticity (no
-interaction) is printed as a sensitivity.
+ADOPTED SPECIFICATION. PPML; a fixed effect for every newsroom county and every county covered; plus
+  CONTROLS (theory; gravity_terms.FACTORS, tested only as blocks, never one term at a time):
+    distance block   log_dist, log_dist_sq, nonmetro_i_x_log_dist, nonmetro_i_x_log_dist_sq, log_pop_i_x_log_dist
+                     (hierarchy: log_dist is kept with its square and with its interactions; the block enters or leaves
+                     whole)
+    border           adjacent
+    commuting block  commute_out, commute_in
+  TRAVEL
+    log_visits              log visits i -> j where visits > 0 (0 otherwise)
+    zero_visits             1 where no visit was recorded
+  HYPOTHESIS TERM (stated in advance; reported whatever the result)
+    log_visits_x_nonmetro   log_visits x nonmetropolitan newsroom county (USDA RUCC 4-9)
+The elasticity -- the percentage difference in stories associated with 1% more visits, holding the controls and both
+sets of fixed effects fixed -- is reported for metro newsroom counties (log_visits) and nonmetro ones (log_visits +
+log_visits_x_nonmetro). It is an association, not an effect of travel on coverage. The pooled elasticity (no
+hypothesis term) is printed as a sensitivity.
 
 STANDARD ERRORS. A story is counted once for each county it names, so the pairs from one newsroom county are not
 independent: errors are clustered by newsroom county. Sensitivity: clustered by unordered county pair, and two-way by
 newsroom county and county covered; robust (HC1, independent pairs) for reference only.
 
-"Travel beyond gravity", log(visits / travel-model prediction), was used before 2026-10-24. The prediction is a function
-of the same gravity terms and fixed effects, so given them the two coefficients are the same quantity (they differ only
-through the 1e-3 floor on zero-visit pairs and the travel model's own coefficients); both are printed.
+HELD OUT. gravity_terms.loco: newsroom counties held out in 8 folds (seed 7), each held-out county's out-of-county story
+shares predicted from the others (its own fixed effect cancels out of its shares). Error = mean absolute share error
+(points) per newsroom county, averaged over counties. PRIMARY: destinations with 1%+ of the county's visits (chosen by
+travel, not by the held-out stories). Beside it: all destinations -- dominated by pairs with no stories, whose share
+error is near zero for any model (the share of zero pairs is printed). Intervals: 95%, 1,000 bootstrap draws of
+newsroom counties (seed 7), county-paired for differences. Each control block and the hypothesis term is scored by
+leaving it out of the adopted model.
 
-NOT ADOPTED, printed for the record so the earlier figures can be traced: fixed effects + log(1 + visits) with no
-distance terms (0.7-0.8, the border_coverage_test.py family) and + log distance + border (0.52).
+"Travel beyond gravity", log(visits / travel-model prediction), was used before 2026-10-24: given the same terms and
+fixed effects it is the same quantity as log visits (printed). NOT ADOPTED, printed so earlier figures can be traced:
+fixed effects + log(1 + visits) with no distance terms (0.7-0.8, the border_coverage_test.py family) and + log distance
++ border (0.52).
 
-Run for all newsrooms and without broadcasters. Output: coverage_predicted_<version>.csv (pred_gravity: gravity terms
-only; pred_travel: adopted specification).
+Run for all newsrooms and without broadcasters. Output: coverage_predicted_<version>.csv (visits: the adopted outcome;
+pred_gravity: controls only; pred_travel: adopted specification).
 """
 import json
 import warnings
@@ -45,14 +58,20 @@ import statsmodels.api as sm
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from gravity_terms import FACTORS, design, root  # noqa: E402  the same gravity terms as the travel model
+import gravity_terms as gt  # noqa: E402  the same gravity terms and outcome as the travel model
+from gravity_terms import FACTORS, DIST_TERMS, design, root  # noqa: E402
 from excluded_outlets import EXCLUDE, home_fips  # noqa: E402  one list for every county count
 
 warnings.filterwarnings("ignore")   # clustered covariance with fewer clusters than fixed-effect columns
 
+BLOCKS = {"distance block (5 terms)": DIST_TERMS, "border (adjacent)": ["adjacent"],
+          "commuting block (out + in)": ["commute_out", "commute_in"]}
+HYP = "log_visits_x_nonmetro"
+
 cov = pd.read_csv(root / "analysis/county_covariates.csv", dtype={"fips": str}).set_index("fips")
 tp = pd.read_csv(root / "analysis/od_predicted.csv", dtype={"i": str, "j": str}).set_index(["i", "j"])
 data = json.load(open(root / "coverage/storymap/statewide_2026_03_articles.json"))
+n_excluded = sum(a["publisher"] in EXCLUDE for a in data["articles"])
 data["articles"] = [a for a in data["articles"] if a["publisher"] not in EXCLUDE]
 by_name = {n.lower(): f for f, n in cov.name.items()}
 by_name.update({"st. louis": "29189", "st louis": "29189", "st. louis city": "29510", "saint louis": "29189"})
@@ -68,9 +87,9 @@ def county_fips(name):
 
 
 def newsroom_fips(a):
-    """The newsroom's county: HOME_COUNTY where it applies, else the county the outlet is filed under."""
-    filed = county_fips(a["publisher_county"])
-    return home_fips(a["publisher"], filed) if filed else None
+    """The newsroom's county: HOME_COUNTY where it applies, else the county the outlet is filed under (None outside
+    Missouri, unless HOME_COUNTY homes the outlet in a Missouri county)."""
+    return home_fips(a["publisher"], county_fips(a["publisher_county"]))
 
 
 def poisson(y, X, **kw):
@@ -88,13 +107,50 @@ def clusters(p):
             "HC1 (pairs independent; reference only)": dict(cov_type="HC1")}
 
 
-unmatched = Counter(a["publisher_county"] for a in data["articles"] if not county_fips(a["publisher_county"]))
-print("publisher counties not matched (articles):", dict(unmatched))
-moved = Counter(a["publisher"] for a in data["articles"] if county_fips(a["publisher_county"])
+def heldout(y, X, p, start):
+    """Per newsroom county: mean absolute share error (points), all destinations and destinations with 1%+ of visits."""
+    def fit(yy, XX):
+        return np.asarray(sm.GLM(yy, XX, family=sm.families.Poisson()).fit(
+            maxiter=300, start_params=start.reindex(XX.columns).fillna(0).values).params)
+    ps = gt.loco(np.asarray(y, float), X, p.i.values, fit=fit)
+    err = pd.Series(100 * np.abs(ps - gt.shares(y, p.i.values)))
+    vs = gt.shares(p.visits.values, p.i.values) >= 0.01
+    return pd.DataFrame({"all": err.groupby(p.i.values).mean(), "travel": err[vs].groupby(p.i.values[vs]).mean()})
+
+
+def bt(d, draws=1000, seed=7):
+    d = d.dropna()
+    rng = np.random.default_rng(seed)
+    b = [d.iloc[rng.integers(0, len(d), len(d))].mean() for _ in range(draws)]
+    return np.quantile(b, [0.025, 0.975])
+
+
+def wald(m, terms):
+    """Joint Wald test of `terms` with the model's (clustered) covariance: chi2, df, p."""
+    from scipy import stats
+    b, V = m.params[terms].values, m.cov_params().loc[terms, terms].values
+    chi2 = float(b @ np.linalg.pinv(V) @ b)
+    return chi2, len(terms), stats.chi2.sf(chi2, len(terms))
+
+
+# ---- outlets outside Missouri and HOME_COUNTY --------------------------------------------------------------------------
+out_state = [a for a in data["articles"] if not newsroom_fips(a)]
+print(f"stories excluded by excluded_outlets.EXCLUDE: {n_excluded:,}")
+print(f"stories NOT IN THE FIT, outlet filed under a county outside Missouri and not homed by HOME_COUNTY: "
+      f"{len(out_state)}")
+for (o, c, t), k in Counter((a["publisher"], a["publisher_county"], a["publisher_type"]) for a in out_state).items():
+    mo = Counter(j for a in out_state if a["publisher"] == o for j in a["counties"] if j.startswith("29"))
+    tot = Counter(j[:2] for a in out_state if a["publisher"] == o for j in a["counties"])
+    print(f"  {o} ({t}; filed {c}): {k} stories; county mentions in Missouri {tot.get('29', 0)}, elsewhere "
+          f"{sum(tot.values()) - tot.get('29', 0)}; Missouri counties named "
+          + ", ".join(f"{county_name(j)} {v}" for j, v in mo.most_common(4)))
+moved = Counter(a["publisher"] for a in data["articles"] if newsroom_fips(a)
                 and newsroom_fips(a) != county_fips(a["publisher_county"]))
 print("stories counted with their HOME_COUNTY newsroom county:", dict(moved))
 
-pairs = tp.reset_index()[["i", "j", "dist", "adjacent", "ratio", "visits"]].copy()
+pairs = gt.all_pairs()
+pairs["visits"] = gt.travel_visits(pairs, gt.MONTHS)
+pairs["ratio"] = tp.ratio.reindex(list(zip(pairs.i, pairs.j))).values     # travel model's file, equivalence check only
 for version, keep in (("all", lambda a: True), ("no_broadcast", lambda a: "broadcast" not in (a["publisher_type"] or ""))):
     arts = [a for a in data["articles"] if keep(a) and newsroom_fips(a)]
     n = Counter()
@@ -113,45 +169,45 @@ for version, keep in (("all", lambda a: True), ("no_broadcast", lambda a: "broad
     pos = (p.visits > 0).values
     log_visits = np.where(pos, np.log(p.visits.where(pos, 1.0)), 0.0)
     zero = (~pos).astype(float)
+    nonmetro = 1 - cov.metro.reindex(p.i).values
+    vs = gt.shares(p.visits.values, p.i.values) >= 0.01
     print(f"\n## {version}: {len(arts):,} stories from {p.i.nunique()} newsroom counties; "
           f"{int(y.sum()):,} story-county pairs outside the newsroom's county; {len(p):,} county pairs, "
           f"{int((~pos).sum())} with no recorded visits ({int(y[~pos].sum())} story-county pairs on them)")
+    print(f"   county pairs with no stories: {(y == 0).mean():.0%} of all pairs, {(y[vs] == 0).mean():.0%} of pairs "
+          f"with 1%+ of visits ({int(vs.sum()):,} pairs) -- the all-destinations score is dominated by zero pairs")
 
-    # gravity terms only (no travel term): pred_gravity
+    # controls only (no travel term): pred_gravity
     Xg = pd.concat([X, O], axis=1)
     p["pred_gravity"] = poisson(y, Xg).predict(Xg).values
-
-    # ADOPTED: log visits, and log visits x nonmetropolitan newsroom county
-    nonmetro = 1 - cov.metro.reindex(p.i).values
     cl = clusters(p)
 
-    def with_travel(t, zero_col=True, interact=True):
-        """Gravity terms + travel term t (+ zero-visit indicator) (+ t x nonmetro newsroom county) + fixed effects."""
-        Z = X.assign(log_visits=t)
+    def with_travel(t, zero_col=True, interact=True, drop=()):
+        """Controls (less `drop`) + travel term t (+ zero-visit indicator) (+ hypothesis term) + fixed effects."""
+        Z = X.drop(columns=list(drop)).assign(log_visits=t)
         if zero_col:
             Z = Z.assign(zero_visits=zero)
         if interact:
-            Z = Z.assign(log_visits_x_nonmetro=t * nonmetro)
+            Z = Z.assign(**{HYP: t * nonmetro})
         return pd.concat([Z, O], axis=1)
 
     def split(m):
-        """(metro elasticity, s.e.), (nonmetro elasticity, s.e.) from a fit with the interaction."""
+        """(metro elasticity, s.e.), (nonmetro elasticity, s.e.) from a fit with the hypothesis term."""
         b_, V = m.params, m.cov_params()
-        se_n = np.sqrt(V.loc["log_visits", "log_visits"] + V.loc["log_visits_x_nonmetro", "log_visits_x_nonmetro"]
-                       + 2 * V.loc["log_visits", "log_visits_x_nonmetro"])
-        return (b_["log_visits"], m.bse["log_visits"]), (b_["log_visits"] + b_["log_visits_x_nonmetro"], se_n)
+        se_n = np.sqrt(V.loc["log_visits", "log_visits"] + V.loc[HYP, HYP] + 2 * V.loc["log_visits", HYP])
+        return (b_["log_visits"], m.bse["log_visits"]), (b_["log_visits"] + b_[HYP], se_n)
 
+    # ADOPTED
     Xa = with_travel(log_visits)
     ma = poisson(y, Xa, **cl["newsroom county (adopted)"])
     p["pred_travel"] = ma.predict(Xa).values
     (bm, sm_), (bn, sn) = split(ma)
     r2 = np.corrcoef(y, p.pred_travel)[0, 1] ** 2
     n_m, n_n = int((cov.metro.reindex(p.i.unique()) == 1).sum()), int((cov.metro.reindex(p.i.unique()) == 0).sum())
-    print(f"### ADOPTED: gravity terms + both fixed effects + log visits + log visits x nonmetro newsroom county + "
-          f"zero-visit indicator; errors clustered by newsroom county ({p.i.nunique()} clusters); r^2 of fitted with "
-          f"observed pairs {r2:.2f}")
-    c = pd.DataFrame({"coef": ma.params, "se": ma.bse, "p": ma.pvalues}).loc[
-        FACTORS + ["log_visits", "log_visits_x_nonmetro", "zero_visits"]]
+    print(f"### ADOPTED: controls (distance block, border, commuting block) + both fixed effects + log visits + "
+          f"zero-visit indicator + hypothesis term log visits x nonmetro newsroom county; errors clustered by newsroom "
+          f"county ({p.i.nunique()} clusters); r^2 of fitted with observed pairs {r2:.2f}")
+    c = pd.DataFrame({"coef": ma.params, "se": ma.bse, "p": ma.pvalues}).loc[FACTORS + ["log_visits", HYP, "zero_visits"]]
     print(c.round(3).to_string())
     for lab, (b, se), k_ in (("metro newsroom counties", (bm, sm_), n_m), ("nonmetro newsroom counties", (bn, sn), n_n)):
         print(f"ELASTICITY (adopted, {version}), {lab} ({k_}): {b:.3f}, s.e. {se:.3f}, 95% CI {b - 1.96 * se:.2f} to "
@@ -159,15 +215,38 @@ for version, keep in (("all", lambda a: True), ("no_broadcast", lambda a: "broad
               f"{2 ** b:.2f} times the stories")
     print("  s.e. by clustering, metro / nonmetro (a story counts once per county it names; pairs are not independent):")
     for lab, kw in cl.items():
-        (_, a1), (_, a2) = (bm, sm_), (bn, sn)
+        a1, a2 = sm_, sn
         if not lab.startswith("newsroom county"):
             (_, a1), (_, a2) = split(poisson(y, Xa, **kw))
         print(f"    {lab:44s} {a1:.3f} / {a2:.3f}")
 
-    # pooled elasticity, no interaction (sensitivity; the adopted specification before the rural-home term)
+    # held out: control blocks and the hypothesis term, each left out of the adopted model
+    start = ma.params
+    E0 = heldout(y, Xa, p, start)
+    print(f"  HELD OUT (8 folds of newsroom counties; mean abs share error, points; [95%, 1,000 county draws]; change "
+          f"= model without the term(s) - adopted, county-paired; positive = the term(s) lower held-out error):")
+    print("  | Model | Primary: 1%+ of visits | Change | All destinations | Change | Wald (clustered) |")
+    print("  |---|---:|---:|---:|---:|---|")
+    lo_t, hi_t = bt(E0.travel)
+    lo_a, hi_a = bt(E0["all"])
+    print(f"  | adopted | {E0.travel.mean():.3f} [{lo_t:.3f}, {hi_t:.3f}] | — | {E0['all'].mean():.3f} "
+          f"[{lo_a:.3f}, {hi_a:.3f}] | — | — |")
+    tests = [(f"without {k} (CONTROL)", with_travel(log_visits, drop=v), v) for k, v in BLOCKS.items()]
+    tests.append((f"without {HYP} (HYPOTHESIS; = pooled)", with_travel(log_visits, interact=False), [HYP]))
+    for lab, Xm, terms in tests:
+        E = heldout(y, Xm, p, start)
+        cells = []
+        for k in ("travel", "all"):
+            d = (E[k] - E0[k])
+            lo, hi = bt(d)
+            cells += [f"{E[k].mean():.3f}", f"{d.mean():+.3f} [{lo:+.3f}, {hi:+.3f}]"]
+        chi2, df, pv = wald(ma, terms)
+        print(f"  | {lab} | " + " | ".join(cells) + f" | chi2 {chi2:.1f}, df {df}, p {pv:.3g} |")
+    print(f"  HYPOTHESIS TERM {HYP}: {ma.params[HYP]:+.3f} (s.e. {ma.bse[HYP]:.3f}, p {ma.pvalues[HYP]:.3g})")
+
+    # pooled elasticity, no hypothesis term (sensitivity)
     mp = poisson(y, with_travel(log_visits, interact=False), **cl["newsroom county (adopted)"])
-    print(f"  SENSITIVITY, pooled (no nonmetro interaction): {mp.params['log_visits']:.3f} "
-          f"(s.e. {mp.bse['log_visits']:.3f})")
+    print(f"  SENSITIVITY, pooled (no hypothesis term): {mp.params['log_visits']:.3f} (s.e. {mp.bse['log_visits']:.3f})")
 
     # zero-visit pairs: how the elasticities move with their treatment
     print("  elasticity, metro / nonmetro, by treatment of the zero-visit pairs:")
@@ -184,22 +263,24 @@ for version, keep in (("all", lambda a: True), ("no_broadcast", lambda a: "broad
     for lab, (v1, v2) in alt.items():
         print(f"    {lab:52s} {v1:.3f} / {v2:.3f}")
 
-    # equivalence: travel beyond gravity (pooled, as it was used)
+    # equivalence: travel beyond gravity (pooled, as it was used; travel model's od_predicted.csv)
+    ok = np.isfinite(p.ratio.values)
     floor = np.log(p.visits.clip(lower=1e-3)).values
-    mr = poisson(y, with_travel(np.log(p.ratio.clip(lower=1e-3)).values, zero_col=False, interact=False))
-    mf = poisson(y, with_travel(floor, zero_col=False, interact=False))
+    mr = poisson(y[ok], with_travel(np.log(p.ratio.clip(lower=1e-3)).values, zero_col=False, interact=False)[ok])
+    mf = poisson(y[ok], with_travel(floor, zero_col=False, interact=False)[ok])
     print(f"  pooled log(visits / travel-model prediction), zeros at 1e-3 (\"travel beyond gravity\", before "
-          f"2026-10-24): {mr.params['log_visits']:.3f}; pooled log visits with the same floor "
-          f"{mf.params['log_visits']:.3f}. Given the same gravity terms and fixed effects the two are one quantity")
+          f"2026-10-24; od_predicted.csv): {mr.params['log_visits']:.3f}; pooled log visits with the same floor "
+          f"{mf.params['log_visits']:.3f}. Given the same terms and fixed effects the two are one quantity (they differ "
+          f"only where od_predicted.csv's visits differ from the adopted outcome)")
 
-    # leave one newsroom county out
+    # leave one newsroom county out: range of each elasticity
     loo = {}
     for f in sorted(set(p.i)):
         k = (p.i != f).values
         Xk = Xa[k].drop(columns=[f"o_{f}"])
         Xk = Xk.loc[:, Xk.abs().sum() > 0]
         mk = poisson(y[k], Xk, start_params=ma.params[Xk.columns].values)
-        loo[f] = (mk.params["log_visits"], mk.params["log_visits"] + mk.params["log_visits_x_nonmetro"])
+        loo[f] = (mk.params["log_visits"], mk.params["log_visits"] + mk.params[HYP])
     L = pd.DataFrame(loo, index=["metro", "nonmetro"]).T
     print(f"  leave one newsroom county out ({len(L)} fits):")
     for col in L.columns:
@@ -212,16 +293,15 @@ for version, keep in (("all", lambda a: True), ("no_broadcast", lambda a: "broad
     # NOT ADOPTED, for the record
     lv1 = np.log1p(p.visits.values)
     nd = poisson(y, pd.concat([pd.DataFrame({"t": lv1}), O], axis=1), **cl["newsroom county (adopted)"])
-    db = poisson(y, pd.concat([pd.DataFrame({"t": lv1, "log_dist": np.log(p.dist.values), "adjacent": p.adjacent.values}),
+    db = poisson(y, pd.concat([pd.DataFrame({"t": lv1, "log_dist": X.log_dist.values, "adjacent": p.adjacent.values}),
                                O], axis=1), **cl["newsroom county (adopted)"])
-    nc = [t for t in FACTORS if not t.startswith("commute")]
-    mnc = poisson(y, pd.concat([X[nc].assign(log_visits=log_visits, zero_visits=zero), O], axis=1))   # pooled
-    print("  NOT ADOPTED -- do not quote (without the gravity terms, distance loads onto travel):")
+    mnc = poisson(y, with_travel(log_visits, interact=False, drop=BLOCKS["commuting block (out + in)"]))
+    print("  NOT ADOPTED -- do not quote (without the controls, distance loads onto travel; pooled elasticities):")
     print(f"    fixed effects + log(1 + visits), no distance terms (border_coverage_test.py family):  "
           f"{nd.params['t']:.3f} (s.e. {nd.bse['t']:.3f})")
     print(f"    fixed effects + log(1 + visits) + log distance + border:                            "
           f"{db.params['t']:.3f} (s.e. {db.bse['t']:.3f})")
-    print(f"    pooled, without the two commuting terms:                                            "
+    print(f"    pooled, without the commuting block:                                                "
           f"{mnc.params['log_visits']:.3f}")
-    p[["i", "j", "dist", "adjacent", "ratio", "stories", "pred_gravity", "pred_travel"]].to_csv(
+    p[["i", "j", "dist", "adjacent", "ratio", "visits", "stories", "pred_gravity", "pred_travel"]].to_csv(
         root / f"analysis/coverage_predicted_{version}.csv", index=False)

@@ -1,8 +1,8 @@
 """Does coverage fall off at non-bordering counties more than travel does?  Statewide, Missouri.
 
-Pairs: newsroom county i -> county j (89 newsroom counties). Ring = county boundaries apart (1 borders, 2 one county
-between, 3+). Travel = residents' visits Jan-Sep 2026, pass-through discounted (od_predicted.csv). Stories = March
-2026 story-county pairs (coverage_predicted_<version>.csv).
+Pairs: newsroom county i -> county j (newsroom counties as in coverage_model.py). Ring = county boundaries apart (1 borders, 2 one county
+between, 3+). Travel = residents' visits Jan-Sep 2026, the travel model's adopted outcome (gravity_terms.travel_visits:
+visits_statewide, pass-through discounted). Both from coverage_predicted_<version>.csv (coverage_model.py).
   1. Shares by ring: per newsroom county, the share of its residents' out-of-county visits and of its newsrooms'
      out-of-county story pairs going to each ring; medians across newsroom counties.
   2. Same travel, different ring: story share by bands of travel share, ring 1 vs ring 2 vs ring 3+.
@@ -39,10 +39,9 @@ def rings(f):
 
 
 R = {f: rings(f) for f in FIPS}
-tp = pd.read_csv(root / "analysis/od_predicted.csv", dtype={"i": str, "j": str})
 for version in ("all", "no_broadcast"):
     cp = pd.read_csv(root / f"analysis/coverage_predicted_{version}.csv", dtype={"i": str, "j": str})
-    p = cp[["i", "j", "stories"]].merge(tp[["i", "j", "visits"]], on=["i", "j"])
+    p = cp[["i", "j", "stories", "visits"]].copy()
     p["ring"] = [min(R[i][j], 3) for i, j in zip(p.i, p.j)]
     p["visit_share"] = p.visits / p.groupby("i").visits.transform("sum")
     p["story_share"] = p.stories / p.groupby("i").stories.transform("sum")
