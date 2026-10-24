@@ -45,13 +45,20 @@ for lab, d in sets.items():
         cf = "; ".join(f"{k} {r.coef:+.2f} ({r.p_cluster_t:.3f})" for k, r in inf.iterrows())
         print(f"| {lab} | {len(d)} ({d.fips.nunique()}) | {f.split('~ ')[1]} | {loo(f, d):.1f} | {cf} |")
 
+# CROSSOVER (crossover_compare.csv): dedup_lower, the calibrated measure the model uses (spillover_outlets.csv
+# travel_out); sensitivity on the true bounds dedup_bound_low and dedup_bound_high.
+cc = pd.read_csv(root / "analysis/crossover_compare.csv", dtype={"Unnamed: 0": str}).rename(columns={"Unnamed: 0": "fips"}).set_index("fips")
+assert np.allclose(so.travel_out, so.fips.map(cc.dedup_lower)), "spillover_outlets.csv travel_out is not the current dedup_lower"
 print("\n## CORRELATION, crossover vs print and digital spillover across counties")
-print("| Outlets | Counties | r, unweighted (p) | r, weighted by stories (p) |\n|---|---:|---:|---:|")
-for lab, d in sets.items():
-    x = d[d.broadcast == 0].groupby("fips").agg(p=("placed", "sum"), s=("spill", "sum"), c=("travel_out", "first")).dropna()
-    r0, p0, n = wcorr(x.c, x.s / x.p)
-    r1, p1, _ = wcorr(x.c, x.s / x.p, x.p)
-    print(f"| {lab} | {n} | {r0:+.2f} ({p0:.3f}) | {r1:+.2f} ({p1:.3f}) |")
+print("| Crossover | Outlets | Counties | r, unweighted (p) | r, weighted by stories (p) |\n|---|---|---:|---:|---:|")
+for cl, col in (("calibrated (dedup_lower)", "dedup_lower"), ("low bound", "dedup_bound_low"), ("high bound", "dedup_bound_high")):
+    for lab, d in sets.items():
+        x = d[d.broadcast == 0].groupby("fips").agg(p=("placed", "sum"), s=("spill", "sum"))
+        x["c"] = x.index.map(cc[col])
+        x = x.dropna()
+        r0, p0, n = wcorr(x.c, x.s / x.p)
+        r1, p1, _ = wcorr(x.c, x.s / x.p, x.p)
+        print(f"| {cl} | {lab} | {n} | {r0:+.2f} ({p0:.3f}) | {r1:+.2f} ({p1:.3f}) |")
 
 from gravity_terms import FACTORS, all_pairs, design  # noqa: E402
 pairs = all_pairs(); key = list(zip(pairs.i, pairs.j)); pidx = {k: n for n, k in enumerate(key)}
