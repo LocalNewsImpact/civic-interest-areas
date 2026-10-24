@@ -5,7 +5,8 @@ scaled). People from different home block groups are distinct, so each home bloc
   residents_h   people from h seen in h itself that month (2026-10-16 denominator; inflated where Advan over-detects
                 homes -- see build_calibration.py)
   E_h           expected units: ACS 2020-2024 population of h x the statewide units per resident that month
-                (home_bg_month_mo_2026.csv; the adopted denominator, review 2026-10-24, option iii)
+                (home_bg_month_mo_2026.csv; option iii, b = 1 sensitivity)
+  D_h           ADOPTED calibrated denominator own_h^(1-b) E_h^b (crossover_bg_month_mo_2026.csv, build_unique_od.py)
   p_hc          people from h seen in outside block group c / the denominator      (c in another county)
   lower         max_c p_hc                       at least the busiest outside block group's share left
   by_county     sum over destination counties of that county's busiest block group's share (capped at 1): each
@@ -13,8 +14,8 @@ scaled). People from different home block groups are distinct, so each home bloc
   (Rejected: 1 - prod(1 - p_hc) and sum_c p_hc both run to ~100% -- thousands of small outside entries add up; the
   smallest entry Advan reports is one panel device x the monthly scale, 14-20 people in 2026.) Work-hours numerators
   use the all-day denominator.
-County share = denominator-weighted mean over its home block groups; averaged over Jan-Sep 2026. Columns lower /
-by_county use residents_h, lower_acs / by_county_acs use E_h. Also with work-hours counts (seen there in working hours)
+County share = denominator-weighted mean over its home block groups; averaged over Jan-Sep 2026. Columns lower_cal /
+by_county_cal use D_h (adopted); lower / by_county use residents_h, lower_acs / by_county_acs use E_h (sensitivity). Also with work-hours counts (seen there in working hours)
 as a stricter "regular" version. Missouri destinations only (the three counties do not border Kansas).
 """
 import csv
@@ -30,6 +31,8 @@ src = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "neighborhood/flows_aud
 HOME = {"29007": "Audrain", "29019": "Boone", "29151": "Osage"}
 hb = pd.read_csv(root / "analysis/home_bg_month_mo_2026.csv", dtype={"home_bg": str})
 E = hb.set_index(["month", "home_bg"]).expected_units.to_dict()
+cb = pd.read_csv(root / "analysis/crossover_bg_month_mo_2026.csv", dtype={"home_bg": str})
+D = cb.set_index(["month", "home_bg"]).denominator_calibrated.to_dict()
 res = []
 # residents: people from h seen in h itself, all day (the denominator for both measures)
 own, out = {}, {"device_home_areas": defaultdict(lambda: defaultdict(float)),
@@ -50,7 +53,7 @@ for col in out:
     for (m, h) in set(own) | set(peak[col]):
         n_home = own.get((m, h), 0.0)
         by =np.array(list(out[col][(m, h)].values()) or [0.0])
-        for den, lab in ((n_home, ""), (E.get((m, h), 0.0), "_acs")):
+        for den, lab in ((n_home, ""), (E.get((m, h), 0.0), "_acs"), (D.get((m, h), 0.0), "_cal")):
             if den > 0:
                 rows.append((m, h[:5], lab, den, min(1.0, peak[col][(m, h)] / den), min(1.0, by.sum() / den)))
     d = pd.DataFrame(rows, columns=["month", "county", "lab", "residents", "lower", "by_county"])
@@ -65,10 +68,10 @@ for col in out:
     res.append(s)
 t = pd.concat(res).reset_index()
 t["name"] = t.county.map(HOME)
-print("| County | Measure | Lower bound (busiest outside block group), / seen at home | / ACS x statewide rate | "
-      "Each destination county counted once, / seen at home | / ACS x statewide rate |")
-print("|---|---|---:|---:|---:|---:|")
+print("| County | Measure | Lower bound (busiest outside block group), / calibrated D (adopted) | / seen at home | / ACS x statewide rate | "
+      "Each destination county counted once, / D | / seen at home | / ACS x statewide rate |")
+print("|---|---|---:|---:|---:|---:|---:|---:|")
 for r in t.sort_values(["name", "measure"], ascending=[True, False]).itertuples():
-    print(f"| {r.name} | {r.measure} | {r.lower:.0%} | {r.lower_acs:.0%} | {r.by_county:.0%} | {r.by_county_acs:.0%} |")
-t[["county", "lower", "by_county", "measure", "name", "lower_acs", "by_county_acs"]].to_csv(
+    print(f"| {r.name} | {r.measure} | {r.lower_cal:.0%} | {r.lower:.0%} | {r.lower_acs:.0%} | {r.by_county_cal:.0%} | {r.by_county:.0%} | {r.by_county_acs:.0%} |")
+t[["county", "lower", "by_county", "measure", "name", "lower_acs", "by_county_acs", "lower_cal", "by_county_cal"]].to_csv(
     root / "analysis/residents_leaving_three_counties.csv", index=False)
