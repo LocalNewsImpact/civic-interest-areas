@@ -47,7 +47,7 @@ def mae(terms, data):
 def search(base, pool, kmax, label):
     models = [tuple(base + list(s)) for k in range(kmax + 1) for s in itertools.combinations(pool, k)]
     full = {m: mae(list(m), g) for m in models}
-    best = min(full, key=full.get)
+    best = min(full, key=lambda m: (full[m], len(m)))   # ties toward fewer terms
     adopted = tuple(terms_of(FINAL))
     print(f"\n## {label}: {len(models)} models")
     print(f"non-nested best: {' + '.join(best)}: mean {100 * full[best]:.2f}"
@@ -56,7 +56,7 @@ def search(base, pool, kmax, label):
     for c in counties:
         tr, te = g[g.fips != c], g[g.fips == c]
         inner = {m: mae(list(m), tr) for m in models}
-        pick = min(inner, key=inner.get)
+        pick = min(inner, key=lambda m: (inner[m], len(m)))
         picks[pick] += 1
         e.append(predict(tr, te, list(pick)) - te.rate.to_numpy(float))
     e = np.abs(np.concatenate(e))

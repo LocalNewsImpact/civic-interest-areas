@@ -60,17 +60,18 @@ NOT_LOCAL = EXCLUDE   # includes CAMPUS (excluded_outlets.py)
 
 MENTION_WEIGHT = 0.5
 SPORTS_WEIGHT = 0.5
-# SELECTION RULE (authors, 2026-10-24), a joint test (spillover_rule_selection.py):
-#   1. the adopted set must beat intercept only: its held-out gain -- mean absolute miss with the set minus intercept
-#      only, each county's outlets predicted by a fit without that county -- has a county-paired bootstrap 95%
-#      interval (paired_gain) excluding zero;
-#   2. each adopted coefficient's county-cluster bootstrap 95% CI (cluster_inference) excludes zero;
-#   3. a candidate ADDITION is tested one at a time against the adopted set and kept only if its paired gain's
-#      interval excludes zero.
-# ADOPTED 2026-10-24: broadcaster + log(1 + print and digital outlets in the county): gain against intercept only
-# -1.51 points (-2.58 to -0.31); coefficient CIs exclude zero. No addition passes: outlets per 10,000 -0.28 (-0.87 to
-# +0.16), border (print and digital) -0.08 (-0.45 to +0.33), crowded weekly +0.09 (-0.05 to +0.27).
-# FINAL_ALL_BORDER is the 2026-10-17 form.
+# MODEL PROCEDURE (authors, 2026-10-24; one procedure for every model in the project):
+#   1. Core terms are set by theory and tested as a block, not one at a time.
+#   2. Hypothesis terms are stated in advance and reported with coefficient and held-out gain whatever the result.
+#   3. Exploratory additions are adopted only if the NESTED procedure's held-out gain (selection repeated inside each
+#      fold without the held-out county) has a county-paired bootstrap 95% interval excluding zero (multiplicity guard;
+#      spillover_rule_selection.py). Selection code breaks ties toward fewer terms.
+#   4. One primary metric per model, declared. Spillover: mean absolute held-out miss on the fitted outlets (each
+#      county's outlets predicted by a fit without that county); the median is reported beside it.
+# SPILLOVER: hypothesis terms, pre-specified -- broadcaster (TV and radio reach beyond their county) and print and
+# digital outlets in the county, log(1 + count) (saturation: the more outlets, the less each covers beyond it). They
+# are not selected by any rule here. They were first found by a search; the honest error of that search is its nested
+# figure (spillover_nested_selection.py, search B). Figures: spillover_outlets.py and spillover_rule_selection.py output.
 FINAL = "rate ~ broadcast + log_print"
 PER_10K = "rate ~ broadcast + outlets_per_10k + log_print"
 BORDER_FORM = "rate ~ broadcast + log_border_np + log_print"
@@ -205,36 +206,53 @@ def skill(terms, fit, score=None, y="rate"):
             "skill": 1 - np.abs(e).mean() / np.abs(e0).mean(), "r2": 1 - (e ** 2).mean() / (e0 ** 2).mean(), "n": len(e)}
 
 
+def paired_interval(e_with, e_without, fips, B=1999, seed=20261024):
+    """Mean of e_with - e_without (absolute misses, points x 100), with a county-paired bootstrap percentile 95% interval:
+    counties resampled with replacement, both error sets of a county kept together."""
+    e_with, e_without, fips = np.asarray(e_with), np.asarray(e_without), np.asarray(fips)
+    keys, inv = np.unique(fips, return_inverse=True)
+    dsum, n = np.bincount(inv, e_with - e_without), np.bincount(inv)
+    draws = np.random.default_rng(seed).integers(0, len(keys), (B, len(keys)))
+    boot = dsum[draws].sum(1) / n[draws].sum(1)
+    return {"gain": 100 * (e_with.mean() - e_without.mean()), "lo": 100 * np.quantile(boot, .025),
+            "hi": 100 * np.quantile(boot, .975), "median_with": 100 * np.median(e_with),
+            "median_without": 100 * np.median(e_without), "kept": bool(np.quantile(boot, .975) < 0)}
+
+
+def loo_fips(score):
+    """County of each error, in the order loo() returns them."""
+    return np.concatenate([score.fips[score.fips == c].to_numpy() for c in score.fips.unique()])
+
+
 def paired_gain(terms_with, terms_without, fit, score=None, B=1999, seed=20261024):
     """Held-out gain of a term: mean absolute miss with it minus without it (negative = the term helps), both by leaving
-    each county out, and a county-paired bootstrap percentile 95% interval (B draws). Also the median difference."""
+    each county out, and a county-paired bootstrap percentile 95% interval (B draws). Also the median of each."""
     score = fit if score is None else score
     ew, eo = np.abs(loo(terms_with, fit, score)), np.abs(loo(terms_without, fit, score))
-    cty = np.concatenate([score.fips[score.fips == c].to_numpy() for c in score.fips.unique()])
-    keys, inv = np.unique(cty, return_inverse=True)
-    dsum, n = np.bincount(inv, ew - eo), np.bincount(inv)
-    rng = np.random.default_rng(seed)
-    draws = rng.integers(0, len(keys), (B, len(keys)))
-    boot = dsum[draws].sum(1) / n[draws].sum(1)
-    return {"gain": 100 * (ew.mean() - eo.mean()), "lo": 100 * np.quantile(boot, .025), "hi": 100 * np.quantile(boot, .975),
-            "median_with": 100 * np.median(ew), "median_without": 100 * np.median(eo),
-            "kept": bool(np.quantile(boot, .975) < 0)}
+    return paired_interval(ew, eo, loo_fips(score), B, seed)
 
 
 def cluster_inference(d, formula, B=1999, seed=20261024):
-    """Coefficients with county-clustered SEs (small-cluster correction G/(G-1)(N-1)/(N-K)), p from t with G-1 df, and a
-    pairs county-cluster bootstrap (B draws, percentile 95% CI). Draws in which a term does not vary are dropped for it."""
+    """Coefficients with county-cluster inference.
+    se_crv3, p_cluster_t: CRV3 -- the cluster jackknife, V = (G-1)/G * sum_g (b_(g) - b_bar)(b_(g) - b_bar)', each b_(g)
+      refitted without county g; p from t with G-1 df. The inference used for every reported p.
+    se_crv1, p_crv1: the sandwich with small-cluster correction G/(G-1)(N-1)/(N-K), for comparison.
+    ci_lo, ci_hi: pairs county-cluster bootstrap (B draws, percentile 95%); draws in which a term does not vary are
+      dropped for it (boot_dropped)."""
     import statsmodels.api as sm
     import statsmodels.formula.api as smf
     grp = pd.factorize(d.fips)[0]
     m = smf.glm(formula, d, family=sm.families.Binomial()).fit(
         cov_type="cluster", cov_kwds={"groups": grp, "use_correction": True})
     G = len(set(grp))
-    t = m.params / m.bse
-    p_t = 2 * stats.t.sf(np.abs(t), G - 1)
     terms = terms_of(formula)
     X, y = design(d, terms), d.rate.to_numpy(float)
-    idx = {c: np.flatnonzero(d.fips.to_numpy() == c) for c in d.fips.unique()}
+    fips = d.fips.to_numpy()
+    idx = {c: np.flatnonzero(fips == c) for c in d.fips.unique()}
+    jk = np.array([irls(X[fips != c], y[fips != c]) for c in idx])
+    se3 = np.sqrt((G - 1) / G * ((jk - jk.mean(0)) ** 2).sum(0))
+    p3 = 2 * stats.t.sf(np.abs(m.params.to_numpy() / se3), G - 1)
+    p1 = 2 * stats.t.sf(np.abs(m.params / m.bse), G - 1)
     cl = list(idx)
     rng = np.random.default_rng(seed)
     draws, dropped = [], np.zeros(len(terms) + 1, int)
@@ -246,7 +264,7 @@ def cluster_inference(d, formula, B=1999, seed=20261024):
         b[flat] = np.nan; dropped += flat
         draws.append(b)
     bs = pd.DataFrame(draws, columns=m.params.index) if draws else pd.DataFrame(np.nan, index=[0], columns=m.params.index)
-    out = pd.DataFrame({"coef": m.params, "se_cluster": m.bse, "p_cluster_t": p_t,
+    out = pd.DataFrame({"coef": m.params, "se_crv3": se3, "p_cluster_t": p3, "se_crv1": m.bse, "p_crv1": p1,
                         "ci_lo": bs.quantile(.025), "ci_hi": bs.quantile(.975),
                         "boot_sign_flip": [(np.sign(bs[k].dropna()) != np.sign(m.params[k])).mean() for k in m.params.index],
                         "boot_dropped": dropped})

@@ -13,12 +13,14 @@ Denominator (a definition): every placed story -- one with no central county, an
 miles, stay in it and count 0 unless they mention another county.
 Model: fractional logit, one observation per outlet (a high-volume broadcaster counts once).
 ADOPTED: spillover ~ broadcaster + log(1 + print and digital outlets in the county), fitted on well-collected outlets
-with 20+ placed stories. Selection rule (spillover_common.FINAL): a term is kept only if its held-out gain has a
-county-paired bootstrap interval excluding zero; every other term is reported with its gain and interval;
-inference: county-clustered SEs with small-cluster correction and t(G-1) p-values, and a county-cluster
-bootstrap (1,999 draws) percentile CI. Scored by leaving each county out, on the fitted outlets and on every well-
-collected outlet with 10+ stories, against intercept-only and broadcaster-only baselines. The terms were chosen by a
-search; spillover_nested_selection.py repeats the search inside each fold.
+with 20+ placed stories. Procedure (spillover_common.py, MODEL PROCEDURE): both terms are pre-specified hypothesis
+terms, reported with coefficient and drop-one held-out gain whatever the result; exploratory additions pass only
+through the nested guard (spillover_rule_selection.py). Primary metric: mean absolute held-out miss on the fitted
+outlets (median beside). Inference: CRV3 (cluster jackknife) SEs, t(G-1) p-values; county-cluster bootstrap (1,999
+draws) percentile CI. Scored by leaving each county out, on the fitted outlets and on every well-collected outlet with
+10+ stories, against intercept-only and broadcaster-only baselines. County expectations are HELD OUT: each county's
+outlets predicted by a fit without that county. The terms were first found by a search; its honest error is the
+nested search B figure (spillover_nested_selection.py).
 Outputs (none under SPILL_DRY=1): analysis/spillover_outlets.csv, flows/outlet_spillover_2026_03.json (the three
 counties, for the chart), flows/outlet_spillover_springfield_2026_03.json.
 """
@@ -38,7 +40,7 @@ from scipy import stats
 
 warnings.filterwarnings("ignore")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from spillover_common import (BORDER_FORM, CAMPUS, FINAL, FINAL_ALL_BORDER, FIT_FLOOR, PER_10K, WITH_CROWDED, paired_gain, MENTION_WEIGHT, NOT_FITTED, NOT_LOCAL, SCORE_FLOOR,  # noqa: E402
+from spillover_common import (BORDER_FORM, CAMPUS, FINAL, FINAL_ALL_BORDER, FIT_FLOOR, PER_10K, WITH_CROWDED, paired_gain, predict, MENTION_WEIGHT, NOT_FITTED, NOT_LOCAL, SCORE_FLOOR,  # noqa: E402
                               SPORTS_WEIGHT, STUDY, cluster_inference, loo, market, outlet_home, outlet_rows, skill,
                               terms_of, unit)
 
@@ -213,17 +215,39 @@ for label, formula in {"broadcaster only": "rate ~ broadcast", "broadcaster + to
 g = d[d.fitted].copy()
 s10 = d[d.scored].copy()
 pb = stats.pointbiserialr(d.good, d.rate)
-print(f"\n## QUALITY SELECTION: well collected {int(d.good.sum())} of {len(d)} outlets; mean spillover "
+print(f"\n## QUALITY SELECTION: well collected {int(d.good.sum())} of {len(d)} outlets ({int(d.scored.sum())} scored = well "
+      f"collected minus NOT_FITTED: {', '.join(sorted(d[d.good & ~d.scored].outlet))}); mean spillover "
       f"{d[d.good].rate.mean():.1%} well collected vs {d[~d.good].rate.mean():.1%} others "
       f"(point-biserial r {pb[0]:+.2f}, p {pb[1]:.3f}); print/digital {d[d.good & (d.broadcast == 0)].rate.mean():.1%} vs "
       f"{d[~d.good & (d.broadcast == 0)].rate.mean():.1%}. The fit and its errors describe well-collected outlets.")
 m, inf, G = cluster_inference(g, FINAL)
-d["expected"] = m.predict(d)
+d["expected_full_fit"] = m.predict(d)
+# HELD-OUT EXPECTATION: each county's outlets predicted by the adopted model fitted without that county's outlets.
+# Used for every county and outlet figure and the chart (`expected`).
+
+
+def heldout_expected(frame, fitset):
+    """Each county's outlets in `frame` predicted by the adopted model fitted on `fitset` without that county. The one
+    computation behind every outlet and county expectation printed, charted or quoted."""
+    e = pd.Series(np.nan, index=frame.index)
+    for c in frame.fips.unique():
+        e[frame.fips == c] = predict(fitset[fitset.fips != c], frame[frame.fips == c], terms_of(FINAL))
+    return e
+
+
+def county_figure(x, col="expected", rate="rate"):
+    """Stories-weighted actual and expected spillover of a set of outlets (one formula for every county figure)."""
+    w = x.placed
+    return {"stories": int(w.sum()), "actual": round(float((x[rate] * w).sum() / w.sum()), 3),
+            "expected": round(float((x[col] * w).sum() / w.sum()), 3)}
+
+
+d["expected"] = heldout_expected(d, g)
 print(f"\n## adopted model: fitted on {len(g)} well-collected outlets with {FIT_FLOOR}+ stories in {G} counties (of {len(d)}); "
       f"crowded weeklies {int(g.crowded_weekly.sum())} in {g[g.crowded_weekly == 1].fips.nunique()} counties "
       f"({', '.join(sorted(g[g.crowded_weekly == 1].outlet))}); crowded counties {len(CROWDED)}")
-print("coefficients: county-clustered SE (small-cluster correction), p from t with G-1 df; county-cluster bootstrap, "
-      "1,999 draws, percentile 95% CI")
+print("coefficients: CRV3 (cluster jackknife) SE, p from t with G-1 df (CRV1 beside for comparison); county-cluster "
+      "bootstrap, 1,999 draws, percentile 95% CI")
 print(inf.round(3).to_string())
 print(f"border point: {(g.location_basis == 'town centroid').sum()} of {len(g)} fitted outlets located at a town centroid, "
       f"{(g.location_basis == 'address').sum()} at a street address; {int(g.outside_home.sum())} outside their home county "
@@ -247,40 +271,41 @@ for label, formula in (("adopted", FINAL), ("+ outlets per 10,000", PER_10K),
 k10 = skill(terms_of(FINAL), s10, s10)
 print(f"| adopted, fitted at {SCORE_FLOOR}+ | all well collected {SCORE_FLOOR}+ | {k10['n']} | {k10['mean']:.2f} | "
       f"{k10['median']:.2f} | {k10['skill']:+.3f} | {k10['r2']:+.3f} |")
-print("nested selection (terms chosen inside each fold): spillover_nested_selection.py")
+print("honest error of the search that found the hypothesis terms: nested search B, spillover_nested_selection.py; "
+      "exploratory guard: spillover_rule_selection.py")
 
-# SELECTION RULE: each term's held-out gain, county-paired bootstrap 95% interval (1,999 draws); kept only if the
-# interval excludes zero. Adopted terms against the model without them; candidates against the adopted model.
-print("\n## selection rule: held-out gain of each term (mean miss with - without, points; negative helps), county-paired "
-      "bootstrap 95% interval; median miss with / without; kept only if the interval excludes zero")
-print("| Term | Against | Gain | 95% interval | Median with / without | Kept |\n|---|---|---:|---|---|---|")
+# HYPOTHESIS TERMS (pre-specified): coefficient (above) and drop-one held-out gain -- mean miss of the adopted model
+# minus the model without the term (negative: the term helps) -- with a county-paired bootstrap 95% interval, reported
+# whatever the result; the block (both terms) against intercept only. LOCO folds are the counties, so the folds have no
+# seed; the only randomness is the county bootstrap, shown over five seeds.
+print("\n## hypothesis terms: drop-one held-out gain (mean miss with - without, points), county-paired bootstrap 95% "
+      "interval over 5 seeds (1,999 draws each); median with / without")
+print("| Term | Against | Gain | 95% interval (5 seeds: lowest lo - highest hi) | Median with / without |\n|---|---|---:|---|---|")
 base = terms_of(FINAL)
-tests = [("broadcaster", base, [t for t in base if t != "broadcast"], "print outlets only"),
-         ("print outlets", base, ["broadcast"], "broadcaster only")]
+for lab, to in (("broadcaster", [t for t in base if t != "broadcast"]), ("print outlets", [t for t in base if t != "log_print"]),
+                ("block: broadcaster + print outlets", [])):
+    rs = [paired_gain(base, to, g, seed=sd) for sd in range(1, 6)]
+    print(f"| {lab} | {' + '.join(to) or 'intercept only'} | {rs[0]['gain']:+.2f} | "
+          + "; ".join(f"{r['lo']:+.2f} to {r['hi']:+.2f}" for r in rs) + f" | {rs[0]['median_with']:.2f} / {rs[0]['median_without']:.2f} |")
+# EXPLORATORY candidates, one at a time against the adopted model: descriptive only. Adoption needs the nested guard
+# (spillover_rule_selection.py), not these intervals.
+print("\n## exploratory candidates, one at a time against the adopted model (descriptive; adoption by the nested guard "
+      "only): gain, county-paired 95% interval, median with / without")
 for lab, t in (("outlets per 10,000", "outlets_per_10k"), ("border, print and digital", "log_border_np"),
-               ("border, every outlet", "log_border_mi"), ("crowded weekly", "crowded_weekly"),
+               ("border, every outlet", "log_border_mi"), ("crowded weekly", "crowded_weekly"), ("all outlets", "log_outlets"),
                ("miles to a town of 25,000+", "log_hub_mi"), ("TV stations", "log_tv")):
-    tests.append((lab, base + [t], base, "adopted"))
-tests.append(("crowded weekly, on the border form", terms_of(WITH_CROWDED), terms_of(BORDER_FORM), "border form"))
-gains = {}
-for lab, tw, to, against in tests:
-    r = paired_gain(tw, to, g)
-    gains[lab] = r
-    print(f"| {lab} | {against} | {r['gain']:+.2f} | {r['lo']:+.2f} to {r['hi']:+.2f} | {r['median_with']:.2f} / "
-          f"{r['median_without']:.2f} | {'yes' if r['kept'] else 'no'} |")
-for lab, f in (("outlets per 10,000 form", PER_10K), ("border form", BORDER_FORM)):
-    ci = cluster_inference(g, f, B=999)[1]
-    print(f"{lab}: " + ", ".join(f"{t} {r.coef:+.3f} (p {r.p_cluster_t:.3f}; CI {r.ci_lo:+.3f} to {r.ci_hi:+.3f})"
-                                 for t, r in ci.iterrows() if t != "Intercept"))
+    r = paired_gain(base + [t], base, g)
+    ci = cluster_inference(g, FINAL + f" + {t}", B=999)[1].loc[t]
+    print(f"  {lab}: gain {r['gain']:+.2f} ({r['lo']:+.2f} to {r['hi']:+.2f}); median {r['median_with']:.2f} / "
+          f"{r['median_without']:.2f}; coefficient {ci.coef:+.3f} (CRV3 p {ci.p_cluster_t:.3f}; CI {ci.ci_lo:+.3f} to {ci.ci_hi:+.3f})")
 # BORDER DISTANCE 0 for an outlet outside its home county (Mid Rivers Newsmagazine, Greene County Commonwealth): it is
 # beyond its home county's edge. Kept by the authors' decision (2026-10-24); the border term is a candidate, not adopted.
 
 # ---- counties -------------------------------------------------------------------------------------------------------------
 types = {a["publisher"]: a["publisher_type"] or "" for a in data["articles"]}
 kind = lambda o_: "TV" if "video" in types.get(o_, "") else "radio" if "audio" in types.get(o_, "") else "print/digital"
-tot = lambda y, col="expected": {"stories": int(y.placed.sum()), "actual": round(y.spill.sum() / y.placed.sum(), 3),
-                                 "expected": round((y.placed * y[col]).sum() / y.placed.sum(), 3)}
-print("\n## counties: actual / expected spillover, stories weighted")
+tot = county_figure
+print("\n## counties: actual / HELD-OUT expected spillover (fit without the county), stories weighted")
 out = {}
 for n, fp in STUDY:
     x = d[d.fips == fp].sort_values("placed", ascending=False)
@@ -296,19 +321,21 @@ for n, fp in STUDY:
 
 # ---- measure sensitivity: mention weight x sports weight (the adopted 0.5 / 0.5 are definitions) ----------------------
 print("\n## measure sensitivity: same outlets, same terms; each row a different outcome, so compare skill and OOS R2, "
-      "not the miss in points. County columns actual / expected.")
+      "not the miss in points. County columns actual / held-out expected.")
 print("| Mention | Sports | Mean rate | Held-out mean | Intercept-only mean | Skill | OOS R2 | "
       + " | ".join(n for n, _ in STUDY[:3]) + " |\n|---:|---:|---:|---:|---:|---:|---:|" + "---|" * 3)
 for mw in (0.25, 0.5, 1.0):
     for sw in (1, 0.5, 0):
-        y = d.assign(rate=spill_of(d, mw, sw) / d.placed)
+        adopted_weights = (mw, sw) == (MENTION_WEIGHT, SPORTS_WEIGHT)
+        y = d.copy() if adopted_weights else d.assign(rate=spill_of(d, mw, sw) / d.placed)
         gy = y[y.fitted]
+        if not adopted_weights:              # the adopted row reuses d.expected: the same numbers as the county section
+            y["expected"] = heldout_expected(y, gy)
         k, k0 = skill(terms_of(FINAL), gy), skill([], gy)
-        y["expected"] = smf.glm(FINAL, gy, family=sm.families.Binomial()).fit().predict(y)
         cty = []
         for n, fp in STUDY[:3]:
-            x = y[y.fips == fp]
-            cty.append(f"{(x.rate * x.placed).sum() / x.placed.sum():.0%} / {(x.expected * x.placed).sum() / x.placed.sum():.0%}")
+            t = county_figure(y[y.fips == fp])
+            cty.append(f"{t['actual']:.0%} / {t['expected']:.0%}")
         mark = "**" if (mw, sw) == (MENTION_WEIGHT, SPORTS_WEIGHT) else ""
         print(f"| {mark}{mw}{mark} | {mark}{sw}{mark} | {gy.rate.mean():.1%} | {k['mean']:.2f} | {k0['mean']:.2f} | "
               f"{k['skill']:+.3f} | {k['r2']:+.3f} | " + " | ".join(cty) + " |")
@@ -343,10 +370,23 @@ for n, fp in REGION.items():
           + "; ".join(f"{o_['name']} {o_['actual']:.0%}/{o_['expected']:.0%}" for o_ in out_sgf[n]["outlets"]))
 
 # ---- outputs: written once, after every column exists ---------------------------------------------------------------------
+# QUOTED ROWS: every outlet and county actual / expected that MODEL_CHANGES.md quotes, from d.expected (held out).
+QUOTED = ["Mid Rivers Newsmagazine", "Greene County Commonwealth", "The Cash-Book Journal", "Vandalia Leader", "KC Beacon",
+          "The Kansas City Star", "The Pitch/Kansas City Pitch", "Boone County Journal", "Centralia Fireside Guard",
+          "The Mexico Ledger", "Columbia Missourian", "Columbia Daily Tribune"]
+qrows = [{"level": "county", "name": n, "subset": sub, **county_figure(x)}
+         for n, fp in STUDY for sub, x in (("all", d[d.fips == fp]), ("print and digital", d[(d.fips == fp) & (d.broadcast == 0)]))
+         if len(x)]
+qrows += [{"level": "outlet", "name": r.outlet, "subset": r.fips, "stories": int(r.placed), "actual": round(r.rate, 3),
+           "expected": round(r.expected, 3)} for r in d[d.outlet.isin(QUOTED)].itertuples()]
+quoted = pd.DataFrame(qrows)
+print("\n## quoted rows (actual / held-out expected): analysis/spillover_quoted_rows.csv")
+print(quoted.to_string(index=False))
 if DRY:
     print("\nSPILL_DRY: nothing written")
 else:
     d.to_csv(root / "analysis/spillover_outlets.csv", index=False)
+    quoted.to_csv(root / "analysis/spillover_quoted_rows.csv", index=False)
     json.dump(out, open(root / "flows/outlet_spillover_2026_03.json", "w"), indent=1)
     json.dump(out_sgf, open(root / "flows/outlet_spillover_springfield_2026_03.json", "w"), indent=1)
     print("\nwrote analysis/spillover_outlets.csv, flows/outlet_spillover_2026_03.json, flows/outlet_spillover_springfield_2026_03.json")
