@@ -4,11 +4,12 @@ Candidates: every Missouri build of public_travel_tiers.py (analysis/public_mode
 assembled by-class files, the Kansas builds (_20_) and the regular-travel builds (_r*): 53 settings, each built from
 public data only. For each class (score_segments.py's five: small rural, independent towns, commuter rings of the
 Kansas City and St. Louis metros, commuter rings of regional hubs, hubs) the setting is the one with the lowest mean
-share-weighted error against Advan:
+share-weighted error against Advan over all Advan destinations (the primary metric; outside the public model's
+200-mile support the model's share is 0):
   in-sample   chosen on all the class's counties and scored on the same counties (what the log reported, 4.30-4.34)
   nested      leave one county out: chosen on the class's other counties, scored on the held-out one (reported)
-Advan therefore chooses among settings but sets no parameter. Scored on the common destination set
-(public_adjusted_model.py), share-weighted error and log-ratio error (public_scoring.py).
+Advan therefore chooses among settings but sets no parameter. The table printed here is on all Advan destinations;
+score_segments.py adds the common destination set.
 
 Outputs: analysis/public_stage1_choice.csv (the setting chosen on all counties of each class -- the one Kansas takes;
 and each county's nested choice), analysis/public_stage1_nested_pairs.csv (county shares, nested and in-sample).
@@ -58,7 +59,7 @@ def county_errors(V):
     sw, lr, P = {}, {}, {}
     for n in range(V.shape[1]):
         p = M.roll(V[:, n])
-        e = per_county(M.S.i.values, M.a, p)
+        e = per_county(M.S.i.values, M.a_raw, p)     # selection on the primary metric: all Advan destinations
         sw[n], lr[n], P[n] = e.sw, e.lr, p
     return pd.DataFrame(sw), pd.DataFrame(lr), P
 
@@ -87,7 +88,7 @@ def main():
         M.A_ / "public_stage1_choice.csv", index=False)
     pd.DataFrame({"i": M.S.i, "j": M.S.j, "common": M.COMMON, "advan": M.a, "fitted": M.adv, "public_nested": p_nest,
                   "public_insample": p_ins}).to_csv(M.A_ / "public_stage1_nested_pairs.csv", index=False)
-    en, ei, ef = (per_county(M.S.i.values, M.a, p) for p in (p_nest, p_ins, M.adv))
+    en, ei, ef = (per_county(M.S.i.values, M.a_raw, p) for p in (p_nest, p_ins, M.adv_raw))
     print(f"{len(names)} candidate settings; common destination set: Advan share outside {100 * M.outside.mean():.2f}% "
           f"per county on average")
     print("| Class (counties) | setting chosen on all counties | in-sample | nested (LOO) | Advan-fitted |\n|---|---|---:|---:|---:|")

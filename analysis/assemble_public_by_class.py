@@ -12,7 +12,11 @@ LEGACY=1 or REGULAR=1: the hand-picked settings of 2026-10-18 (small rural obser
 chained errands, Huff on sales; independent towns the same with decay 6; commuter gravity work part, 20 days; hubs
 Huff on surplus sales; class 5 = CLASS5), and the regular-travel builds.
 STATE=20: the Kansas builds of the same settings (public_model_pairs_tiers_20<TAG>.csv; county_class_k4_20.csv).
-Output analysis/public_model_pairs_tiers[_20]_byclass<OUTTAG>.csv (tract shares, same columns as the inputs)."""
+Output analysis/public_model_pairs_tiers[_20]_byclass<OUTTAG>.csv (tract shares, same columns as the inputs).
+Environment (printed at start): STATE, OUTTAG, LEGACY, REGULAR, HYB, CLASS5. Runs of 2026-10-24:
+  OUTTAG=_nested                                    Missouri, settings chosen on all Missouri counties
+  STATE=20 OUTTAG=_nested                           Kansas, the same settings (transfer_adjustments.py BASE)
+  LEGACY=1 CLASS5=_g_40_sales OUTTAG=_c5_g_40_sales the 2026-10-18 base of public_adjusted_pairs_trnear.csv"""
 import os
 from pathlib import Path
 
@@ -41,7 +45,7 @@ def klass(h):
     return "class 5" if c == "class 3" and h not in _bigm else c
 
 
-print("settings:", PICK)
+print("environment:", {k: os.environ.get(k, "") for k in ("STATE", "OUTTAG", "LEGACY", "REGULAR", "HYB", "CLASS5")}, "| settings:", PICK)
 parts = []
 for c, tag in PICK.items():
     T = pd.read_csv(A / f"public_model_pairs_tiers{SUF}{tag}.csv", dtype={"tract": str, "j": str, "home": str})

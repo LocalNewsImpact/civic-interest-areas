@@ -1,7 +1,10 @@
 """The Advan-fitted benchmark for Kansas: the adopted travel model's form (Poisson, origin and destination fixed
 effects; log distance and its square, nonmetro origin x log distance and its square, origin size x log distance,
 adjacency, pair commuting out and in) fitted to Kansas Advan (od_ks_2026.csv, Kansas homes, Kansas and Missouri
-destinations, out of county), each home county held out (8 folds). Same score as score_ks.py."""
+destinations, out of county), each home county held out (8 folds). Outcome: visits_statewide (Kansas calibration
+factors, analysis/calibration_county_month_ks.csv, on the statewide device->person scale used in Missouri); no
+pass-through discount (no Kansas road-stop shares). Commuting: LODES 2023 primary jobs (JT01). Every fold's fit is
+checked for convergence (no start values are used). Scored by score_ks.py."""
 import csv
 import gzip
 import math
@@ -14,9 +17,10 @@ import statsmodels.api as sm
 
 root = Path(__file__).resolve().parents[1]
 A = root / "analysis"; REF = root / "census_dl/ref"
+OUTCOME = "visits_statewide"     # Kansas factors (calibration_county_month_ks.csv), statewide basis, as Missouri
 od = pd.read_csv(A / "od_ks_2026.csv", dtype={"home_county": str, "dest_county": str})
 od = od[(od.home_county != od.dest_county) & od.dest_county.str[:2].isin(["20", "29"]) & (od.home_county.str[:2] == "20")]
-y = od.groupby(["home_county", "dest_county"]).visits.sum()
+y = od.groupby(["home_county", "dest_county"])[OUTCOME].sum()
 co = pd.read_csv(REF / "CenPop2020_Mean_CO.txt", dtype=str, encoding="utf-8-sig"); co["f"] = co.STATEFP + co.COUNTYFP
 cp = co.set_index("f")[["LATITUDE", "LONGITUDE", "POPULATION"]].astype(float)
 homes = sorted(cp.index[cp.index.str[:2] == "20"]); dests = sorted(set(cp.index[cp.index.str[:2].isin(["20", "29"])]))
@@ -31,7 +35,8 @@ ADJ = set(zip(adj["County GEOID"], adj["Neighbor GEOID"]))
 rucc = pd.read_csv(REF / "rucc2023.csv", dtype=str, encoding="latin-1"); rucc = rucc[rucc.Attribute == "RUCC_2023"]
 nonmetro = {r.FIPS.zfill(5): float(int(r.Value) >= 4) for r in rucc.itertuples()}
 flow, work = defaultdict(float), defaultdict(float)
-for f in (root / "free/ks/ks_od_main_JT00_2023.csv.gz", root / "free/ks/mo_od_aux_JT00_2023.csv.gz", root / "free/od_2023.csv.gz", root / "free/ks_od_aux_JT00_2023.csv.gz"):
+for f in (root / "free/ks/ks_od_main_JT01_2023.csv.gz", root / "free/ks/mo_od_aux_JT01_2023.csv.gz", root / "free/mo_od_main_JT01_2023.csv.gz",
+          root / "free/ks_od_aux_JT01_2023.csv.gz"):                                    # LODES 2023 primary jobs (JT01)
     with gzip.open(f, "rt") as fh:
         for r in csv.DictReader(fh):
             h, w, n = r["h_geocode"][:5], r["w_geocode"][:5], float(r["S000"])
@@ -52,8 +57,10 @@ for f in folds:
     test = P.i.isin(f).values; train = ~test
     cc = XX.columns[(XX[train] != 0).any()]
     m = sm.GLM(P.y.values[train], XX.loc[train, cc], family=sm.families.Poisson()).fit(maxiter=300)
+    assert m.converged, f"fold not converged ({m.fit_history['iteration']} iterations)"
     lin = XX.loc[test, [c for c in cc if not c.startswith("o_")]].values @ m.params[[c for c in cc if not c.startswith("o_")]].values
-    pred[test] = np.exp(lin - lin.max())
+    lin = lin - pd.Series(lin).groupby(P.i.values[test]).transform("max").values      # each origin's own maximum
+    pred[test] = np.exp(lin)
 P["fitted"] = pred
 P["fitted"] = P.fitted / P.groupby("i").fitted.transform("sum")
 P[["i", "j", "dist", "y", "fitted"]].rename(columns={"i": "home"}).to_csv(A / "ks_advan_fitted.csv", index=False)

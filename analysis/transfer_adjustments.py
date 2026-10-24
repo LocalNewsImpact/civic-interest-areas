@@ -7,7 +7,7 @@ counties; Kansas is held out entirely, so choosing on all of Missouri is out of 
   distance band      tract miles to the destination's centre of population, bands <15, 15-30, 30-50, 50-80, 80-120,
                      120+; DIST_BY_RANK: learned apart for the dominant/secondary commuting county and the hub relation
   adjacency          Census county adjacency 2023
-  commuting          LODES 2023 (Kansas main + Missouri auxiliary): the home county's out-of-county work destinations
+  commuting          LODES 2023 primary jobs, JT01 (Kansas main + Missouri auxiliary): the home county's out-of-county work destinations
                      in Kansas and Missouri (rank; out and in bands)
   destination order  transferable definitions: central county of a 1M+ metro area (OMB 2023, Census 2024); rest of
                      such a metro; resort (marinas + RV parks and camps per resident, top tenth of U.S. counties, CBP
@@ -19,6 +19,9 @@ Public base: BASE (default public_model_pairs_tiers_20_byclass_nested.csv: each 
 Missouri counties, assemble_public_by_class.py STATE=20).
 Frame: destinations in Kansas and Missouri, out of county. Output analysis/ks_predictions.csv: home, j, public,
 corrected, dist, cls, order.
+Environment (printed at start): BASE, PKL; the structure (SPLIT3, C5AS, DIST_BY_RANK, DIST_HUB, CORE, CORE_NEAR,
+TRANSFER, RC_PF, COMMUTE, POOLED) comes from the pickle and is printed. Run of 2026-10-24:
+  BASE=public_model_pairs_tiers_20_byclass_nested.csv PKL=segment_corrections_mo.pkl python analysis/transfer_adjustments.py
 """
 import csv
 import gzip
@@ -37,7 +40,8 @@ K = pickle.load(open(A / os.environ.get("PKL", "segment_corrections_mo.pkl"), "r
 cfg = K.get("cfg") or {"SPLIT3": True, "C5AS": "class 2", "DIST_BY_RANK": True, "DIST_HUB": False, "CORE": False,
                        "CORE_NEAR": True, "TRANSFER": True, "RC_PF": 1.0, "COMMUTE": tuple(K["groups"]), "POOLED": tuple(K["pooled"])}
 assert cfg["TRANSFER"], "only the transferable destination-order definitions can be applied outside Missouri"
-print("structure:", cfg)
+print("environment:", {"BASE": os.environ.get("BASE", "public_model_pairs_tiers_20_byclass_nested.csv"), "PKL": os.environ.get("PKL", "segment_corrections_mo.pkl")},
+      "| structure:", cfg)
 CUTS = [15, 30, 50, 80, 120]
 FRAME = {"20", "29"}
 
@@ -94,8 +98,8 @@ def miles(i, j):
 
 # commuting (Kansas homes; destinations in Kansas and Missouri; workers living in the destination from both files)
 flow, work = defaultdict(float), defaultdict(float)
-for f in (root / "free/ks/ks_od_main_JT00_2023.csv.gz", root / "free/ks/mo_od_aux_JT00_2023.csv.gz",
-          root / "free/od_2023.csv.gz", root / "free/ks_od_aux_JT00_2023.csv.gz"):
+for f in (root / "free/ks/ks_od_main_JT01_2023.csv.gz", root / "free/ks/mo_od_aux_JT01_2023.csv.gz",      # primary jobs (JT01)
+          root / "free/mo_od_main_JT01_2023.csv.gz", root / "free/ks_od_aux_JT01_2023.csv.gz"):
     with gzip.open(f, "rt") as fh:
         for r in csv.DictReader(fh):
             h, w, n = r["h_geocode"][:5], r["w_geocode"][:5], float(r["S000"])

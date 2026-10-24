@@ -63,3 +63,28 @@ def fmt_ci(t, nd=2):
     m, lo, hi, _ = t
     star = "" if lo <= 0 <= hi else "*"
     return f"{m:+.{nd}f} [{lo:+.{nd}f}, {hi:+.{nd}f}]{star}"
+
+
+def boot_share_closed(e_from, e_to, e_ref, groups, n=N_BOOT, seed=0):
+    """Share of the gap from e_from to the benchmark e_ref that e_to closes: (mean e_from - mean e_to) /
+    (mean e_from - mean e_ref), per class and all (stratified), with a county-paired bootstrap 95% interval.
+    Inputs: per-county Series on the same index."""
+    rng = np.random.default_rng(seed)
+    g = groups.reindex(e_from.index)
+    out, parts = {}, {}
+    for c in g.dropna().unique():
+        idx = np.flatnonzero((g == c).values)
+        f, t, r = e_from.values[idx], e_to.values[idx], e_ref.values[idx]
+        b = rng.integers(0, len(idx), (n, len(idx)))
+        num, den = (f[b] - t[b]).mean(1), (f[b] - r[b]).mean(1)
+        parts[c] = (num * len(idx), den * len(idx))
+        out[c] = ((f - t).mean() / (f - r).mean(), *np.percentile(num / den, [2.5, 97.5]), len(idx))
+    num = sum(p[0] for p in parts.values()); den = sum(p[1] for p in parts.values())
+    m = g.notna().values
+    out["all"] = ((e_from[m] - e_to[m]).mean() / (e_from[m] - e_ref[m]).mean(), *np.percentile(num / den, [2.5, 97.5]), int(m.sum()))
+    return out
+
+
+def fmt_pct(t):
+    m, lo, hi, _ = t
+    return f"{100 * m:.0f}% [{100 * lo:.0f}, {100 * hi:.0f}]"

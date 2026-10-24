@@ -7,7 +7,8 @@ public_adjusted_model.py):
   1. Stage 1: each class's public setting is chosen on the counties outside fold k (public_stage1_nested.py's
      candidates and rule);
   2. every candidate structure is scored by inner cross-validation on the other 7 folds only (learn on 6, predict 1);
-  3. the structure with the lowest inner share-weighted error is learned on all 7 folds and applied to fold k.
+  3. the structure with the lowest inner share-weighted error (all Advan destinations, the primary metric) is
+     learned on all 7 folds and applied to fold k.
 Fold k's counties are therefore scored with a setting and a structure neither chosen nor learned with them. Done for
 each mode (C segment factors only, A + one factor per destination county, B + destination factor from public
 measures), each mode choosing its own structure.
@@ -92,7 +93,8 @@ MODES = ("C", "A", "B")
 
 
 def sw_home(p):
-    return np.bincount(M.ii, 100 * M.a * np.abs(p - M.a), minlength=len(M.homes_S))
+    # selection metric = the primary metric: share-weighted error over all Advan destinations (0 outside the support)
+    return np.bincount(M.ii, 100 * M.a_raw * np.abs(p - M.a_raw), minlength=len(M.homes_S))
 
 
 def run_cfg(n):

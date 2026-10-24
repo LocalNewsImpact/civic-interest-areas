@@ -2,8 +2,10 @@
 eight neighbouring states. No Advan, no destination fixed effects -- every destination's pull is a public measure, so
 the model applies to any place.
 
-Outcome   LODES 2023 jobs, home tract -> work county: the Missouri main OD file (od_2023.csv.gz) plus the auxiliary OD
-          files of IL, KS, IA, AR, OK, NE, TN, KY (Missouri residents working in those states).
+Outcome   LODES 2023 primary jobs (JT01; JT=JT00 all jobs), home tract -> work county: the Missouri main OD file
+          (mo_od_main_JT01_2023.csv.gz) plus the auxiliary OD files of IL, KS, IA, AR, OK, NE, TN, KY (Missouri residents
+          working in those states); STATE=20: the Kansas main file and the MO, NE, OK, CO auxiliary files.
+Builds    DIST=pop TAG=_v1 (Missouri) and STATE=20 DIST=pop TAG=_v1 (Kansas): the files public_travel_tiers.py reads.
 Inputs    distance: miles between the tract's 2020 centre of population (CenPop2020_Mean_TR29) and the destination
             county's job centre (county_public_geo.csv, build_public_geography.py), log and log squared
           destination employment: County Business Patterns 2022 total employment (cbp22co.txt), log
@@ -50,8 +52,10 @@ rcol = "Value" if "Value" in rucc else rucc.columns[-1]
 rural = {r.FIPS.zfill(5): int(float(getattr(r, rcol))) >= 4 for r in rucc.itertuples()} if "FIPS" in rucc else {}
 
 flow = defaultdict(float)
-files = ([root / "free/od_2023.csv.gz"] + [root / f"free/{s}_od_aux_JT00_2023.csv.gz" for s in ("il", "ks", "ia", "ar", "ok", "ne", "tn", "ky")]
-         if ST == "29" else [root / "free/ks/ks_od_main_JT00_2023.csv.gz"] + [root / f"free/ks/{s}_od_aux_JT00_2023.csv.gz" for s in ("mo", "ne", "ok", "co")])
+# LODES job type: JT01 primary jobs, one job per worker (adopted 2026-10-24, as gravity_terms.py); JT=JT00 all jobs
+JT = os.environ.get("JT", "JT01")
+files = ([root / ("free/od_2023.csv.gz" if JT == "JT00" else f"free/mo_od_main_{JT}_2023.csv.gz")] + [root / f"free/{s}_od_aux_{JT}_2023.csv.gz" for s in ("il", "ks", "ia", "ar", "ok", "ne", "tn", "ky")]
+         if ST == "29" else [root / f"free/ks/ks_od_main_{JT}_2023.csv.gz"] + [root / f"free/ks/{s}_od_aux_{JT}_2023.csv.gz" for s in ("mo", "ne", "ok", "co")])
 for f in files:
     with gzip.open(f, "rt") as fh:
         for r in csv.DictReader(fh):

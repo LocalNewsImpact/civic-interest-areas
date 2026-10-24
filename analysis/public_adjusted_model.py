@@ -23,7 +23,14 @@ is reported. Scores: share-weighted error and log-ratio error (public_scoring.py
 
 The structure is a configuration (keys(cfg)); run as a script it is read from the environment (SPLIT3, C5AS,
 DIST_BY_RANK, DIST_HUB, CORE, CORE_NEAR, TRANSFER, RC_PF, COMMUTE, POOLED), as before. public_adjusted_nested.py
-imports the functions to choose the structure inside an outer cross-validation loop. Factors learned on all counties
+imports the functions to choose the structure inside an outer cross-validation loop.
+Environment (printed at start): BASE, OUTTAG, EXPORT and the structure SPLIT3, C5AS, DIST_BY_RANK, DIST_HUB, CORE,
+CORE_NEAR, TRANSFER, RC_PF, COMMUTE, POOLED. public_adjusted_pairs_trnear.csv (the 2026-10-18 structure on the
+2026-10-18 base; read by tie_footprint.py, public_activity_space.py, directions_per_tract.py):
+  LEGACY=1 CLASS5=_g_40_sales OUTTAG=_c5_g_40_sales python analysis/assemble_public_by_class.py
+  BASE=public_model_pairs_tiers_byclass_c5_g_40_sales.csv SPLIT3=1 C5AS="class 2" DIST_BY_RANK=1 CORE= CORE_NEAR=1 \
+    TRANSFER=1 RC_PF=1.0 COMMUTE=commute_rank,dest_order,dest_class POOLED= OUTTAG=_trnear python analysis/public_adjusted_model.py
+(every command of the chain: scratchpad review_fixes/public_commands.sh, 2026-10-24). Factors learned on all counties
 are written for reuse: analysis/public_adjustments.csv (distance and adjacency by class; destination coefficients).
 """
 import csv
@@ -145,12 +152,14 @@ nearest = {i: min((j for j in central if j != i), key=lambda j: dmiles.get((i, j
 core_of = lambda i, j: (j in central and cbsa.get(i) is not None and cbsa.get(i) == cbsa.get(j)) or (cbsa.get(i) is None and nearest[i] == j)
 core_S = np.array([core_of(i, j) for i, j in zip(S.i, S.j)])
 core_T = np.array([core_of(h, j) for h, j in zip(T.home, T.j)])
-# pair commuting (LODES 2023, Missouri main OD)
+# pair commuting: LODES 2023 primary jobs (JT01), Missouri main + aux OD, as gravity_terms.py (the aux file adds
+# out-of-state residents working in Missouri; it changes no Missouri pair)
 _flow, _work = defaultdict(float), defaultdict(float)
-with gzip.open(root / "free/od_2023.csv.gz", "rt") as fh:
-    for r in csv.DictReader(fh):
-        h, w_, n = r["h_geocode"][:5], r["w_geocode"][:5], float(r["S000"])
-        _work[h] += n; _flow[h, w_] += n
+for _f in ("free/mo_od_main_JT01_2023.csv.gz", "free/mo_od_aux_JT01_2023.csv.gz"):
+    with gzip.open(root / _f, "rt") as fh:
+        for r in csv.DictReader(fh):
+            h, w_, n = r["h_geocode"][:5], r["w_geocode"][:5], float(r["S000"])
+            _work[h] += n; _flow[h, w_] += n
 CB = [0.005, 0.02, 0.05, 0.15, 0.30]
 cband = lambda i, j: int(np.digitize(_flow.get((i, j), 0) / max(_work.get(i, 1), 1), CB))
 cinband = lambda i, j: int(np.digitize(_flow.get((j, i), 0) / max(_work.get(j, 1), 1), CB))
@@ -366,6 +375,7 @@ def export(K, p_base, name):
 
 def main():
     cfg = env_cfg()
+    print("environment:", {"BASE": BASE, "OUTTAG": os.environ.get("OUTTAG", ""), "EXPORT": os.environ.get("EXPORT", ""), **cfg}, flush=True)
     K = keys(cfg)
     LABEL = K.LABEL
     print("destination order counts:", pd.Series([K.dest_order(j) for j in dests]).value_counts().sort_index().to_dict(),
@@ -396,7 +406,7 @@ def main():
     # Audrain's tracts, north to south: Marion and Boone
     lat = dict(zip(_tr.STATEFP + _tr.COUNTYFP + _tr.TRACTCE, _tr.LATITUDE.astype(float)))
     od = pd.read_csv(A_ / "od_tract_mo_2026.csv", dtype={"home_tract": str, "dest_county": str}).groupby(["home_tract", "dest_county"]).all_day.sum()
-    print("\nAudrain tracts (out-of-county Missouri shares, %): Marion actual / public / public + B; Boone the same")
+    print("\nAudrain tracts (out-of-county Missouri shares, %; od_tract_mo_2026.csv, January-July): Marion actual / public / public + B; Boone the same")
     for t, g in T[T.home == "29007"].groupby("tract"):
         adv_t = pd.Series({j: od.get((t, j), 0) for j in g.j}); adv_t = adv_t / adv_t.sum()
         gi = g.set_index("j")

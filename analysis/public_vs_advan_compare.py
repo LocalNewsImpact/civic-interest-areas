@@ -4,8 +4,8 @@ county destination shares, January-September 2026, out-of-county Missouri pairs 
 tier. The Advan-fitted model is the adopted one (gravity_terms.FACTORS, doubly constrained), each county held out in
 8 folds (gravity_terms.loco, seed 7: the same folds as travel_commute_pair_test.py); the public models never see
 Advan, so they need no holding out. Public tract shares are rolled up to counties, weighted by tract population (2020).
-Scores on the common destination set (the public model's destinations, Advan and the fitted model renormalised over
-it): share-weighted error and log-ratio error (public_scoring.py).
+Scores: share-weighted error (primary) and log-ratio error (public_scoring.py) over all Advan destinations (a pair
+outside a model's support counts with model share 0); the Advan-fitted model on the common destination set also printed.
 Output: analysis/compare_shares.csv (advan = observed shares over all Missouri destinations; the Advan-fitted model;
 the public builds), read by every public_* script."""
 import sys
@@ -54,7 +54,12 @@ rows = {"Advan-fitted (adopted, counties held out)": ps_advan,
 common = rows["trade area: TAC leakage, Huff on sales, survey decay"] > 0
 ac = renorm(pairs.i.values, a * common)
 cls = pd.Series({f: tier.get(unit(f), "class 1") for f in sorted(set(pairs.i))})
-E = {lab: per_county(pairs.i.values, ac, renorm(pairs.i.values, ps * common)) for lab, ps in rows.items()}
+# primary: all Advan destinations (a pair outside a model's support counts with model share 0); the common set beside it
+E = {lab: per_county(pairs.i.values, a, ps) for lab, ps in rows.items()}
+Ec = {lab: per_county(pairs.i.values, ac, renorm(pairs.i.values, ps * common)) for lab, ps in rows.items()}
+print("all destinations, Advan-fitted: share-weighted %.2f, log-ratio %.2f; common set %.2f / %.2f" % (
+    E["Advan-fitted (adopted, counties held out)"].sw.mean(), E["Advan-fitted (adopted, counties held out)"].lr.mean(),
+    Ec["Advan-fitted (adopted, counties held out)"].sw.mean(), Ec["Advan-fitted (adopted, counties held out)"].lr.mean()))
 print(f"common destination set: Advan share outside {100 * pd.Series(a * ~common).groupby(pairs.i.values).sum().mean():.2f}% per county")
 base = E["BASELINE public: work + non-work (employment draw, likelihood)"]
 print("| Factor | " + " | ".join(names.values()) + " | all |\n|---|" + "---:|" * 5)
@@ -65,7 +70,7 @@ for lab, e in E.items():
     else:
         print(f"| {lab} | " + " | ".join(f"{cell(e, c).sw.mean() - cell(base, c).sw.mean():+.2f} / {cell(e, c).lr.mean() - cell(base, c).lr.mean():+.2f}"
                                          for c in list(names) + ["all"]) + " |")
-print("(share-weighted error / log-ratio error; factor rows: change against the baseline; negative = better)")
+print("(all Advan destinations; share-weighted error / log-ratio error; factor rows: change against the baseline; negative = better)")
 
 for h, n in (("29019", "Boone"), ("29077", "Greene"), ("29151", "Osage")):
     far = (pairs.i.values == h) & (pairs.dist.values > 60)
