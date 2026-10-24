@@ -9,10 +9,12 @@ across one city): each town of the Columbia-Jefferson City TV market (a block gr
 centre), each rural block group (outside towns), and each other Missouri county. Reach is residents seen in the
 unit's busiest block group / residents seen at home, mean over months. A block group's own town is left out (masked):
 patterns describe travel beyond home.
-The number of patterns K (user, 2026-10-24): the largest K (grid 1-12) at which every pattern has (a) 10%+ and 1,000+
-of the market's estimated residents, (b) 10%+ of its travel volume (residents x reconstructed reach), and (c) matched
-cosine 0.9+ across 10 random starts (median) and between fits to odd and to even months. The kept fit is the lowest-loss
-of the 10 starts. Held-out month error (all 105 4 / 2 / 1 month partitions) is printed as a persistence diagnostic.
+The number of patterns K (user, 2026-10-24): the largest K (grid 1-12, extended while its last K passes) at which every
+pattern holds 10%+ and 1,000+ of some study town's estimated residents and 10%+ of that town's travel (residents x
+reconstructed reach), and has matched cosine 0.9+ across 10 random starts (median) and between fits to odd and to even
+months. Per town, not per market: the area rule is per town, and a market's share depends on which counties form it.
+The kept fit is the lowest-loss of the 10 starts. Held-out month error (all 105 4 / 2 / 1 month partitions) is printed
+as a persistence diagnostic.
 Writes flows/reach/patterns.json.
 """
 import json
@@ -125,20 +127,25 @@ import os
 from scipy.optimize import linear_sum_assignment
 
 # THE K RULE (user, 2026-10-24: "the patterns need to have a minimum percentage of the population and overall volume -
-# AND replicability"). K = the LARGEST K in the grid at which EVERY pattern meets all three:
-#   (a) population  residents allocated to the pattern (devices at home / calibration factor, split by each block
-#                   group's membership, as for the areas) >= 10% of the market's residents AND >= 1,000 residents
-#   (b) volume      the pattern's share of the market's travel volume >= 10%: volume = residents x reconstructed
-#                   reach, sum over home block groups h and destinations u (masked) of people(h) W[h,k] H[k,u] -- the
-#                   estimated residents' trips the pattern carries (not the unweighted W.H reconstruction)
+# AND replicability"; option A, the same day: population and volume per TOWN). K = the LARGEST K at which EVERY
+# pattern passes both:
+#   (a+b) a town  at least one of the market's towns (the towns the maps are drawn for, flows/regions.json) for which
+#                 the pattern holds 10%+ AND 1,000+ of the town's residents AND 10%+ of the town's travel -- the same
+#                 town for all three. Residents: devices at home / calibration factor, split by each block group's
+#                 membership (as the areas use). Travel: residents x reconstructed reach, sum over the town's block
+#                 groups h and destinations u (own town masked) of people(h) W[h,k] H[k,u].
+#                 Why per town: the area rule already requires 10% and 1,000 of a town's residents; a share of the
+#                 MARKET depends on which home counties form the market (Kansas City's 4th pattern, 64,348 residents,
+#                 failed at 7.4% of 865,064, while Springfield's 5th, 39,488, passed at 10.4% of 378,908). A 5% level is
+#                 not considered.
 #   (c) replicability (i) across 10 random starts, the pattern's median matched cosine to the kept solution >= 0.9;
-#                   (ii) refitted on odd months (Jan, Mar, May, Jul) and on even months (Feb, Apr, Jun) separately
-#                   (best of 5 starts each), the odd and even patterns matched (Hungarian, cosine): every pair >= 0.9
-# Replaces the held-out-month one-SE rule (2026-10-24, earlier the same day), which on paired splits kept adding
-# patterns to the top of the grid. The held-out month score is kept as a persistence diagnostic only.
-KGRID = range(1, int(os.environ.get("KMAX", 12)) + 1)
+#                 (ii) refitted on odd months (Jan, Mar, May, Jul) and on even months (Feb, Apr, Jun) separately (best of
+#                 5 starts each), the odd and even patterns matched (Hungarian, cosine): every pair >= 0.9
+# Grid 1-12, extended while its last K passes. Replaces the held-out-month one-SE rule (earlier the same day), which on
+# paired splits kept adding patterns to the top of the grid; the held-out score is kept as a persistence diagnostic.
+KMAX0, KCAP = int(os.environ.get("KMAX", 12)), 20
 STARTS, HALF_STARTS, ITERS = 10, 5, 2000
-POP_MIN, POP_ABS, VOL_MIN, COS_MIN = 0.10, 1000, 0.10, 0.90
+TOWN_MIN, TOWN_ABS, COS_MIN = 0.10, 1000, 0.90
 unit_ = lambda A_: A_ / np.maximum(np.linalg.norm(A_, axis=1, keepdims=True), 1e-12)
 
 
@@ -163,32 +170,60 @@ X = cube.mean(0)
 odd = [i for i, m in enumerate(MONTHS) if int(m[-2:]) % 2 == 1]
 even = [i for i, m in enumerate(MONTHS) if int(m[-2:]) % 2 == 0]
 Xo, Xe = cube[odd].mean(0), cube[even].mean(0)
-total_res = ppl0.sum()
+TOWN_IDX = {t_: [hi[h] for h in hm[(hm.town == t_) | (hm.place == CFG["towns"][t_][1])].index if h in hi] for t_ in CFG["towns"]}
 crit, fitk = {}, {}
-for k in KGRID:
+
+
+def town_tests(W, H):
+    """per town and pattern: share and count of the town's residents, share of the town's travel"""
+    mass = W * H.sum(1)[None, :]
+    member_ = mass / np.maximum(mass.sum(1, keepdims=True), 1e-12)
+    trav = np.stack([(ppl0[:, None] * MASK * (W[:, [j]] @ H[[j]])).sum(1) for j in range(W.shape[1])], 1)   # homes x K
+    out_ = {}
+    for t_, ix in TOWN_IDX.items():
+        r_ = (ppl0[ix, None] * member_[ix]).sum(0)
+        v_ = trav[ix].sum(0)
+        out_[t_] = {"res": r_, "res_share": r_ / max(r_.sum(), 1e-9), "travel_share": v_ / max(v_.sum(), 1e-9)}
+    return out_
+
+
+def carrier(c_, j, tmin=TOWN_MIN):
+    """the town carrying pattern j (all three tests), the one where it holds most of the residents; else None"""
+    ok = [(c_["towns"][t_]["res_share"][j], t_) for t_ in c_["towns"]
+          if c_["towns"][t_]["res_share"][j] >= tmin and c_["towns"][t_]["res"][j] >= TOWN_ABS
+          and c_["towns"][t_]["travel_share"][j] >= tmin]
+    return max(ok)[1] if ok else None
+
+
+k = 1
+while True:
     fs = best_of(X, k, STARTS)
     loss, seed_kept, W, H = fs[0]
     m_ = np.array([matched(H, H_) for *_, H_ in fs[1:]])               # starts x patterns
     cos_starts = np.median(m_, 0) if len(m_) else np.ones(k)
     Ho, He = best_of(Xo, k, HALF_STARTS)[0][3], best_of(Xe, k, HALF_STARTS)[0][3]
-    cos_half = matched(Ho, He)
-    mass = W * H.sum(1)[None, :]
-    member_ = mass / np.maximum(mass.sum(1, keepdims=True), 1e-12)
-    res = (ppl0[:, None] * member_).sum(0)
-    vol = np.array([(ppl0[:, None] * MASK * (W[:, [j]] @ H[[j]])).sum() for j in range(k)])
-    crit[k] = {"pop_share": res / total_res, "pop": res, "vol_share": vol / vol.sum(), "cos_starts": cos_starts,
-               "cos_halves": cos_half, "loss": float(loss)}
+    crit[k] = {"towns": town_tests(W, H), "cos_starts": cos_starts, "cos_halves": matched(Ho, He), "loss": float(loss)}
     fitk[k] = (W, H, seed_kept, [float(z[0]) for z in fs], m_)
     c_ = crit[k]
-    print(f"K={k:2d}: min over patterns -- (a) residents {c_['pop_share'].min():.1%} ({c_['pop'].min():,.0f}); "
-          f"(b) volume {c_['vol_share'].min():.1%}; (c-i) starts cosine {c_['cos_starts'].min():.3f}; "
-          f"(c-ii) odd/even cosine {c_['cos_halves'].min():.3f}", flush=True)
+    car = [carrier(c_, j) for j in range(k)]
+    best_town = [max(c_["towns"], key=lambda t_: min(c_["towns"][t_]["res_share"][j], c_["towns"][t_]["travel_share"][j]))
+                 for j in range(k)]
+    print(f"K={k:2d}: patterns carried by " + ", ".join(
+        f"{j}:{car[j]}" if car[j] else f"{j}:none (best {best_town[j]} {c_['towns'][best_town[j]]['res_share'][j]:.0%} of residents "
+        f"/{c_['towns'][best_town[j]]['res'][j]:,.0f} / {c_['towns'][best_town[j]]['travel_share'][j]:.0%} of travel)"
+        for j in range(k)) + f"; starts cosine min {c_['cos_starts'].min():.3f}; odd/even cosine min {c_['cos_halves'].min():.3f}",
+          flush=True)
+    if k >= KMAX0 and not (all(car) and (c_["cos_starts"] >= COS_MIN).all() and (c_["cos_halves"] >= COS_MIN).all()
+                           and k < KCAP):
+        break
+    k += 1
+KGRID = range(1, k + 1)
 
 
-def passes(k, pop=POP_MIN, vol=VOL_MIN, cos=COS_MIN):
+def passes(k, tmin=TOWN_MIN, cos=COS_MIN):
     c_ = crit[k]
-    return bool((c_["pop_share"] >= pop).all() and (c_["pop"] >= POP_ABS).all() and (c_["vol_share"] >= vol).all()
-                and (c_["cos_starts"] >= cos).all() and (c_["cos_halves"] >= cos).all())
+    return bool(all(carrier(c_, j, tmin) for j in range(k)) and (c_["cos_starts"] >= cos).all()
+                and (c_["cos_halves"] >= cos).all())
 
 
 def pick(**kw):
@@ -200,29 +235,29 @@ K = pick()
 binding = {}
 for k in crit:
     c_ = crit[k]
-    fails = [n_ for n_, bad in (("population", (c_["pop_share"] < POP_MIN).any() or (c_["pop"] < POP_ABS).any()),
-                                ("volume", (c_["vol_share"] < VOL_MIN).any()), ("starts", (c_["cos_starts"] < COS_MIN).any()),
-                                ("halves", (c_["cos_halves"] < COS_MIN).any())) if bad]
-    binding[k] = fails
-print(f"chosen K={K}: the largest K in {KGRID.start}-{KGRID.stop - 1} at which every pattern has 10%+ and 1,000+ of the "
-      f"market's residents, 10%+ of its travel volume, and matched cosine 0.9+ across starts and between odd and even "
-      f"months. Fails by K: " + "; ".join(f"{k} {','.join(v) or 'pass'}" for k, v in binding.items()))
+    binding[k] = [n_ for n_, bad in (("no town", not all(carrier(c_, j) for j in range(k))),
+                                     ("starts", (c_["cos_starts"] < COS_MIN).any()),
+                                     ("halves", (c_["cos_halves"] < COS_MIN).any())) if bad]
+print(f"chosen K={K}: the largest K in 1-{max(crit)} at which every pattern holds 10%+ and 1,000+ of some study town's "
+      f"residents and 10%+ of that town's travel, with matched cosine 0.9+ across starts and between odd and even months. "
+      f"Fails by K: " + "; ".join(f"{k} {','.join(v) or 'pass'}" for k, v in binding.items()))
+print(f"   carriers at K={K}: " + ", ".join(f"pattern {j} {carrier(crit[K], j)}" for j in range(K)))
 SENS = {}
-print("sensitivity (K picked; population and volume threshold x cosine threshold):")
-for pv in (0.05, 0.10, 0.15):
-    row = {cs: pick(pop=pv, vol=pv, cos=cs) for cs in (0.85, 0.90, 0.95)}
-    SENS[f"{pv:.2f}"] = {f"{cs:.2f}": v for cs, v in row.items()}
-    print(f"   population and volume {pv:.0%}: " + ", ".join(f"cosine {cs:.2f} -> K={v}" for cs, v in row.items()))
-if pick(pop=0.05, vol=0.05, cos=0.85) == max(KGRID):
-    print(f"   (the loosest setting passes at the grid's top, K={max(KGRID)}: KMAX caps it)")
+print("sensitivity (K picked; town threshold for residents and travel x cosine threshold):")
+for tv in (0.10, 0.15, 0.20):
+    row = {cs: pick(tmin=tv, cos=cs) for cs in (0.85, 0.90, 0.95)}
+    SENS[f"{tv:.2f}"] = {f"{cs:.2f}": v for cs, v in row.items()}
+    print(f"   town {tv:.0%}: " + ", ".join(f"cosine {cs:.2f} -> K={v}" for cs, v in row.items()))
 W, H, seed_kept, losses, m_ = fitk[K]
 stability = {"starts": STARTS, "seed_kept": seed_kept, "loss": [round(z, 4) for z in losses],
              "matched_cosine_median_by_pattern": np.round(crit[K]["cos_starts"], 3).tolist(),
              "matched_cosine_min_by_pattern": np.round(m_.min(0) if len(m_) else np.ones(K), 3).tolist(),
              "odd_even_cosine_by_pattern": np.round(crit[K]["cos_halves"], 3).tolist(),
-             "matched_cosine_mean": round(float(m_.mean()) if len(m_) else 1.0, 3)}
-criteria = {str(k): {n_: np.round(v, 4).tolist() for n_, v in c_.items() if n_ != "loss"} | {"fails": binding[k]}
-            for k, c_ in crit.items()}
+             "matched_cosine_mean": round(float(m_.mean()) if len(m_) else 1.0, 3),
+             "carrier_town_by_pattern": [carrier(crit[K], j) for j in range(K)]}
+criteria = {str(k): {"towns": {t_: {n_: np.round(v, 4).tolist() for n_, v in tt.items()} for t_, tt in c_["towns"].items()},
+                     "cos_starts": np.round(c_["cos_starts"], 4).tolist(), "cos_halves": np.round(c_["cos_halves"], 4).tolist(),
+                     "carriers": [carrier(c_, j) for j in range(k)], "fails": binding[k]} for k, c_ in crit.items()}
 
 # PERSISTENCE DIAGNOSTIC (not the K rule): held-out months, every K on the same splits -- all 105 distinct 4 / 2 / 1
 # partitions of the seven months (35 training sets; block-group weights refitted on two held-out months, scored on the
@@ -268,8 +303,8 @@ if scores:
 peak = H.max(1, keepdims=True)
 H, W = H / peak, W * peak.T
 name = lambda u: place_name.get(u, u)
-out = {"K": K, "k_rule": "largest K at which every pattern has 10%+ and 1,000+ of the market's residents, 10%+ of its "
-                         "travel volume (residents x reach), matched cosine 0.9+ across 10 starts and odd vs even months",
+out = {"K": K, "k_rule": "largest K at which every pattern holds 10%+ and 1,000+ of some study town's residents and 10%+ "
+                         "of that town's travel (residents x reach), matched cosine 0.9+ across 10 starts and odd vs even months",
        "criteria": criteria, "sensitivity": SENS, "stability": stability,
        "persistence_scores": scores, "errors_by_training_set": {j: np.round(v, 5).tolist() for j, v in err.items()},
        "units": units, "patterns": [], "towns": {}}
