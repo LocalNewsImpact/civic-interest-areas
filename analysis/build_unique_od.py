@@ -14,7 +14,7 @@ Denominator per home block group (review 2026-10-24; see crossover_compare.py fo
   trim_h      own_h, or E_h where h is a phantom home block group (own_h > 3 x E_h) (option ii)
   E_h         expected units = ACS 2020-2024 population of h x the statewide units per resident that month (option iii):
               no term taken from seen-at-home in the county
-  D_h         ADOPTED (user decision 2026-10-24, option A): calibrated, E_h x (own_h / E_h)^(1 - b), b estimated here
+  D_h         ADOPTED (authors' decision 2026-10-24): calibrated, E_h x (own_h / E_h)^(1 - b), b estimated here
               by 2SLS from how leaving falls with home detection (see below); b = 1 gives E_h, b = 0 gives own_h
 Each block group's leavers are capped at its denominator.
 
@@ -151,7 +151,7 @@ lv = pd.DataFrame([(m, c, *[L[k] for k in cols]) for (m, c), L in sorted(leave.i
 lv["share_left_lower"] = (lv.left_lower / lv.residents_seen_at_home.where(lv.residents_seen_at_home > 0)).round(4)
 lv["share_left_acs"] = (lv.left_lower_acs / lv.expected_units.where(lv.expected_units > 0)).round(4)
 
-# ---- calibrated denominator (user decision 2026-10-24, option A; b by 2SLS, review round 3, 2026-10-25) ------------------
+# ---- calibrated denominator (authors' decision 2026-10-24; b by 2SLS, review round 3, 2026-10-25) ------------------
 # Within a county, block groups where Advan detects more phones at home than the ACS predicts (d_h = own_h / E_h > 1)
 # show a lower leaving rate (busiest outside block group / own_h). Model: log leaving rate_m2 = -b x log d_m2 + county x
 # month-pair effect. d_m2 shares own_m2 with the leaving rate (noise in own_h biases a same-month slope toward -1), so

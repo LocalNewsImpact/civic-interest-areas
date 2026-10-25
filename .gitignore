@@ -11,6 +11,7 @@
 !Makefile
 !.gitignore
 !PUBLIC_DATA.txt
+!requirements.txt
 !LICENSE
 !data/stories/march_2026_three_counties_articles.csv
 !data/stories/march_2026_three_counties_places.csv

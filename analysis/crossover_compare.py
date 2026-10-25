@@ -1,7 +1,7 @@
 """Crossover per Missouri county (St. Louis city and county one unit), January-September 2026 -> crossover_compare.csv
 
 current      share of residents' summed block-group counts that are outside the county (od_mo_2026.csv, calibrated)
-dedup_lower  ADOPTED (user decision 2026-10-24, option A): distinct residents seen in at least one block group outside
+dedup_lower  ADOPTED (authors' decision 2026-10-24): distinct residents seen in at least one block group outside
              the county in a month / calibrated residents, averaged over months (leaving_unique_mo_2026.csv). Per home
              block group: people in its busiest outside block group (Missouri or Kansas), capped at
              D_h = E_h x (own_h / E_h)^(1 - b), E_h = ACS population x the statewide units per resident, own_h =

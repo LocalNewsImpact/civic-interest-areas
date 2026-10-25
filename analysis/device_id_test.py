@@ -19,13 +19,14 @@ import glob
 import gzip
 import sys
 from collections import defaultdict
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
 csv.field_size_limit(sys.maxsize)
-root = "/Users/kiesowd/VSCode/advan"
+root = str(Path(__file__).resolve().parents[1])
 WEEKS = ("2026-03-02", "2026-03-09", "2026-03-16", "2026-03-23")
 vis = defaultdict(lambda: defaultdict(float))        # cbg -> place -> summed weekly visitors
 peak = defaultdict(float)                            # (cbg, place) -> busiest single week

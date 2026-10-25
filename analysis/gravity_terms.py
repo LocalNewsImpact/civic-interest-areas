@@ -21,7 +21,7 @@ trips is 26 miles) and home-county population from its mean, so the log_dist coe
 travel at 25 miles for a metropolitan home county of mean size, and log_dist + nonmetro_i_x_log_dist the same for a
 nonmetropolitan one. The constants are absorbed by the fixed effects: predictions and fit are unchanged by centring.
 
-SELECTION (user, 2026-10-24): core gravity terms by theory, tested as BLOCKS -- distance (the five distance terms),
+SELECTION (authors, 2026-10-24): core gravity terms by theory, tested as BLOCKS -- distance (the five distance terms),
 border, commuting (out + in) -- never one term at a time; no hypothesis terms; an exploratory addition is adopted only
 if the NESTED procedure's held-out gain (combined_marginal_test.py travel_nested_all) has a county-paired 95% interval
 excluding zero. Primary metric: share-weighted absolute share error over all Missouri destinations, each home county
@@ -45,7 +45,7 @@ cov = pd.read_csv(root / "analysis/county_covariates.csv", dtype={"fips": str}).
 FIPS = list(cov.index)
 FACTORS = ["log_dist", "log_dist_sq", "nonmetro_i_x_log_dist", "nonmetro_i_x_log_dist_sq", "log_pop_i_x_log_dist",
            "adjacent", "commute_out", "commute_in"]
-# SELECTION (user, final, 2026-10-24): the three blocks -- distance (first five), border, commuting (out + in) -- are
+# SELECTION (authors, final, 2026-10-24): the three blocks -- distance (first five), border, commuting (out + in) -- are
 # core gravity terms by theory, tested as blocks against the model without them (travel_model_dc_test.py selection,
 # held out, county-paired intervals); never dropped one term at a time. Exploratory additions only through the nested
 # procedure (combined_marginal_test.py travel_nested_all). Results: MODEL_CHANGES.md, Travel model.

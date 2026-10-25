@@ -1,11 +1,12 @@
 #!/bin/zsh
-# Rebuild every figure from the current data and models, in dependency order.
+# Rebuilds the county-level figures: travel maps, alignment maps, outlet spillover charts and triptychs.
+# The civic interest area maps and the calculation diagram are built by scripts/reproduce.sh (stage figures).
 #   analysis: travel model -> coverage model -> county table -> outlet model -> three-county table
 #   (od_mo_2026.csv carries population-calibrated visits: analysis/build_calibration.py, run once after the raw build)
 #   flows:    township shares (Jan-Sep, pass-through discounted) -> alignment data
 #   render:   travel maps, alignment maps, outlet chart, triptychs (5.5 in at 300 dpi)
 set -e
-ROOT=~/VSCode/advan
+ROOT=${0:A:h}
 PY="$ROOT/.venv/bin/python -I"
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 cd /tmp

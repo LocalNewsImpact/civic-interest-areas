@@ -1,5 +1,5 @@
 """The published story data: March 2026 local news from the outlets of Boone, Audrain and Osage counties, as the
-analysis used it (user, 2026-10-22: these three counties only, no article text).
+analysis used it (authors, 2026-10-22: these three counties only, no article text).
 
 Inputs (the analysis's own, so the files match its numbers):
   coverage/storymap/statewide_2026_03_articles.json   outlet, its county and type; the story's central county and
