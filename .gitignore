@@ -1,5 +1,5 @@
 # ALLOWLIST. Everything is ignored; code and documentation are let in by pattern.
-# Data -- public, ours or licensed -- is never committed by default. A public
+# Data -- public, project-owned or licensed -- is never committed by default. A public
 # data file is committed only by adding it below AND to PUBLIC_DATA.txt, with its
 # citation in CITATIONS.md (README.md: Data).
 *
