@@ -37,7 +37,7 @@ for town, ms in MAPS["towns"].items():
         tot = sum(tv.values())
         res_u = {u: m["residents"] * x / tot for u, x in tv.items()}
         net = m["index"]["net"]                    # the published (network-tie) map
-        # THE AREA = the ensemble core, p >= 0.5 (flows/area_ensemble.py; user 2026-10-25), home left out
+        # THE AREA = the ensemble core, p >= 0.5 (flows/area_ensemble.py; authors, 2026-10-25), home left out
         core = {k for k, v in PROB.get(town, {}).get(str(m["rank"]), {}).get("p", {}).items() if v >= 0.5}
         drawn = [k for k in core if k not in g["HOMES"][town] and k in centre]
         for k in drawn:

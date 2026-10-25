@@ -29,7 +29,7 @@ cname = cov.name.to_dict()
 by_name = {n.lower(): f for f, n in cname.items()}
 by_name.update({"st. louis": "29189", "st louis": "29189", "st. louis city": "29510"})
 fips_of = lambda n: by_name.get((n or "").lower().replace(" county", "").strip())
-# AN OUTLET'S HOME COUNTY (user, 2026-10-24): the county it is filed under, except the two outlets homed in the county
+# AN OUTLET'S HOME COUNTY (authors, 2026-10-24): the county it is filed under, except the two outlets homed in the county
 # they cover (excluded_outlets.HOME_COUNTY: Mid Rivers Newsmagazine -> St. Charles, Greene County Commonwealth -> Greene)
 home_of = lambda a: home_fips(a["publisher"], fips_of(a["publisher_county"]))
 # ...and their home TOWN, for the incoming tie (outlets based in a hexagon's town): the covered county's seat --
@@ -78,7 +78,7 @@ for town, home in STUDY.items():
     # THE TOWN'S OWN TRAVEL IN EACH PATTERN: a pattern is fitted across all 158 block groups, so it carries other
     # places' trips (Osage's pattern takes southern Osage residents to Maries). Each of the town's block groups'
     # observed travel to a place is split across the patterns by the share each explains there (the mixture's
-    # responsibilities, W[h,k] H[k,u] / sum_j W[h,j] H[j,u]). WEIGHTED BY RESIDENTS (2026-10-24, peer review): a block
+    # responsibilities, W[h,k] H[k,u] / sum_j W[h,j] H[j,u]). WEIGHTED BY RESIDENTS (2026-10-24): a block
     # group's reach counts by its residents, so the town's travel is people's visits, not reach summed over block groups.
     hb = hbi
     Wm, Xm = Wa[hb], Xa[hb]
@@ -180,7 +180,7 @@ pts = pd.read_csv(here / "reach/march_story_points.csv", dtype={"point_geoid": s
 plc = pd.read_csv(here / "reach/march_story_places.csv", dtype={"geoid": str})
 pl_shapes = read_shp(str(DL / "place/cb_2020_29_place_500k"), lambda r: r["GEOID"])
 centre = {k: (sum(c[0] for c in v[:6]) / 6, sum(c[1] for c in v[:6]) / 6) for k, v in hexes.items()}
-# a hexagon's county: the county of the block group holding its centre (2026-10-24, peer review; was its travel unit's
+# a hexagon's county: the county of the block group holding its centre (2026-10-24; was its travel unit's
 # county -- a town unit takes the county most of its block groups lie in, so hexagons of a town spanning a county line
 # were assigned across it)
 hex_county = {k: b_[:5] for k, b_ in hex_bg.items()}
@@ -230,7 +230,7 @@ def spread(targets, w, acc):
             acc[k] = max(acc.get(k, 0), w / len(targets))
 
 
-# STATEWIDE, NATIONAL AND INTERNATIONAL STORIES locate nothing (2026-10-24, peer review): as in coverage density
+# STATEWIDE, NATIONAL AND INTERNATIONAL STORIES locate nothing (2026-10-24): as in coverage density
 # (analysis/area_coverage_alignment.py), a story whose scope is wider than a region adds no tie to the places it names
 SCOPE = pd.read_csv(here.parent / "coverage/storymap/statewide_2026_03_scope.csv").set_index("article_id").scope.fillna("")
 WIDE = {"statewide", "national", "international", "other"}
@@ -273,7 +273,7 @@ cov_unit = lambda k: hex_place.get(k) or unit_at.get(k)
 # hexagon's weight is (destinations in it + 0.25) / the block group's mean of the same, so the block group's average is
 # kept, farmland falls toward 0.25 / (mean + 0.25) of it and a cluster of destinations rises (travel capped at 1).
 # A floor of 1 left sparse rural counties (Barton: ~0.2 destinations a hexagon) one flat band.
-# TOWNS TOO (2026-10-25, peer review, user D3-A): a town is one travel unit, so a city's whole extent took one value --
+# TOWNS TOO (authors, 2026-10-25): a town is one travel unit, so a city's whole extent took one value --
 # Kansas City's every hexagon carried Columbia residents' reach to Kansas City as a whole. A town of 2+ hexagons is now
 # spread the same way, by half OpenStreetMap destinations ((destinations + DFLOOR) / the town's mean) and half 2020
 # population (each block group's population over the hexagons whose centres lie in it / the town's mean); the town's
@@ -326,7 +326,7 @@ DW = dasymetric(DFLOOR)
 # HEADROOM (2026-10-17): the busiest destination is 50, not 100 -- home stays 100, above any place visited, and news ties
 # can lift the top destination toward home (Linn's news reaching Jefferson City) instead of finding it already capped
 TRAVEL_TOP = 0.5
-# DESTINATIONS CAP BELOW HOME (2026-10-25, peer review): a place visited is at most 99; home alone is 100, and is flagged
+# DESTINATIONS CAP BELOW HOME (2026-10-25): a place visited is at most 99; home alone is 100, and is flagged
 # explicitly (home_hexes_of), never read from a tie of 100
 DCAP = 0.99
 tr_at = lambda Hk, k, u: min(DCAP, TRAVEL_TOP * Hk.get(u, 0) * DW.get(k, 1.0))
@@ -339,7 +339,7 @@ BUSIEST = _os.environ.get("BUSIEST", "place")
 
 
 def norm_hex(Hk):
-    """THE BUSIEST PLACE = 50 (the user's rule) is kept at the PLACE: the busiest town's mean is 50 and, with towns
+    """THE BUSIEST PLACE = 50 (the authors' rule) is kept at the PLACE: the busiest town's mean is 50 and, with towns
     spread by population and destinations, its dense hexagons rise above it, to the cap of 99. BUSIEST=hexagon (a
     sensitivity, 2026-10-25) rescales travel so the busiest HEXAGON -- travel x its dasymetric weight -- is 50 instead:
     every other hexagon falls by the busiest town's peak weight, and the floor of 5 then cuts most rural hexagons
@@ -601,7 +601,7 @@ for town, pats in out.items():
             idx[name_] = {k: round(100 * x, 1) for k, x in raw.items() if 100 * x >= 1}
             for k in home_hexes_of[town]:
                 idx[name_][k] = 100.0
-        # THE TRAVEL-ONLY AREA (user, 2026-10-24): travel, rural spread by destinations, headroom, the spatial lag and
+        # THE TRAVEL-ONLY AREA (authors, 2026-10-24): travel, rural spread by destinations, headroom, the spatial lag and
         # direction, home 100 -- no news term. The footprint supply (coverage density, the balanced diet) is measured on
         # (the next paper; QA here). The published map is the network tie ("net"); orange dots mark what news adds
         raw_t = {k: tr_at(Hk, k, u) for k, u in unit_at.items() if tr_at(Hk, k, u) > 0}

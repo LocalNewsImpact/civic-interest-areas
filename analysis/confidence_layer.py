@@ -1,5 +1,5 @@
 """The ADOPTED-SETTING drawing of each civic interest area, and its month-split stability. THE AREA ITSELF is the core of
-the settings ensemble (p >= 0.5, flows/area_ensemble.py; user 2026-10-25, D2-A); this script gives the single
+the settings ensemble (p >= 0.5, flows/area_ensemble.py; authors, 2026-10-25); this script gives the single
 adopted-setting drawing (?prob=0) and its drawing aids. Two ties: the NETWORK TIE (market_patterns.py idx["net"]: travel
 strengthened by news ties; the paper's map) and TRAVEL ONLY (idx["travel"]: no news term; the supply QA footprint).
 Each computed from odd months (January, March, May, July 2026) and from even months (February, April, June) on
@@ -216,9 +216,9 @@ def outline_for(town, rank, half, index="net", **sel_kw):
     if len(ps) > 1:
         main = max(ps, key=lambda p_: (bool(p_ & home_), len(p_ & core)))
         shape_ = set(main)
-    # SMOOTHED (user, 2026-10-18: the hexagon-edge outline "looks dumb"; "it does not need to trace the bump of every
+    # SMOOTHED (authors, 2026-10-18: the hexagon-edge outline "looks dumb"; "it does not need to trace the bump of every
     # hexagon"): grown 5 km, pulled back 4.5 km, simplified at 300 m -- the market's shape, not its cells. ISOTROPIC
-    # (2026-10-24, peer review): done on the hexagon plane in km (x = lon x 111.32 cos 38.7, y = lat x 110.57), not in
+    # (2026-10-24): done on the hexagon plane in km (x = lon x 111.32 cos 38.7, y = lat x 110.57), not in
     # degrees, where 0.05 was 4.3 km east-west and 5.5 km north-south
     to_km = lambda c: [(x_ * KXP, y_ * KYP) for x_, y_ in c]
     polys = [Polygon(to_km(MAPS["hexes"][f"{a},{b}"][:6])) for a, b in shape_ if f"{a},{b}" in MAPS["hexes"]]

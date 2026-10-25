@@ -1,0 +1,70 @@
+{
+ "columbia": {
+  "dma": "Columbia - Jefferson City, MO DMA",
+  "market": "Columbia–Jefferson City TV market",
+  "flows": "neighborhood/flows_audrain_boone_osage_2026.csv",
+  "out": "flows/reach",
+  "towns": {
+   "Columbia": [
+    "29019",
+    "2915670"
+   ],
+   "Mexico": [
+    "29007",
+    "2947648"
+   ],
+   "Linn": [
+    "29151",
+    "2943238"
+   ],
+   "Ashland": [
+    "29019",
+    "2902242"
+   ],
+   "Centralia": [
+    "29019",
+    "2912898"
+   ],
+   "Vandalia": [
+    "29007",
+    "2975688"
+   ],
+   "Hallsville": [
+    "29019",
+    "2929998"
+   ],
+   "Belle": [
+    "29151",
+    "2904150"
+   ]
+  },
+  "dma_counties": [
+   "29007",
+   "29019",
+   "29027",
+   "29041",
+   "29051",
+   "29053",
+   "29089",
+   "29125",
+   "29131",
+   "29135",
+   "29139",
+   "29141",
+   "29151",
+   "29175"
+  ],
+  "landmarks": [
+   {
+    "name": "Mark Twain Lake",
+    "lon": -91.74,
+    "lat": 39.5
+   },
+   {
+    "name": "Lake of the Ozarks",
+    "lon": -92.62,
+    "lat": 38.2
+   }
+  ]
+ }
+}

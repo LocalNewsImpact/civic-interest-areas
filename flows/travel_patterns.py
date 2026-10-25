@@ -12,7 +12,7 @@ seen at home; a missing home-month is missing, not zero, and is masked in every 
 out (masked): patterns describe travel beyond home. Residents: ACS 2020-2024 population of each block group (the
 calibrated denominator of crossover, analysis/crossover_bg_month_mo_2026.csv). The masked NMF updates subtract the
 masked cells from the full products instead of multiplying by the mask: identical results, about 6x faster.
-The number of patterns K (user, 2026-10-24): the largest K (grid 1-12, extended while its last K passes) at which every
+The number of patterns K (authors, 2026-10-24): the largest K (grid 1-12, extended while its last K passes) at which every
 pattern holds 10%+ and 1,000+ of some study town's estimated residents and 10%+ of that town's travel (residents x
 reconstructed reach), and has matched cosine 0.9+ across 10 random starts (median) and between fits to odd and to even
 months. Per town, not per market: the area rule is per town, and a market's share depends on which counties form it.
@@ -49,8 +49,8 @@ __file__ = str(here / "build_cousub_shares.py")
 exec(open(here / "build_cousub_shares.py").read().split("\ndef cw(")[0])
 from shapely.strtree import STRtree
 bgs = read_shp(str(DL / "bg/cb_2020_29_bg_500k"), lambda r: r["GEOID"])
-# DESTINATIONS ARE ALL OF MISSOURI, as towns and rural block groups: no TV-market boundary (a border city's market --
-# St. Joseph toward Kansas City -- crosses one). The fit still uses only this market's home counties.
+# DESTINATIONS ARE ALL OF MISSOURI, as towns and rural block groups: no TV-market boundary (a border
+# town's travel crosses one). The fit still uses only this market's home counties.
 DMA = sorted({b[:5] for b in bgs})
 places = read_shp(str(DL / "place/cb_2020_29_place_500k"), lambda r: r["GEOID"])
 pids = list(places)
@@ -71,7 +71,7 @@ homes = sorted(p.home_cbg.unique())
 units = sorted(p.unit.unique())
 cube = np.full((len(MONTHS), len(homes), len(units)), np.nan)
 mi, hi, ui = {m: i for i, m in enumerate(MONTHS)}, {h: i for i, h in enumerate(homes)}, {u: i for i, u in enumerate(units)}
-# MISSING HOME-MONTHS ARE MISSING, NOT ZERO (2026-10-24, peer review): a block group with fewer than 50 residents seen at
+# MISSING HOME-MONTHS ARE MISSING, NOT ZERO (2026-10-24): a block group with fewer than 50 residents seen at
 # home in a month has no row that month; its travel is unknown, not nil. Observed home-months start at 0 (no visit to a
 # destination is a true zero) and take their reach; missing ones stay NaN and are left out of every mean and masked in
 # every fit and score.
@@ -109,7 +109,7 @@ def nmf(X, k, iters=600, seed=0, H=None, M=None):
     The masked products are computed as the full product less the masked cells (the own-town cell of each block group,
     and the rows of block groups with no observed month): (M * WH) H' = W (H H') - the masked cells' part, and
     W' (M * WH) = (W' W) H - the same -- the same updates as multiplying by M (identical to 1e-14), about 6 times faster
-    at Kansas City's size (748 x 2,234) (2026-10-24)."""
+    (2026-10-24)."""
     M = MASK if M is None else M
     rng = np.random.default_rng(seed)
     fixed = H is not None
@@ -134,7 +134,7 @@ def nmf(X, k, iters=600, seed=0, H=None, M=None):
     return W, H
 
 
-# RESIDENTS (2026-10-24, peer review; replaces devices at home / the county-month factor): each block group's residents
+# RESIDENTS (2026-10-24; replaces devices at home / the county-month factor): each block group's residents
 # through the calibrated per-block-group denominator of crossover (analysis/crossover_bg_month_mo_2026.csv,
 # build_unique_od.py): people = devices x ACS population / D_h, so a block group's residents are its ACS 2020-2024
 # population (B01003), mean over January-July. Mixed membership: a block group's residents are split across the
@@ -149,8 +149,8 @@ import itertools
 import os
 from scipy.optimize import linear_sum_assignment
 
-# THE K RULE (user, 2026-10-24: "the patterns need to have a minimum percentage of the population and overall volume -
-# AND replicability"; option A, the same day: population and volume per TOWN). K = the LARGEST K at which EVERY
+# THE K RULE (authors, 2026-10-24: "the patterns need to have a minimum percentage of the population and overall volume -
+# AND replicability"; the same day: population and volume per TOWN). K = the LARGEST K at which EVERY
 # pattern passes both:
 #   (a+b) a town  at least one of the market's towns (the towns the maps are drawn for, flows/regions.json) for which
 #                 the pattern holds 10%+ AND 1,000+ of the town's residents AND 10%+ of the town's travel -- the same
@@ -159,9 +159,8 @@ from scipy.optimize import linear_sum_assignment
 #                 block groups h and destinations u -- the town's own units masked, as the maps mask them
 #                 (own_units_of) -- of people(h) W[h,k] H[k,u].
 #                 Why per town: the area rule already requires 10% and 1,000 of a town's residents; a share of the
-#                 MARKET depends on which home counties form the market (Kansas City's 4th pattern, 64,348 residents,
-#                 failed at 7.4% of 865,064, while Springfield's 5th, 39,488, passed at 10.4% of 378,908). A 5% level is
-#                 not considered.
+#                 MARKET depends on which home counties form the market (the same number of residents passes in a small
+#                 market and fails in a large one). A 5% level is not considered.
 #   (c) stability (i) across 10 random starts, the pattern's median matched cosine to the kept solution >= 0.9;
 #                 (ii) MONTH-SPLIT STABILITY: refitted on odd months (Jan, Mar, May, Jul) and on even months (Feb, Apr,
 #                 Jun) separately (W and H both; best of 5 starts each, the two halves on DISJOINT seeds: odd 0-4, even
@@ -394,7 +393,7 @@ for town in CFG["towns"]:
     print(f"{town} ({len(idx)} block groups, ~{ppl.sum():,.0f} residents): "
           + ", ".join(f"pattern {k} {x / ppl.sum():.0%} (~{x:,.0f})" for k, x in sorted(enumerate(ppl), key=lambda z: -z[1])))
 json.dump(out, open(R / "patterns.json", "w"))
-# THE HALVES, FITTED INDEPENDENTLY (2026-10-24, peer review): W and H refitted on odd months and on even months, each
+# THE HALVES, FITTED INDEPENDENTLY (2026-10-24): W and H refitted on odd months and on even months, each
 # half's patterns in the kept order, with each half's mean reach (missing home-months left out) -- for the
 # replicability of the areas (analysis/confidence_layer.py). Before, both halves used the full fit's W and H.
 Wo, Ho, We, He = HALF_FIT

@@ -1,23 +1,29 @@
-"""The civic interest area as the core of an ensemble of plausible drawing settings (user, 2026-10-24 option A;
-2026-10-25 D2-A, D3-A, D4-A). The adopted drawing moved by more than half under hexagon size, busiest-place scaling and
+"""The civic interest area as the core of an ensemble of plausible drawing settings (authors, 2026-10-24 and
+2026-10-25). The adopted drawing moved by more than half under hexagon size, busiest-place scaling and
 the dasymetric spread (analysis/area_sensitivity.csv), so each area is drawn under every combination of the settings
-below and each published 3 km hexagon is given p = the share of members that draw it -- in user-facing text its
+below and each published 3 km hexagon is given p = the share of members that draw it -- in published text its
 "likelihood" of being part of the area: a probability under equal weighting of the members, conditional on their range.
-THE AREA = THE CORE, p >= 0.5 (p >= 0.8 also reported), drawn as ONE CONNECTED AREA by flows/area_core.py (run after
-this script: pieces of 3+ hexagons within 15 km joined to the body holding home, pieces of 1-2 hexagons left out of the
-outline, pieces beyond 15 km separate). The single adopted-setting drawing is ?prob=0 on the map.
+THE AREA = THE CORE, p >= 0.5 (p >= 0.8 also reported), kept as parts by flows/area_core.py (run after this script:
+the home body and every core piece of 3+ hexagons whose nearest hexagon lies within the town's D90; specks of 1-2
+hexagons leave the outline). No single-setting map is produced.
 
 Ties: the NETWORK TIE (market_patterns.py idx["net"], the paper's map) and, with the same members, TRAVEL ONLY (no news
 term; the supply QA footprint, p_travel). Same K, patterns, data and news weights in every member; only the drawing
-changes. FULL FACTORIAL, 1,728 members:
+changes. FULL FACTORIAL, 6,912 members:
   hexagon size        2, 3, 4 km (the whole grid rebuilt: market_patterns.py HEX_KM)                       3
   TRAVEL_TOP          0.5 (adopted: busiest place 50), 1.0 (busiest place 100)                               2
   dasymetric spread   off, DFLOOR 0.1, 0.25 (adopted), 1 -- rural block groups AND towns of 2+ hexagons       4
   LAMBDA              0, 0.25 (adopted), 0.5 (spatial lag, its rings in km)                                   3
   selectivity         40, 50 (adopted), 60% (share of ties outside home the drawn hexagons hold)              3
   distance rule       on (adopted: the floor rises to 2x over 10.4 km inside the TV market, 5.2 km outside), off 2
-  reach               10, 15 (adopted), 25 km, none: drawn pieces joined to the area's body when within this
-                      distance of it (pieces holding home seed the body; grown outward)                       4
+  reach               10, 15 (adopted), 25 km: drawn pieces joined to the area's body when within this
+                      distance of it (pieces holding home seed the body; grown outward); D90 (authors, 2026-10-25,
+                      replaces "none"): every drawn piece whose nearest hexagon lies within the town's
+                      regular-travel distance D90 of its centre of population (flows/regular_distance.py)      4
+  news weight         x0 (travel only), x0.5, x1 (adopted), x2: all four news weights of the network tie (out 0.3,
+                      in 0.3, shared places 0.7, shared coverage 0.7) multiplied together (authors, 2026-10-25) 4
+The 1,728 versions of the seven other choices at news weight x1 are reported beside the whole ensemble
+(news_weight_levels: each level's core, month-split stability and mean |p_level - p|).
 A full factorial weights every level of every factor equally, so the uniform weighting IS the marginal-balanced one;
 the script checks that the two give the same p. Held at the adopted values: GAMMA 0.5, the tie cut 1, the floor 5
 (never binding), the news weights. Distances are in km on every grid (rings, distance rule, reach).
@@ -34,7 +40,7 @@ kept patterns) and its travel: the correlation of p between halves over every he
 CONTESTED ones (0.1 <= p <= 0.9), the mean |p_odd - p_even|, and the Jaccard of the two cores (home left out).
 Home is flagged explicitly (home_hexes_of), never read from a tie of 100 (destinations are capped at 99).
 Writes <region out>/probability.json (Columbia: flows/reach/probability_columbia.json).
-Usage: area_ensemble.py <region> [all]   (default: the built towns of flows/export_figures.py; all = every study town)"""
+Usage: area_ensemble.py [columbia] [all]   (default: the built towns Columbia, Mexico, Linn; all = every study town of the market)"""
 import itertools
 import json
 import math
@@ -59,21 +65,24 @@ sys.argv = ["confidence_layer.py", region]
 C = runpy.run_path(str(root / "analysis/confidence_layer.py"), run_name="confidence_lib")
 ns, P, MAPS, HALVES = C["ns"], C["P"], C["MAPS"], C["HALVES"]
 G3 = ns["tie_map"].__globals__
-BUILT = {"columbia": ("Columbia", "Mexico", "Linn"), "springfield": ("Springfield",), "joplin": ("Joplin",),
-         "kirksville": ("Kirksville",)}
+BUILT = {"columbia": ("Columbia", "Mexico", "Linn")}     # the Columbia-Jefferson City TV market only
 towns = list(MAPS["towns"]) if ALL else list(BUILT.get(region, ()))
+if os.environ.get("TOWNS"):                # one process per subset of towns (merged afterwards; the members are the same)
+    towns = [t for t in towns if t in os.environ["TOWNS"].split(",")]
 AREAS = [(t, m["rank"]) for t in towns for m in MAPS["towns"][t]]
 if not AREAS:
     raise SystemExit(f"{region}: no built town (pass 'all' for every study town)")
 HEX_KMS, TOPS, DWS, LAMS, SELS, DISTS, REACHES = (2, 3, 4), (0.5, 1.0), (None, 0.1, 0.25, 1.0), (0.0, 0.25, 0.5), \
-    (0.4, 0.5, 0.6), ("on", "off"), (10, 15, 25, None)
+    (0.4, 0.5, 0.6), ("on", "off"), (10, 15, 25, "D90")
+NEWS = (0.0, 0.5, 1.0, 2.0)
 if os.environ.get("SMOKE"):                 # a code check on a reduced design; writes to the scratch path given in SMOKE
-    HEX_KMS, TOPS, DWS, LAMS, SELS, DISTS, REACHES = (3, 4), (0.5,), (0.25,), (0.25,), (0.5,), ("on",), (15, None)
+    HEX_KMS, TOPS, DWS, LAMS, SELS, DISTS, REACHES = (3, 4), (0.5,), (0.25,), (0.25,), (0.5,), ("on",), (15, "D90")
+    NEWS = (0.0, 1.0)
 LEVELS = {"hexagon_km": HEX_KMS, "TRAVEL_TOP": TOPS, "dasymetric": DWS, "LAMBDA": LAMS, "selectivity": SELS,
-          "distance_rule": DISTS, "reach_km": REACHES}
+          "distance_rule": DISTS, "reach_km": REACHES, "news_weight": NEWS}
 MEMBERS = int(np.prod([len(v) for v in LEVELS.values()]))
 W_MEMBER = 1.0 / MEMBERS          # marginal-balanced: prod over factors of 1 / levels -- equal for every member here
-ADOPTED = (3, 0.5, 0.25, 0.25, 0.5, "on", 15)
+ADOPTED = (3, 0.5, 0.25, 0.25, 0.5, "on", 15, 1.0)
 KXP, KYP = 111.32 * math.cos(math.radians(38.7)), 110.57
 SP3 = math.sqrt(3) * 1.5                                   # centre spacing of the 3 km grid, km
 NB6 = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
@@ -164,13 +173,33 @@ def pieces_of(cells):
     return ps
 
 
-def body(on, home, reach_hex):
-    """the pieces holding home, and every piece within reach_hex (None: every piece) of them, grown outward;
+DREG = json.load(open(here / "regular_distance.json"))      # D90 per town, km from its centre of population
+
+
+def km_from(hexes, lon0, lat0):
+    """km from (lon0, lat0) to every hexagon's centre (the mean of its corners), great circle"""
+    out_ = {}
+    for k, cs in hexes.items():
+        lo, la = sum(c[0] for c in cs[:6]) / 6, sum(c[1] for c in cs[:6]) / 6
+        a = math.sin(math.radians(la - lat0) / 2) ** 2 + math.cos(math.radians(la)) * math.cos(math.radians(lat0)) * math.sin(math.radians(lo - lon0) / 2) ** 2
+        out_[k] = 6371.0 * 2 * math.asin(math.sqrt(a))
+    return out_
+
+
+def body(on, home, reach_hex, dkm=None, dmax=None):
+    """the pieces holding home, and every piece within reach_hex of them, grown outward; or, with reach_hex None,
+    every piece whose nearest hexagon lies within dmax km of the town's centre (dkm: km by hexagon) -- the D90 level;
     returns (body, distant pieces)"""
-    if reach_hex is None:
-        return set(on), []
     ps = pieces_of({qr(k) for k in on})
     hq = {qr(k) for k in home}
+    if reach_hex is None:
+        kept, rest = set(), []
+        for p_ in ps:
+            if p_ & hq or min(dkm.get(f"{a},{b}", 1e9) for a, b in p_) <= dmax:
+                kept |= p_
+            else:
+                rest.append(p_)
+        return {f"{a},{b}" for a, b in kept}, [{f"{a},{b}" for a, b in p_} for p_ in rest]
     kept = set().union(*[p_ for p_ in ps if p_ & hq]) if hq else set()
     rest = [p_ for p_ in ps if not (p_ & hq)]
     grew = True
@@ -215,15 +244,16 @@ def amps(G, town, Hk):
     return out_
 
 
-def tie(G, town, Hk, amp, news):
-    """the tie (network or travel only) under G's current TRAVEL_TOP, DW, LAMBDA: tie_footprint.tie_map, cached terms"""
+def tie(G, town, Hk, amp, news, nw=1.0):
+    """the tie (network or travel only) under G's current TRAVEL_TOP, DW, LAMBDA: tie_footprint.tie_map, cached terms;
+    nw multiplies all four news weights (the amplification less 1)"""
     top, DW, DC = G["TRAVEL_TOP"], G["DW"], G["DCAP"]
     Hk = G["norm_hex"](Hk)                   # busiest hexagon = 1 under this member's spread
     raw = {}
     for k, (u, a) in amp.items():
         t_ = min(DC, top * Hk[u] * DW.get(k, 1.0))
         if t_ > 0:
-            raw[k] = min(DC, t_ * a) if news else t_
+            raw[k] = min(DC, t_ * (1 + nw * (a - 1))) if news else t_
     if raw:
         raw = G["spatial"](raw, G["home_hexes_of"][town])
     out_ = {k: round(100 * x, 1) for k, x in raw.items() if 100 * x >= 1}
@@ -240,6 +270,7 @@ for town, rank in AREAS:
                                **{s: C["pattern_travel"](town, g_, HALVES[f"X_{s}"], HALVES[f"W_{s}"], HALVES[f"H_{s}"]) for s in ("odd", "even")}}
 RUNS = [("net", "all"), ("net", "odd"), ("net", "even"), ("travel", "all")]
 acc = {a: {r_: defaultdict(float) for r_ in RUNS} for a in AREAS}
+accw = {a: {(s, nw): defaultdict(float) for s in ("all", "odd", "even") for nw in NEWS} for a in AREAS}   # by news weight
 wacc = {a: defaultdict(float) for a in AREAS}                 # marginal-balanced weighting, network tie, all months
 distant = {a: defaultdict(float) for a in AREAS}
 drawn_any = {a: defaultdict(float) for a in AREAS}            # share of members drawing a town anywhere (area or apart)
@@ -260,6 +291,7 @@ for hk in HEX_KMS:
     TOWN_OF = {k: G["pl_shapes"][pl][0]["NAME"] for k, pl in G["hex_place"].items()
                if pl in G["pl_shapes"] and (G["POP"].get(pl, 0) >= 2500 or pl in G["HOME_PLACE"].values())}
     AMP = {(a, s): amps(G, a[0], travel_in[a][s]) for a in AREAS for s in ("all", "odd", "even")}
+    DKM = {t_: km_from(G["hexes"], *DREG[t_]["centre"]) for t_ in {a[0] for a in AREAS}}
     DW0, saved = dict(G["DW"]), {k: G[k] for k in ("TRAVEL_TOP", "LAMBDA")}
     for top, dw, lam in itertools.product(TOPS, DWS, LAMS):
         G["TRAVEL_TOP"], G["LAMBDA"] = top, lam
@@ -267,14 +299,19 @@ for hk in HEX_KMS:
         for a in AREAS:
             home = G["home_hexes_of"][a[0]]
             for kind, s in RUNS:
-                t = tie(G, a[0], travel_in[a][s], AMP[(a, s)], kind == "net")
+              for nw in (NEWS if kind == "net" else (0.0,)):
+                t = tie(G, a[0], travel_in[a][s], AMP[(a, s)], kind == "net", nw)
                 for sel, dist in itertools.product(SELS, DISTS):
                     on, _ = shown_fast(t, in_market, home, sel, 2 if dist == "on" else 1, r_in, r_out)
                     for reach in REACHES:
-                        b, far = body(on, home, None if reach is None else reach / sp)
+                        b, far = (body(on, home, None, DKM[a[0]], DREG[a[0]]["D90"]) if reach == "D90"
+                                  else body(on, home, reach / sp))
                         fr = {k: 1.0 for k in b} if hk == 3 else onto3(b, G["hexes"])
                         for k, f in fr.items():
                             acc[a][(kind, s)][k] += f
+                        if kind == "net":
+                            for k, f in fr.items():
+                                accw[a][(s, nw)][k] += f
                         if (kind, s) == ("net", "all"):
                             for k, f in fr.items():
                                 wacc[a][k] += W_MEMBER * f
@@ -284,15 +321,15 @@ for hk in HEX_KMS:
                                 drawn_any[a][n_] += 1.0 / MEMBERS
                             for n_ in {TOWN_OF[k] for k in b if k in TOWN_OF}:             # inside the area
                                 drawn_body[a][n_] += 1.0 / MEMBERS
-                            if (hk, top, dw, lam, sel, dist, reach) == ADOPTED:
+                            if (hk, top, dw, lam, sel, dist, reach, nw) == ADOPTED:
                                 adopted[a] = b
         print(f"hexagon {hk} km, TRAVEL_TOP {top}, dasymetric {dw}, LAMBDA {lam}: done", flush=True)
     G.update(saved); G["DW"].clear(); G["DW"].update(DW0)
 
 R = root / json.load(open(here / "regions.json"))[region]["out"]
 out_path = here / "reach/probability_columbia.json" if region == "columbia" else R / "probability.json"
-if os.environ.get("SMOKE"):
-    out_path = Path(os.environ["SMOKE"])
+if os.environ.get("SMOKE") or os.environ.get("OUT"):
+    out_path = Path(os.environ.get("SMOKE") or os.environ["OUT"])
 out = {}
 jac = lambda a, b: len(a & b) / max(1, len(a | b))
 POP = G3["POP"]
@@ -325,7 +362,9 @@ def people_split(hs, town):
 
 for (town, rank) in AREAS:
     a = (town, rank)
-    p = {r_: {k: v / MEMBERS for k, v in acc[a][r_].items()} for r_ in RUNS}
+    M7 = MEMBERS // len(NEWS)                     # the versions of the seven other choices (1,728)
+    p = {r_: {k: v / (MEMBERS if r_[0] == "net" else M7) for k, v in acc[a][r_].items()} for r_ in RUNS}
+    pl_ = {key_: {k: v / M7 for k, v in d_.items()} for key_, d_ in accw[a].items()}
     pw = dict(wacc[a])
     assert max(abs(pw.get(k, 0) - p[("net", "all")].get(k, 0)) for k in set(pw) | set(p[("net", "all")])) < 1e-9, \
         "the marginal-balanced weighting differs from the uniform one"
@@ -382,7 +421,31 @@ for (town, rank) in AREAS:
                                      "jaccard_core50": round(jac(halves["odd"], halves["even"]), 3),
                                      "core50_odd_even": [len(halves["odd"]), len(halves["even"])],
                                      "note": "K was selected on the same odd/even split; not an independent test"}}
+    # THE NEWS-WEIGHT FACTOR ALONE: each level's p over the 1,728 versions of the other choices, its core (p >= 0.5),
+    # its month-split stability, and mean |p_level - p| over the hexagons either draws (home left out)
+    def split_(po_, pe_):
+        ks = sorted((set(po_) | set(pe_)) - home)
+        a_, b_ = np.array([po_.get(k, 0) for k in ks]), np.array([pe_.get(k, 0) for k in ks])
+        con = [i for i, k in enumerate(ks) if 0.1 <= pa.get(k, 0) <= 0.9]
+        ho, he = {k for k, v in po_.items() if v >= 0.5} - home, {k for k, v in pe_.items() if v >= 0.5} - home
+        return {"r_all": round(float(np.corrcoef(a_, b_)[0, 1]), 3), "r_contested": round(float(np.corrcoef(a_[con], b_[con])[0, 1]), 3),
+                "mean_abs_diff": round(float(np.mean(np.abs(a_ - b_))), 3), "jaccard_core50": round(jac(ho, he), 3)}
+    rec["news_weight_levels"] = {}
+    for nw in NEWS:
+        pn = pl_[("all", nw)]
+        ks = sorted((set(pn) | set(pa)) - home)
+        c50 = {k for k, v in pn.items() if v >= 0.5}
+        rec["news_weight_levels"][str(nw)] = {
+            "versions": M7, "core50_hexes": sorted(c50), "core50_km2": round(km2_of(c50)),
+            "people50": round(sum(hex_pop.get(k, 0) for k in c50)),
+            "mean_abs_diff_vs_all": round(float(np.mean([abs(pn.get(k, 0) - pa.get(k, 0)) for k in ks])), 4),
+            "max_abs_diff_vs_all": round(float(max(abs(pn.get(k, 0) - pa.get(k, 0)) for k in ks)), 3),
+            "jaccard_core50_vs_all": round(jac(c50 - home, core[0.5] - home), 3),
+            "month_split_stability": split_(pl_[("odd", nw)], pl_[("even", nw)])}
     out.setdefault(town, {})[str(rank)] = rec
+    print(f"{town} {rank}: news-weight levels " + "; ".join(
+        f"x{k_}: core {v_['core50_km2']:,} km2, mean |dp| {v_['mean_abs_diff_vs_all']}, core Jaccard vs all {v_['jaccard_core50_vs_all']}, "
+        f"month split {v_['month_split_stability']}" for k_, v_ in rec["news_weight_levels"].items()), flush=True)
     print(f"{town} {rank}: {MEMBERS} members (full factorial); core p>=0.5 {rec['core50_km2']:,} km2, {rec['people50']:,} people "
           f"(by band {rec['people_by_band']}; {rec['people50_split']}); p>=0.8 {rec['core80_km2']:,} km2; travel-only core "
           f"{rec['core50_travel_km2']:,} km2, vs network {rec['net_vs_travel_core']}; adopted drawing {len(ad)} hexagons, "

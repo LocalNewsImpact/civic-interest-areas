@@ -53,9 +53,9 @@ SETTINGS = {k_: _os.environ.get(k_, d_) for k_, d_ in (("PUBFILE", "public_adjus
             ("REHOME", "1"), ("SCORE", "current"), ("MASKHOME", "1"))}
 if _os.environ.get("SUMMARY") != "1":
     print("tie_footprint.py", REGION_, " ".join(f"{k_}={v_}" for k_, v_ in SETTINGS.items()), flush=True)
-if _os.environ.get("SUMMARY") == "1":       # the figures the log quotes, over every market's output (OUTTAG, OUTDIR)
+if _os.environ.get("SUMMARY") == "1":       # the figures the log quotes, over the market's output (OUTTAG, OUTDIR)
     import json as _json
-    _R = ("columbia", "springfield", "cape", "kirksville", "joplin", "kansascity", "stjoseph")
+    _R = ("columbia",)                                   # the Columbia-Jefferson City TV market only
     # the settings the summarised runs used, as each recorded them (not this call's defaults)
     _st = {r_: _json.load(open(root / SETTINGS["OUTDIR"] / f"tie_footprint_{r_}{SETTINGS['OUTTAG']}.settings.json")) for r_ in _R}
     _keys = ("PUBFILE", "PUBCOL", "BETA_IN", "REGRULE", "ATTRPOP", "CAMPUS_IN", "REHOME", "SCORE", "MASKHOME")

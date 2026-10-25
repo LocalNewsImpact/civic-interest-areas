@@ -11,7 +11,7 @@ Public Census geography only -- no Advan data -- so it ships inside datadesk bes
            -- the town's 2020 boundary and 3 km around it (analysis/area_coverage_alignment.town_area)
   counties FIPS: [name, geometry] for Missouri and the counties of the eight bordering states within 1.5 degrees
            of it (cb_2020_us_county_500k, simplified to 0.003 degrees): a map at a state line shows the
-           neighbouring state's county borders for context (user, 2026-10-22)
+           neighbouring state's county borders for context (authors, 2026-10-22)
   markets  region: [TV market name, outline] (flows/reach/**/market_pattern_maps.json)
   landmarks  [name, lon, lat] from flows/regions.json, for naming an unlabelled cluster
   areas_p  "region|town|area": {"p": {hexagon: p}, "area": {hexagon: part}}: each hexagon's likelihood of being
@@ -68,7 +68,7 @@ for fips, (rec, geom) in us.items():
     if fips[:2] == "29" or (fips[:2] in NEAR and geom.intersects(reach_box)):
         gj = mapping(geom.simplify(0.003))
         counties_out[fips] = [rec["NAME"], {"type": gj["type"], "coordinates": rnd(gj["coordinates"])}]
-regions = json.load(open(root / "flows/regions.json"))
+regions = {k: v for k, v in json.load(open(root / "flows/regions.json")).items() if k == "columbia"}   # the Columbia-Jefferson City TV market only
 markets_out = {}
 for reg, cfg in regions.items():
     f = root / cfg["out"] / "market_pattern_maps.json"
