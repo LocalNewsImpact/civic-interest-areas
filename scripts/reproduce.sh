@@ -76,7 +76,7 @@ if stage public; then
 fi
 
 # Civic interest areas, Columbia-Jefferson City television market: homes, travel patterns (non-negative matrix
-# factorization), the network tie, the 1,728-version drawing ensemble, the multi-part areas and tie-market accuracy.
+# factorization), the network tie, the 6,912-version drawing ensemble, the multi-part areas and tie-market accuracy.
 if stage areas; then
   for r in $REGIONS; do
     step homes_$r              flows/build_homes.py $r

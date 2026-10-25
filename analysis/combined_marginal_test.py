@@ -362,7 +362,7 @@ if "travel_nested_all" in RUN:
     lo, hi = gt.boot(ref_, "werr", ref=st)
     verdict[lab] = lo > 0
     out(f"| {lab} | {st.werr.mean():.3f} | {ref_.werr.mean() - st.werr.mean():+.3f} [{lo:+.3f}, {hi:+.3f}] |")
-  out("DECISION (user's procedure: adopt only if the nested gain's interval excludes zero): "
+  out("DECISION (the authors' procedure: adopt only if the nested gain's interval excludes zero): "
       + ("adopt the procedure's choices" if verdict["nested (DECIDING): lowest inner error"] else "no addition adopted"))
 
 # ---- coverage --------------------------------------------------------------------------------------------------------

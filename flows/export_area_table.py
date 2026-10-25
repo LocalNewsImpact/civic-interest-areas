@@ -11,7 +11,7 @@ multi-part area only -- no single-setting map):
                           x = lon * 111.32 * cos(38.7 deg), y = lat * 110.57 (km): centre x = 1.5 * sqrt(3) * (q + r/2),
                           y = 1.5 * 1.5 * r
   lon, lat                hexagon centre
-  p                       likelihood the hexagon is part of the area: the probability, with the ensemble's 1,728 versions
+  p                       likelihood the hexagon is part of the area: the probability, with the ensemble's 6,912 versions
                           weighted equally, that a version draws it (flows/area_ensemble.py)
   in_area, part           1 = in the area: the home body or a core piece (p >= 0.5) of 3+ hexagons (flows/area_core.py);
                           part = the part's name (the home town, or the part's largest town)

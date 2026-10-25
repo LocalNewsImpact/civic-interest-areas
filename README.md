@@ -68,7 +68,7 @@ STAGES="travel coverage" zsh scripts/reproduce.sh
 | `coverage` | Coverage model, saturation test, border test | `travel`, story data |
 | `spillover` | Outlet model, nested selection, television-market and regional holdouts, collection-quality subsets | `data`, story data |
 | `public` | Public-data travel model and its Advan-learned corrections (`scripts/public_model.sh`) | `travel`, public data |
-| `areas` | Travel patterns, network tie, 1,728-version drawing ensemble, multi-part areas, tie-market accuracy | Advan files, story data, `public` |
+| `areas` | Travel patterns, network tie, 6,912-version drawing ensemble, multi-part areas, tie-market accuracy | Advan files, story data, `public` |
 | `qa` | Coverage density and balanced diet on the travel-only footprint (diagnostics for later work) | `areas` |
 | `figures` | Area table, calculation diagram, area maps for Columbia, Mexico and Linn (`flows/print/`) | `areas` |
 

@@ -15,7 +15,7 @@ Public Census geography only -- no Advan data -- so it ships inside datadesk bes
   markets  region: [TV market name, outline] (flows/reach/**/market_pattern_maps.json)
   landmarks  [name, lon, lat] from flows/regions.json, for naming an unlabelled cluster
   areas_p  "region|town|area": {"p": {hexagon: p}, "area": {hexagon: part}}: each hexagon's likelihood of being
-           part of the area (the ensemble's 1,728 versions weighted equally), and the multi-part area (flows/area_core.py)
+           part of the area (the ensemble's 6,912 versions weighted equally), and the multi-part area (flows/area_core.py)
            (flows/area_ensemble.py; derived from Advan travel at the hexagon level -- check the licence before shipping)
 
 Every number is the one today's coverage maps were computed from (analysis/area_coverage_alignment.py), so the

@@ -1,4 +1,4 @@
-# Data files that may be committed: public data, or our own, each cited in CITATIONS.md.
+# Data files that may be committed: public data, or the project's own, each cited in CITATIONS.md.
 # One path per line. scripts/check_commit.sh refuses any other data file.
 data/stories/march_2026_three_counties_articles.csv
 data/stories/march_2026_three_counties_places.csv

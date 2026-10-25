@@ -126,7 +126,7 @@ const CORRM = new URLSearchParams(location.search).get("corridors") === "1";
 const OUTM = new URLSearchParams(location.search).get("outline") !== "0";
 const confUrl = (r) => r === "columbia" ? "reach/confidence_columbia.json" : `reach/${r}/confidence.json`;
 // THE CIVIC INTEREST AREA (authors, 2026-10-25): each 3 km hexagon shaded by its likelihood of being part of the area -- the
-// probability, under equal weighting of the ensemble's 1,728 versions, that a version draws it (flows/area_ensemble.py), the area's parts outlined (flows/area_core.py). No single-setting map is drawn
+// probability, under equal weighting of the ensemble's 6,912 versions, that a version draws it (flows/area_ensemble.py), the area's parts outlined (flows/area_core.py). No single-setting map is drawn
 // as a product: one setting is one arbitrary member of the ensemble (the ?prob=0 switch is gone)
 const PROBM = true;
 const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `reach/${r}/probability.json`;
@@ -255,14 +255,14 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     const km_ = (PR.core50_kept || {}).km2 || PR.core50_km2;
     // THE DISTANCE LIMIT (authors, 2026-10-25): no part beyond the town's regular-travel distance D90 (flows/regular_distance.py)
     const LIM_ = Math.round((PR.core50_limit || {}).km);
-    // WORDING (authors, 2026-10-25): p is a likelihood under equal weighting of the 1,728 versions -- never "share of settings"
+    // WORDING (authors, 2026-10-25): p is a likelihood under equal weighting of the 6,912 versions -- never "share of settings"
     document.getElementById("subtitle").textContent = `Across ${PR.members.toLocaleString()} equally plausible ways of drawing ` +
       `the map; outlined: the area, places likely 50% or more (${km_.toLocaleString()} km\u00b2)`;
     document.getElementById("note").textContent = `About ${P.residents.toLocaleString()} residents of ${who} ` +
       `(${Math.round(100 * P.share)}%) travel in this pattern, January\u2013July 2026. A place's tie: their travel there, ` +
       `strengthened by news ties \u2013 coverage each way, and places both visit and report on. Each of the ` +
-      `${PR.members.toLocaleString()} versions (eight drawing choices: hexagon 2\u20134 km across, busiest place at 50 or 100, ` +
-      `travel spread within towns and rural areas or not, spatial lag, selectivity, distance rule, reach, and the weight ` +
+      `${PR.members.toLocaleString()} versions (seven drawing choices: hexagon 2\u20134 km across, busiest place at 50 or 100, ` +
+      `travel spread within towns and rural areas or not, spatial lag, selectivity, distance rule, reach; and the weight ` +
       `of the news ties, from none to double) is weighted equally, ` +
       `so the likelihood is conditional on that range of choices. The area: the home body and every other piece of three or ` +
       `more hexagons likely 50% or more${PARTN_ && PARTN_.length ? ` (${PARTN_.join(", ")})` : ""}, provided it starts within ` +

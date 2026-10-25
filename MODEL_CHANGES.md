@@ -13,7 +13,7 @@ every figure from the adopted models.
 |---|---|
 | Travel | Advan Neighborhood Patterns Plus (Dewey), Missouri destinations, January–September 2026; summed to home county × destination county (`build_calibration.py`, then `build_statewide_od.py` → `od_mo_2026.csv`; nothing rewrites the file afterwards). Columns: `visits` (÷ county factor, 2026-10-16), `visits_recorded`, `visits_statewide` (÷ statewide units per resident; the adopted scale), `visits_trimmed` (÷ county factor without phantom home block groups); work-hours columns alike. Outcome in every travel script: `gravity_terms.travel_visits` (`visits_statewide` × (1 − shrunken highway-stop discount)) |
 | Travel, capped destinations | Advan keeps at most 2,000 home block groups per destination row. Capped destination block groups: 275–904 per month (5.5–18% of rows), holding 19.5% (January) to 43.3% (July) of Missouri out-of-county device-visits. Flag: `dest_bg_capped_mo_2026.csv`; pairs counted in uncapped destinations only: `od_mo_2026_uncapped.csv` |
-| Travel, distinct people | `od_people_mo_2026.csv` (`build_unique_od.py`): per home county × destination county × month, St. Louis city and county one unit, Missouri and Kansas destinations: people from each home block group in the destination's busiest block group, capped at the block group's calibrated denominator D and converted to people by its ACS population ÷ D, summed (`people_lower`; sensitivity columns `people_lower_recorded`, `people_lower_b1`, `people_lower_calibrated`) |
+| Travel, distinct people | `od_people_mo_2026.csv` (`build_unique_od.py`): per home county × destination county × month, the independent city and its county one unit, Missouri and Kansas destinations: people from each home block group in the destination's busiest block group, capped at the block group's calibrated denominator D and converted to people by its ACS population ÷ D, summed (`people_lower`; sensitivity columns `people_lower_recorded`, `people_lower_b1`, `people_lower_calibrated`) |
 | Travel, Kansas destinations | Advan Neighborhood Patterns Plus, Kansas destination block groups, January–September 2026 (`neighborhood/raw_ks/`): Missouri residents' visits to Kansas, used in crossover and in the Kansas share of travel |
 | Destinations not observed | Illinois, Iowa, Arkansas, Oklahoma and Nebraska block groups are not in the data. A Missouri resident seen only there is not counted as leaving; border counties' crossover is low by that much |
 | Tracts | Tract outputs use January–July only (2020 block groups), as `activity_space.py` does: August–September home codes are 2010 block groups, whose tract codes name different areas (`build_tract_od.py` → `od_tract_mo_2026.csv`) |
@@ -149,67 +149,62 @@ the Advan-fitted model, and does not in any class. Every score out of sample for
 Scripts: `score_segments.py` (scores, gaps, shares closed), `public_stage1_nested.py`, `public_adjusted_nested.py`,
 `public_vs_advan_compare.py`; metrics in `public_scoring.py`.
 
-**Civic interest areas** — travel patterns by non-negative matrix factorization per TV market
-(`flows/travel_patterns.py`). The network-tie map is drawn in 1,728 equally weighted versions, the full factorial of
-seven drawing choices (`flows/area_ensemble.py`; a multiverse analysis, Steegen et al. 2016). Each hexagon's **p** is
-the probability, under equal weighting of the versions, that the place is part of the area, conditional on the range of
-the drawing choices; it varies drawing choices, not data (data uncertainty is month-split stability). The **area** is
-**multi-part** (authors, 2026-10-25; `flows/area_core.py`): the home body plus every core piece (p ≥ 0.5) of 3 or more
-hexagons, wherever it lies; 1–2-hexagon specks leave the outline but keep their shading; non-home parts are labelled by
-their largest town. No single version is produced or exported as a map. **K rule (authors,
-2026-10-24, per town):** K = the largest K at which every pattern holds 10%+ and 1,000+ of the residents and
-10%+ of the travel of at least one study town in the market (the same town for all three), and is stable at matched
-cosine 0.9+ across random starts and between independently refitted odd and even months. A share of the market was
-rejected (it depends on which home counties form the market); a 5% level was rejected; held-out month error is a
-persistence diagnostic only.
-
-| Market | K | K + 1 fails on | Script |
-|---|---:|---|---|
-| Columbia-Jefferson City | 2 | odd/even months (0.87) | `flows/travel_patterns.py` |
-| Springfield | 7 | starts, months | `flows/travel_patterns.py` |
-| Paducah-Cape Girardeau | 3 | no town (Marble Hill 643 residents), months | `flows/travel_patterns.py` |
-| Ottumwa-Kirksville | 2 | no town (Lancaster 695 residents) | `flows/travel_patterns.py` |
-| Joplin | 4 | no town (Neosho 4%) | `flows/travel_patterns.py` |
-| Kansas City | 5 | no town, months | `flows/travel_patterns.py` |
-| St. Joseph | 5 | months (0.87) | `flows/travel_patterns.py` |
-
-58 areas in 36 study towns (`analysis/market_stability.py`).
+**Civic interest areas** — Columbia–Jefferson City TV market only (authors' decision, 2026-10-25); areas drawn and
+reported for Columbia, Mexico and Linn. Travel patterns by non-negative matrix factorization (`flows/travel_patterns.py`).
+The network-tie map is drawn in 6,912 equally weighted versions: the full factorial of seven drawing choices (1,728
+combinations) × the news weight ω ∈ {0, ½, 1, 2} (`flows/area_ensemble.py`; a multiverse analysis, Steegen et al.
+2016). Each hexagon's **p** is the probability, under equal weighting of the versions, that the place is part of the
+area, conditional on the range of the choices; it varies drawing choices, not data (data uncertainty is month-split
+stability). The **area** is **multi-part** (authors' decision, 2026-10-25; `flows/area_core.py`): the home body plus
+every core piece (p ≥ 0.5) of 3 or more hexagons whose nearest hexagon lies within **D90** of the town's centre of
+population; 1–2-hexagon specks keep their shading but are not outlined; non-home parts are labelled by their largest
+town. **D90** (`flows/regular_distance.py`) = the distance from the town's centre of population within which 90% of its
+residents' regular travel lies; regular = a destination block group seen from the home block group in all 7 months
+(January–July). The limit applies to separate parts only, not to the home body (authors' decision, 2026-10-25). No
+single version is drawn or exported as a map. **K rule** (authors' decision, 2026-10-24, per town): K = the largest K
+at which every pattern holds 10%+ and 1,000+ of the residents and 10%+ of the travel of at least one study town in the
+market (the same town for all three), and is stable at matched cosine 0.9+ across random starts and between
+independently refitted odd and even months: K = 2 (K = 3 fails on the odd/even months, 0.87). 9 areas in the market's
+8 study towns (`analysis/market_stability.py`).
 
 | Measure | Columbia | Mexico | Linn | Script |
 |---|---:|---:|---:|---|
 | Areas | 1 ("Columbia's civic interest area") | 1 | 1 | `flows/market_patterns.py` |
 | Residents allocated to the area's pattern (ACS; share of the town's) | 103,086 (93%) | 5,685 (86%) | 1,172 (85%) | `flows/market_patterns.py` |
-| **Area (multi-part): km² / people** | **1,079 / 207,883** | **785 / 123,873** | **890 / 132,531** | `flows/area_core.py` |
-| — home body: hexagons, km², people | 165, 962, 160,816 | 92, 535, 15,507 | 134, 785, 56,509 (includes Jefferson City) | `flows/area_core.py` |
-| — other parts (hexagons, km², gap to the home body, people) | Jefferson City 13, 76 km², 7.8 km, 35,606; Moberly 7, 41 km², 33.8 km, 11,460 | **Columbia 20, 117 km², 33.8 km, 102,884**; rural Audrain 14, 81 km², 5.2 km, 387; rural Audrain 3, 17 km², 7.8 km, 104; Fulton 3, 17 km², 10.4 km, 2,065; Centralia 3, 17 km², 18.2 km, 2,925 | Columbia 12, 70 km², 36.4 km, 75,883; rural Osage 6, 35 km², 7.8 km, 140 | `flows/area_core.py` |
-| — specks left out of the outline (1–2 hexagons) | 12 specks, 15 hexagons | 2 specks, 3 hexagons | 9 specks, 10 hexagons | `flows/area_core.py` |
-| All core hexagons (p ≥ 0.5): km² / people | 1,166 / 212,133 | 802 / 124,002 | 949 / 133,522 | `flows/area_ensemble.py` |
-| People at p 0.5–0.8 / p ≥ 0.8 | 38,714 / 173,419 | 111,840 / 12,163 | 93,965 / 39,557 | `flows/area_ensemble.py` |
-| p ≥ 0.8: km² | 583 | 308 | 346 | `flows/area_ensemble.py` |
-| Month-split stability: r(p) all / contested; mean \|p_odd − p_even\|; core Jaccard (home left out; K was selected on the same split) | 0.994 / 0.990; 0.016; 0.85 | 0.978 / 0.956; 0.029; 0.88 | 0.901 / 0.734; 0.043; 0.72 | `flows/area_ensemble.py` |
-| Boone hexagons: p ≥ 0.2 / p ≥ 0.5 / p ≥ 0.8 | — | 51 / 23 (20 in the Columbia part) / 1 | — | `flows/area_ensemble.py` |
-| Towns drawn in 50%+ of versions with no hexagon at p ≥ 0.5 (share of versions drawing the town) | Kansas City 0.93, Springfield 0.82, Fulton 0.76, Independence 0.70, Lee's Summit 0.69, Macon 0.54 | Moberly 0.74 | Ashland 0.78, Springfield 0.71 | `flows/area_ensemble.py` |
-| Network-tie core against the travel-only core (Jaccard) | 0.91 | 0.88 | 0.95 | `flows/area_ensemble.py` |
+| D90 (7 of 7 months), km | 23.9 | 48.1 | 70.5 | `flows/regular_distance.py` |
+| **Area (multi-part): km² / people** | **979 / 161,321** | **802 / 123,946** | **896 / 139,001** | `flows/area_core.py` |
+| — home body: hexagons, km², people | 168, 979, 161,321 (reaches 32.3 km; 18 hexagons beyond D90) | 109, 634, 15,968 | 134, 785, 56,509 (includes Jefferson City) | `flows/area_core.py` |
+| — other parts (hexagons, km², km from the home body, people) | none | **Columbia 20, 117, 33.8, 102,884**; Fulton 3, 17, 10.4, 2,065; Centralia 3, 17, 7.8, 2,925; rural Audrain 3, 17, 5.2, 104 | Columbia 13, 76, 36.4, 82,353; rural Osage 6, 35, 7.8, 140 | `flows/area_core.py` |
+| — beyond D90, a distant tie | Jefferson City: 10 hexagons, 59 km², 41.2 km from the centre, 32,125 people | none | none | `flows/area_core.py` |
+| — specks left out of the outline (1–2 hexagons) | 5 (6 hexagons) | 4 (5 hexagons) | 9 (10 hexagons) | `flows/area_core.py` |
+| All core hexagons (p ≥ 0.5): km² / people | 1,073 / 194,485 | 831 / 124,228 | 955 / 139,992 | `flows/area_ensemble.py` |
+| People at p 0.5–0.8 / p ≥ 0.8 | 47,491 / 146,994 | 111,976 / 12,252 | 100,435 / 39,557 | `flows/area_ensemble.py` |
+| p ≥ 0.8: km² | 536 | 320 | 346 | `flows/area_ensemble.py` |
+| Month-split stability: r(p) all / contested; mean \|p_odd − p_even\|; core Jaccard (home left out; K was selected on the same split) | 0.995 / 0.990; 0.014; 0.86 | 0.978 / 0.955; 0.030; 0.87 | 0.895 / 0.732; 0.056; 0.72 | `flows/area_ensemble.py` |
+| Boone hexagons: likely 20%+ / 50%+ / 80%+ | — | 51 / 24 (20 in the Columbia part) / 1 | — | `flows/area_ensemble.py` |
+| Towns drawn in 50%+ of versions with no hexagon at p ≥ 0.5, inside the TV market (share of versions drawing the town) | Moberly 0.87, Centralia 0.82, Fulton 0.74, Boonville 0.73 | Moberly 0.73 | Ashland 0.79 | `flows/area_ensemble.py` |
+| Network-tie core against the travel-only core (Jaccard) | 0.93 | 0.91 | 0.95 | `flows/area_ensemble.py` |
 | Tie-market accuracy, public vs Advan (town) | 0.14 | 0.47 | 0.69 | `analysis/tie_footprint.py` |
 
-All figures from unrounded p (single source `flows/reach/probability_columbia.json`). A town counts toward a hexagon's p
-only where it falls inside a version's area, and versions draw different hexagons of it, so each hexagon can stay under
-0.5 while the town is drawn in most versions.
+All figures from unrounded p. A town counts toward a hexagon's p only where it falls inside a version's area, and
+versions draw different hexagons of it, so each hexagon can stay under 0.5 while the town is drawn in most versions.
+Jefferson City leaves Columbia's area (nearest hexagon 41.2 km from the centre, beyond 23.9 km) and is reported as a
+distant tie; Moberly forms no core part (highest hexagon p 0.44). Columbia stays a part of Mexico's area (40.5 km from
+Mexico's centre, against 48.1) and of Linn's (64.0 km, against 70.5).
 
 Why multi-part: Columbia is Mexico's dominant destination (Audrain → Boone 39% of out-of-county visits, 43% of
-work-hours visits, 34% of out-commuters, LODES JT01) but lies ~34 km (nearest hexagons) from Mexico's home body; a rule
-keeping only the body and pieces within reach would cut it out.
+work-hours visits, 34% of out-commuters, LODES JT01) but lies 33.8 km (nearest hexagons) from Mexico's home body; a
+rule keeping only the body would cut it out.
 
-Tie markets, 36 towns in all seven markets: accuracy median 0.58 (mean 0.580), month-split stability median 0.88,
-travel alone 0.59; by market Columbia 0.50, Springfield 0.56, Joplin 0.75, Kirksville 0.60, Cape Girardeau 0.38, Kansas
-City 0.95, St. Joseph 0.59 (`analysis/tie_footprint.py SUMMARY=1`, from the settings each run recorded, identical in
-all seven). Supply (coverage density, balanced diet) is not a result of this paper: see Supply (QA only; next paper).
+Tie markets, the market's 8 study towns: accuracy median 0.505 (printed 0.51; mean 0.526), month-split stability median
+0.79, travel alone 0.52 (`analysis/tie_footprint.py SUMMARY=1`, from the settings each run recorded). Supply (coverage
+density, balanced diet) is not a result of this paper: see Supply (QA only; next paper).
 
 ### Rural flag: Census settlement replaces RUCC (2026-10-25)
 
 **Adopted (authors' decision, 2026-10-25):** a county is rural when under 50% of its 2020 population lives in Census
-urban areas (`analysis/county_urban_share.csv`, `pct_urban` < 0.5, Census "mostly or completely rural"; St. Louis city
-takes St. Louis County's value; `gravity_terms.cov.rural`). 89 counties are rural and 26 urban; of the 88 newsroom
+urban areas (`analysis/county_urban_share.csv`, `pct_urban` < 0.5, Census "mostly or completely rural"; the
+independent city takes its county's value; `gravity_terms.cov.rural`). 89 counties are rural and 26 urban; of the 88 newsroom
 counties in the coverage model, 65 are rural and 23 urban. Audrain (45% urban) and Osage (0%) are rural; Boone (77%)
 is urban. The flag replaces USDA RUCC nonmetro (codes 4–9) in the travel model's distance terms
 (`rural_i_x_log_dist`, `rural_i_x_log_dist_sq`) and in the coverage model's hypothesis term (`log_visits_x_rural`).
@@ -273,11 +268,11 @@ RUCC-flag results had been seen; both sets of figures are reported.
 | **The Maneater and CoMoBuzz** excluded from Boone's coverage | Decision for these analyses |
 | **Statewide outlets are no county's local news** (2026-10-17): Missouri Business Alert (filed under Boone); The Missouri Independent, Missouri Net, Missouri Scout, The Missouri Times (filed under Cole) (`excluded_outlets.EXCLUDE`) | They cover the state, not a county |
 | **Campus newspapers are not local news anywhere** (2026-10-24): the 11 student newspapers owned by a college or university (`CAMPUS`, part of `EXCLUDE` in `excluded_outlets.py`) are out of coverage, the spillover outcome and fit, and every county outlet count | Same footing as The Maneater. University-licensed public broadcasters (KBIA, KCUR, KRCU, KSMU, KXCV, STL Public Radio) and the School of Journalism's community newsrooms (Columbia Missourian, Boone County Journal, KOMU) stay |
-| **Dos Mundos Bilingual Newspaper and KHQA 7 excluded** (authors, 2026-10-24; `EXCLUDE`): Dos Mundos (filed in Wyandotte County, Kansas) is mostly Spanish-language, outside the English-language corpus the models describe; KHQA 7 (Quincy, Illinois; licensed to Hannibal) is an Illinois newsroom | Both were already outside every fit as out-of-state filings |
-| **Mid Rivers Newsmagazine → St. Charles; Greene County Commonwealth → Greene** (2026-10-24; `excluded_outlets.HOME_COUNTY`, `home_fips`), in coverage, spillover and the area maps, both fitted | Each is published outside the county it covers |
-| **St. Louis city and county treated as one unit** for spillover and crossover (crossover: before the left-the-county test, 2026-10-24) | Every St. Louis outlet is registered in St. Louis County, so city stories counted as "another county" |
+| **The two outlets filed outside Missouri excluded** (authors' decision, 2026-10-24; `EXCLUDE`, named in `analysis/excluded_outlets.py`): one is mostly Spanish-language, outside the English-language corpus the models describe; the other is an out-of-state broadcast newsroom licensed to a Missouri town | Both were already outside every fit as out-of-state filings |
+| **Two outlets homed with the county they cover** (2026-10-24; `excluded_outlets.HOME_COUNTY`, `home_fips`), in coverage, spillover and the area maps, both fitted | Each is published outside the county it covers |
+| **Missouri's independent city and its county treated as one unit** for spillover and crossover (crossover: before the left-the-county test, 2026-10-24) | Every outlet of the city is registered in the county, so city stories counted as "another county" |
 | **Other-state counties within 60 miles count as spillover** | Border regions cross the state line |
-| **One home rule for every outlet** (spillover, 2026-10-24): the county filed under, every other county holding part of its registry city, and Kansas City, Kansas (Wyandotte) for Kansas City, Missouri outlets | A story about another part of the outlet's own city is not spillover |
+| **One home rule for every outlet** (spillover, 2026-10-24): the county filed under, every other county holding part of its registry city, and, for the one Missouri city with a same-named city across the state line, that city's county | A story about another part of the outlet's own city is not spillover |
 | **Home county excluded from every travel–coverage comparison** | Residents live in their home county all of the time; a share of visits says nothing about how much it matters to them. Home and away story counts are reported for reference only |
 | **Coverage counts a story's central place as well as the places it mentions** | The story map's county layer omits each story's central place; Osage had 13 placed stories on that layer against 40 with both |
 | **Hospital indicator removed** | It was a facility count from a CMS file, not travel data, incomplete (it missed Capital Region Medical Center), and read as a healthcare finding the data cannot support |
@@ -508,7 +503,7 @@ nested guard like every other candidate.
 | Old discount (`discount_old`) | −0.859 (0.127) | −0.690 (0.147) | 3.30 | 93.8% | 93.8% |
 | County factor (`visits`, 2026-10-16) | −0.855 (0.087) | −0.703 (0.128) | 3.30 | 93.5% | 94.6% |
 | Uncapped destinations only | −0.953 (0.140) | −0.799 (0.128) | 3.04 | 94.6% | 94.6% |
-| Distinct people (`people_lower`; St. Louis one unit; undiscounted) | −0.662 (0.109) | −0.622 (0.138) | 1.80 | 88.5% | 88.2% |
+| Distinct people (`people_lower`; independent city and county one unit; undiscounted) | −0.662 (0.109) | −0.622 (0.138) | 1.80 | 88.5% | 88.2% |
 
 - The elasticity moves by less than one standard error across scales and discount definitions.
 - Uncapped destinations: decay steeper (rural −0.80). Capped destination block groups (Advan keeps 2,000 home block
@@ -623,8 +618,8 @@ minutes from Mexico) is ordinary local travel.
 The pooled travel model fits large counties best: Poisson weights by count, so big flows drive the fit. Tested for the
 counties it serves worst, public data only. Tiers: k-means on log population (ACS 2020–2024) and commuting outflow
 (LODES 2023) (`county_class_k4.csv`): small rural 56 (median 10,600, 67% commute out), independent towns 32, commuter
-18, hubs 8. The file has 114 rows, with no row for St. Louis city; scored, St. Louis city is a ninth hub and St.
-Louis city and county are scored apart (115 home counties: hubs 9).
+18, hubs 8. The file has 114 rows, with no row for the independent city; scored, the independent city is a ninth hub
+and it and its county are scored apart (115 home counties: hubs 9).
 
 | Tested (held out; share-weighted error, change [95%]) | Result | Script |
 |---|---|---|
@@ -672,7 +667,7 @@ is out of sample for the county scored:
 |---|---|
 | Primary metric (declared) | Share-weighted error, 100 × Σ a\|p - a\| (points), over ALL Advan destinations in Missouri: a pair outside a model's support counts with model share 0 |
 | Beside it | The same on the common destination set (the public model's destinations, counties within 200 miles of the tract; Advan and the Advan-fitted model renormalised over it; outside it 2,968 pairs, 1.34% of Advan share per county, max 8.2%); log-ratio error, mean \|ln(p/a)\| over pairs with Advan share ≥ 1% (p floored at 0.01%; scale-free, where the share-weighted error scales with concentration, r × HHI for a uniform relative miss r). `public_scoring.py` |
-| Averaging | County mean (each home county weighs the same); St. Louis city and county scored apart (115 homes) |
+| Averaging | County mean (each home county weighs the same); the independent city and its county scored apart (115 homes) |
 | Intervals | County-paired bootstrap, 2,000 draws, 95% percentile; the all-county interval resamples within each class. * = interval excludes zero |
 | Benchmark | Advan-fitted: the adopted model (`gravity_terms.FACTORS`, 8 terms centred at 25 miles), each county held out, 8 folds, seed 7 (`gravity_terms.loco`; `public_vs_advan_compare.py` → `compare_shares.csv`): 3.28 on all destinations |
 | Commuting | LODES 2023 primary jobs (JT01) of residents, in and out of state, in every public-model script. Missouri: `free/mo_residents_od_JT01_2023.csv.gz` (Missouri main + the Missouri-home rows of the IL, KS, IA, AR, OK, NE, TN, KY aux files), read by the work model (out-of-state jobs are destinations) and the corrections (`public_adjusted_model.py`: pairs and commuting ranks are Missouri pairs; out-of-state jobs enter only the denominator, all workers living in i) |
@@ -680,7 +675,7 @@ is out of sample for the county scored:
 | Stage 2 | Corrections learned on other counties (8 folds); their structure chosen inside an outer loop; compared with the Stage 1 base of the same outer fold |
 
 Classes (`score_segments.py`): the k-means tiers above; commuter counties split by the OMB 2023 delineation into rings
-of the Kansas City and St. Louis metros (9) and rings of regional hubs or outside any metro (9).
+of the state's two largest metros (9) and rings of regional hubs or outside any metro (9).
 
 **Public model** (`public_work_model.py`, `public_travel_tiers.py`, `assemble_public_by_class.py`), tract origins
 (CenPop2020 tract centres), destinations every county within 200 miles in Missouri and the eight neighbouring states:
@@ -912,8 +907,8 @@ regular visits; market = the footprint closed over gaps of 2 hexagons, holes fil
 5%+ of its area. Tracts, median: small rural 549 km2, 3 lobes, 79% of visits outside the home county; hubs 433 km2, 1
 lobe, 24%. Month-split stability (odd vs even months, 1,653 tracts): market overlap (Jaccard) 0.78, same number of markets 74%.
 Places (`place_activity_space.py`): Columbia's population is the primary activity space of 250,502 residents outside
-the city at 10%+ of their regular visits (140,632 at 20%+): Boone, Callaway, Cole, Randolph, Audrain, Cooper, Saline,
-Macon, Howard. Jefferson City 102,095 (Cole, Callaway, Moniteau, Miller, Osage); Moberly 22,355; Mexico 4,791.
+the city at 10%+ of their regular visits (140,632 at 20%+): Boone, Callaway, Cole, Randolph, Audrain, Cooper,
+Howard and two counties outside the TV market. Jefferson City 102,095 (Cole, Callaway, Moniteau, Miller, Osage); Moberly 22,355; Mexico 4,791.
 Radius of gyration and convex hull computed over all regular visits are inflated by a few distant destinations; the
 hexagon market is the robust measure.
 
@@ -932,25 +927,25 @@ ties; towns spread, destinations capped at 99, lag in km). Run: `ATTRPOP=1 REGRU
 <region>`; settings printed at the start of every run. Month-split stability = Advan odd vs even months; accuracy = public vs
 Advan; both median Jaccard overlap over the market's study towns.
 
-Current results (2026-10-25, round 3; `SUMMARY=1 OUTTAG=_pop tie_footprint.py`, `logs8/tie_summary2.log`, from the
+Current results (2026-10-25, audit round 3; `SUMMARY=1 OUTTAG=_pop analysis/tie_footprint.py columbia`, from the
 settings each run recorded: ATTRPOP=1 BETA_IN=0.5 PUBCOL=adjusted_C REGRULE=1 CAMPUS_IN=0 REHOME=1 SCORE=current
-MASKHOME=1, identical in all seven runs). Round 3 changed the tie: towns of 2+ hexagons spread by destinations and
-population, destinations capped at 99, the spatial lag in km:
+MASKHOME=1). Audit round 3 changed the tie: towns of 2+ hexagons spread by destinations and population, destinations
+capped at 99, the spatial lag in km. The market's 8 study towns, network tie: accuracy (public vs Advan) median 0.505
+(printed 0.51), mean 0.526; month-split stability median 0.79; travel alone 0.52. By town:
 
-| 36 study towns, 7 markets | Accuracy (public vs Advan), market median |
+| Town | Accuracy (public vs Advan) |
 |---|---:|
-| Kansas City (6) | 0.95 |
-| Joplin (5) | 0.75 |
-| Kirksville (3) | 0.60 |
-| St. Joseph (3) | 0.59 |
-| Springfield (6) | 0.56 |
-| Columbia (8) | 0.50 |
-| Cape Girardeau (5) | 0.38 |
-| **All 36 towns (median)** | **0.58** (mean 0.580; travel alone 0.59; month-split stability 0.88) |
+| Columbia | 0.14 |
+| Centralia | 0.32 |
+| Hallsville | 0.43 |
+| Mexico | 0.47 |
+| Vandalia | 0.54 |
+| Belle | 0.67 |
+| Linn | 0.69 |
+| Ashland | 0.95 |
 
-Towns (`logs8/tie_columbia.log`): Columbia month-split stability 0.92, accuracy 0.14 (public area 0.16 of Advan's);
-Mexico 0.80, 0.47; Linn 0.79, 0.69. With the round-3 tie the network terms no longer raise public accuracy over travel
-alone (0.58 against 0.59, all towns).
+Month-split stability (`logs8/tie_columbia.log`): Columbia 0.92, Mexico 0.80, Linn 0.79. Columbia's 0.14 is genuine:
+the public model sends Columbia's out-of-county travel to Jefferson City (public area 0.16 of Advan's).
 
 **The drop from 0.70, isolated** (before stage 3; the isolation stands; `tie_footprint.py` diagnostics `CAMPUS_IN`, `REHOME`, `SCORE=2026-10-18`,
 `MASKHOME`, `PUBFILE`). The 2026-10-18 state (public file as saved before its regeneration; campus papers counted; no
@@ -969,37 +964,34 @@ change alone, from that state (36 towns, network tie):
 | (4a) + (4b), the scoring change in the script | 0.625 / 0.613 | 0.88 | 0.15 | 0.17 |
 | all (before stage 3) | 0.61 / 0.610 | 0.88 | 0.13 | 0.16 |
 
-By market (accuracy median, 2026-10-18 state -> before stage 3 -> after stage 3 -> round 3): Columbia 0.68 -> 0.615 ->
-0.625 -> 0.50; Springfield 0.74 -> 0.575 -> 0.55 -> 0.56; Joplin 0.87 -> 0.77 -> 0.79 -> 0.75; Cape Girardeau 0.49 ->
-0.36 -> 0.37 -> 0.38 (campus exclusion alone 0.38: The Arrow); Kirksville 0.62 -> 0.59 -> 0.61 -> 0.60; Kansas City
-0.92 -> 0.93 -> 0.965 -> 0.95; St. Joseph 0.85 -> 0.62 -> 0.63 -> 0.59.
+Columbia–Jefferson City market (accuracy median, 2026-10-18 state -> before stage 3 -> after stage 3 -> audit round 3):
+0.68 -> 0.615 -> 0.625 -> 0.505.
 
 Cause: the scoring change (4a + 4b) accounts for 0.70 -> 0.625 of the median; the public file, campus exclusion and
-re-homing move it by 0.00 alone (Cape Girardeau excepted) and 0.015 together with the scoring change. Columbia's 0.69
+re-homing move it by 0.00 alone (one market outside the TV market excepted) and 0.015 together with the scoring change. Columbia's 0.69
 was an artifact of the old scoring: with home units unmasked, Columbia city was the town's busiest unit, every other
 tie scaled against it, and both markets were the city and its edge (292 km2). 0.13 is not a code bug: with home masked
 and the score taken beyond Boone, Advan's market beyond Boone is 518 hexagons and the public one 77. The public model
 sends Columbia's out-of-county travel overwhelmingly to Jefferson City (the busiest non-home unit, 1.0; next Fulton
-0.18), so Kansas City, Springfield and Moberly -- 0.70, 0.47, 0.32 of the busiest in Advan -- fall under the tie cut
+0.18), so two metropolitan areas outside the TV market and Moberly -- 0.70, 0.47, 0.32 of the busiest in Advan -- fall under the tie cut
 of 5. Units at 0.05+ of the busiest outside Boone: Advan 37, public 6. The patterns refit (K rule, below) does not
 enter the tie market: it reads the travel sources directly.
 
 **History of the tie-market settings (2026-10-18, old scoring; figures superseded, see appendix).** Columbia's eight
 towns: within-county exponent 0.5 and the regularity rule were adopted on small gains. Audrain: Vandalia's public
-markets became the two Advan shows (northeast toward Hannibal, and Columbia; Vandalia now 0.55); the false Kansas City
-and St. Louis markets came from the 2026-10-18 public build overdrawing metros for a small town (Jackson 3.3% of
-out-of-county travel against Advan's ~0.2%; St. Louis County 11.8% vs ~4.5%; Marion 2.2% vs ~17%), amplified by Kansas
-City being one map unit. Mexico kept one false market (Jefferson City, 1.1% of observed travel): LODES gave Audrain
+markets became the two Advan shows (northeast, outside the TV market, and Columbia; Vandalia now 0.55); the false
+markets in the state's two largest metropolitan areas came from the 2026-10-18 public build overdrawing metros for a
+small town (the two metro counties 3.3% and 11.8% of out-of-county travel against Advan's ~0.2% and ~4.5%; the
+county to the northeast 2.2% against ~17%), amplified by the larger metro being one map unit. Mexico kept one false market (Jefferson City, 1.1% of observed travel): LODES gave Audrain
 residents 398 jobs in Cole, 78% in "all other services" (which includes government), while Advan shows 1.4% of their
 out-of-county work-behaviour visits there -- consistent with LEHD's imputed establishment assignment of state jobs to
 the capital; observed LODES only within 45 miles did not remove it. Rejected: long-distance kinds in activity spaces
 (create false metro markets); hexagon-level scoring of visited cells (the market is the region, not the cells).
-Cape Girardeau: the public markets were in the right places (79-100% inside Advan's) but too compact -- Jackson 608
-km2 against 1,404, Scott City 427 against 1,170, Marble Hill 913 against 2,644: regular visits in this farm region
-spread over rural block groups that jobs and listed destinations miss. **ADOPTED (2026-10-18):** where people live
+In a farm region outside the TV market the public markets were in the right places (79-100% inside Advan's) but two
+to three times too compact: regular visits there spread over rural block groups that jobs and listed destinations miss. **ADOPTED (2026-10-18):** where people live
 (2020 Census block group population, CenPop2020_Mean_BG29) as a third of the within-county spread, with jobs and OSM
-destinations (`ATTRPOP=1`), for every tract (a nonmetro-only rule missed Cape Girardeau and Bollinger, metro counties
-whose residents travel like rural ones). Thresholds by density (< 50/km2, < 200/km2) were not adopted.
+destinations (`ATTRPOP=1`), for every tract (a nonmetro-only rule missed two metro counties whose
+residents travel like rural ones). Thresholds by density (< 50/km2, < 200/km2) were not adopted.
 
 Against the conventional definitions of a local market (Missouri tracts, 2026-10-18; overlap = median Jaccard with
 Advan's market; recall = share of Advan's market covered; precision = share of the definition that is Advan's market):
@@ -1020,25 +1012,21 @@ radius of the top 75% of places, LSOA count, Gini, entropy, Moran's I, distance 
 against where audiences live or travel; this work supplies the audience side. Coverage places here are after the
 grounding gate (PR #595, 2026-09-16; March corpus regrounded) -- every stored place is named in the article text.
 
-### Information needs markets: name, certainty, minimum size (2026-10-18; evidence rerun 2026-10-24)
+### Information needs markets: name, certainty, minimum size (2026-10-18; evidence rerun 2026-10-25)
 
 Named **local information needs areas** on 2026-10-18 (from "information needs market"), **civic interest areas**
 from 2026-10-20 (Name: civic interest areas). Map title "<Town>'s civic interest area", no direction in the title,
 numbered I, II, III only when a town has more than one. Columbia has one since 2026-10-24: "Columbia's civic interest
 area" (formerly I and II). The area is the multi-part ensemble core (Revealed media market, The civic interest
-area). Superseded 2026-10-25: the certainty layer of the single adopted-setting map (`?prob=0`; `&conf=1&outline=1`;
-`analysis/confidence_layer.py`), which drew the area as one connected area (confident cells joined by closing, small
-clusters kept within 5 hexagons, lone far cells dropped, smoothed ~5 km); a single drawing version is no longer
-produced. `flows/pattern_halves.py` remains a check.
+area). Superseded 2026-10-25: the certainty layer of the single-drawing map (`analysis/confidence_layer.py`), which drew
+the area as one connected shape; no single-drawing map is produced. `flows/pattern_halves.py` remains a check.
 
 **Minimum size, ADOPTED (2026-10-18, unchanged):** a secondary or tertiary area needs 10%+ of the town's residents AND
-1,000+ residents (`market_patterns.py`; primary always kept). Evidence, current (`analysis/market_stability.py`, 58
-areas in 36 towns — a diagnostic of one drawing, at the middle values of the drawing choices, because the ensemble is
-run for the built regions only; independent halves, home left out): share of shown hexagons holding in
-both halves, median 0.92; 0.76 at 500-1,000 residents (2 areas), 0.84 at 1,000-2,000 (8), 0.89 at 2,000-5,000 (15),
-0.93 above 5,000 (33); Spearman (residents, share) 0.39. Grain Valley I (Kansas City market; no ensemble is run for
-Kansas City, so this is also a one-drawing diagnostic) draws no hexagon beyond home at the middle values: 64 Kansas City-area hexagons reach the cap of 99, the 50% selectivity floor
-rises to 99 and none of them touches home. A stability threshold is not adopted.
+1,000+ residents (`market_patterns.py`; primary always kept). Evidence, current (`analysis/market_stability.py`, the
+market's 9 areas in 8 towns -- a diagnostic of one drawing, the version at the reference levels, because the ensemble
+is run for the three mapped towns only; independent halves, home left out): share of drawn hexagons holding in both
+halves, median 0.90; 0.87 at 500-1,000 residents (1 area), 0.78 at 1,000-2,000 (2; Linn 0.63), 0.90 at 2,000-5,000
+(3), 0.93 above 5,000 (3); Spearman (residents, share) 0.66. A stability threshold is not adopted.
 
 ## Coverage model
 
@@ -1053,10 +1041,10 @@ commuting from residents' JT01 jobs in and out of state, 8 terms centred at 25 m
 | Hypothesis term (stated in advance) | log visits × rural newsroom county (`log_visits_x_rural`; under 50% of 2020 population in Census urban areas; USDA RUCC 4–9 until 2026-10-25) | Reported whatever the result |
 | Exploratory | saturation terms (`coverage_saturation_test.py`) | Adopted only if the nested guard's gain has an interval excluding zero: none adopted |
 
-- Newsroom county: `excluded_outlets.home_fips`. Mid Rivers Newsmagazine counts with St. Charles and Greene County
-  Commonwealth with Greene.
+- Newsroom county: `excluded_outlets.home_fips`. The two outlets published outside the county they cover count with the
+  covered county.
 - `excluded_outlets.EXCLUDE` is left out (547 stories), including the 11 campus student newspapers (`CAMPUS`) and
-  the two outlets filed outside Missouri (Dos Mundos Bilingual Newspaper, Kansas City, KS; KHQA 7, Quincy, IL). No
+  the two outlets filed outside Missouri (named in `analysis/excluded_outlets.py`). No
   story is dropped silently: the output lists any outlet filed outside Missouri (none remain).
 - The elasticity is the percentage difference in stories associated with 1% more visits, holding the core terms and
   both sets of fixed effects fixed. It is an association, not an effect of travel on coverage.
@@ -1211,7 +1199,7 @@ the combined model.
 | Zero-visit pairs (137 fitted) | log(1e-3) = −6.9, high leverage | indicator + log visits where > 0; elasticities move ≤ 0.006 |
 | Standard errors | HC1 | clustered by newsroom county; pair and two-way as sensitivity |
 | HOME_COUNTY, CAMPUS | counted under the county filed; campus papers in | `home_fips`; `CAMPUS` excluded; out-of-county pairs 10,406 → 10,282 |
-| Out-of-state outlets | dropped silently | Dos Mundos and KHQA 7 in `EXCLUDE` (2026-10-25); any outlet filed outside Missouri is listed in the output |
+| Out-of-state outlets | dropped silently | The two outlets filed outside Missouri in `EXCLUDE` (2026-10-25); any outlet filed outside Missouri is listed in the output |
 | `home_county_decay.py` | county-wide variant took `publisher_county` | `home_fips` (`market_patterns.home_of`). Default result 1.68 → 1.64 (s.e. 0.02), from upstream changes |
 
 ## Spillover model, 2026-10-16 (replaced)
@@ -1291,14 +1279,14 @@ Crossover is the share of a county's residents observed outside it in a month, c
 market by travel pattern and not a term in the adopted spillover model. Advan reports distinct people per destination
 block group by home block group; people from different home block groups are distinct, and for each home block group
 the people seen in its single most-visited block group outside the county (Missouri or Kansas) are all distinct.
-St. Louis city and county are one unit before the left-the-county test.
+The independent city and its county are one unit before the left-the-county test.
 
 **Detection test (b by 2SLS, audit round 3, 2026-10-25).** Within a county, block groups where Advan sees more
 phones at home than the ACS predicts (d = own ÷ E, E = ACS population × the month's statewide units per resident) show
 lower leaving rates (busiest outside block group ÷ own). Model: log leaving rate in month m2 = −b × log d in m2 +
 county × month-pair effect. Same-month d shares own with the leaving rate, so log d in m2 is instrumented by log d in
 another month m1 of the same block-group vintage; every ordered month pair stacked (44 pairs, 218,955 block-group
-pairs), ACS-population weights, county-clustered (St. Louis city and county one cluster), `build_unique_od.py`:
+pairs), ACS-population weights, county-clustered (the independent city and its county one cluster), `build_unique_od.py`:
 
 | Estimate | Value |
 |---|---|
@@ -1339,7 +1327,7 @@ Denominators compared (Spearman across 114 counties):
 | Denominator | with calibration factor | with commuters out ÷ employed (JT01) | with commuters out ÷ population |
 |---|---:|---:|---:|
 | Seen at home, as published (city ↔ county counted as leaving) | −0.64 | +0.54 | +0.37 |
-| Seen at home, St. Louis unit fixed | −0.63 | +0.55 | +0.38 |
+| Seen at home, city-county unit fixed | −0.63 | +0.55 | +0.38 |
 | (i) Residents in the busiest block group anywhere | −0.66 | +0.55 | +0.37 |
 | (ii) Seen at home, phantom block groups at E | −0.49 | +0.51 | +0.31 |
 | b = 1 (iii) E, Missouri and Kansas destinations (sensitivity) | +0.14 | +0.46 | +0.33 |
@@ -1450,29 +1438,25 @@ describe well-collected outlets; expectations for the other 33 are extrapolation
   another county by its nature. Other weights appear only in the sensitivity table below.
 - **Denominator**: every placed story. The 2,700 stories with no central county and the 163 centred out of state more
   than 60 miles away (23.5% of stories) stay in it; they count only through mentions.
-- **Home** (one rule for every outlet): the county the outlet is filed under (St. Louis city and county one unit),
-  every other county holding part of its registry city (Census 2020 base population > 0, place-in-county rows of
-  `census_dl/ref/sub-est2024_29.csv`), and Kansas City, Kansas (Wyandotte) for Kansas City, Missouri outlets — a
-  same-named city adjoining across the state line; no other Missouri city has one. Kansas City → Jackson, Clay,
-  Platte, Cass; Joplin → Jasper, Newton; Sikeston → Scott, New Madrid; Springfield → Greene, Christian; Jefferson
-  City → Cole, Callaway; Excelsior Springs → Clay, Ray; Osage Beach, Hannibal, Lee's Summit, Mountain Grove, Belle,
-  Cameron likewise. Johnson County, Kansas and St. Clair and Madison counties, Illinois are home for no outlet.
-  HOME_COUNTY outlets take only the county they cover.
-- **Mid Rivers Newsmagazine** (St. Charles) and **Greene County Commonwealth** (Greene) are fitted with the county they
-  cover as home (`excluded_outlets.HOME_COUNTY`); both are published outside it, so their border distance is 0. Three
-  Rivers Publishing (three newspapers under one name) stays out of the fit.
-- **Not local news**: `EXCLUDE` (`spillover_common.NOT_LOCAL = EXCLUDE`): the statewide outlets, Dos Mundos, KHQA 7 and
-  the campus newspapers (`CAMPUS`, in `excluded_outlets.py`) — student newspapers owned by a college or university:
-  Griffon News, The Arrow, Drury Mirror, The Standard, UMKC Roo News, The Chart, The Daily BURG, North West Missourian,
-  Student Life, The Journal/The Webster Journal, The University News. Out of the outcome, the fit and every county
-  count. University-licensed public broadcasters (KBIA, KCUR, KRCU, KSMU, KXCV, STL Public Radio) and the School of
-  Journalism's community newsrooms (Columbia Missourian, Boone County Journal, KOMU) stay.
+- **Home** (one rule for every outlet): the county the outlet is filed under (the independent city and its county one
+  unit), every other county holding part of its registry city (Census 2020 base population > 0, place-in-county rows
+  of `census_dl/ref/sub-est2024_29.csv`), and, for the one Missouri city with a same-named city adjoining across the
+  state line, that city's county. In the TV market: Jefferson City → Cole, Callaway; Belle likewise; every outlet with
+  extra home counties is printed by `analysis/spillover_outlets.py`. Other counties across the state line are home for
+  no outlet (`analysis/spillover_common.py`). HOME_COUNTY outlets take only the county they cover.
+- **The two outlets published outside the county they cover** are fitted with the covered county as home
+  (`excluded_outlets.HOME_COUNTY`), so their border distance is 0. One registry entry holding three newspapers under one
+  name stays out of the fit.
+- **Not local news**: `EXCLUDE` (`spillover_common.NOT_LOCAL = EXCLUDE`): the statewide outlets, the two outlets filed
+  outside Missouri and the 11 campus newspapers (`CAMPUS`) — student newspapers owned by a college or university, all
+  named in `analysis/excluded_outlets.py`. Out of the outcome, the fit and every county count. University-licensed
+  public broadcasters (six, KBIA among them) and the School of Journalism's community newsrooms (Columbia Missourian,
+  Boone County Journal, KOMU) stay.
 - **Market counts** (print and digital outlets in the county, the crowded-county test, every search candidate): pinned
   registry, status active or closed but publishing in March, not `EXCLUDE`. One rule in every script.
 - **Crowded weekly** (candidate, not adopted): a print weekly (registry type print/newspaper) in a county whose market
-  has a print daily and a TV station. Nine counties: Adair, Boone, Buchanan, Callaway, Cape Girardeau, Greene,
-  Jackson, Jasper, St. Louis. Fitted crowded weeklies: Boone County Journal, Greene County Commonwealth, North East
-  News, St. Louis American, The Cash-Book Journal, The Pitch, Webster Kirkwood Times.
+  has a print daily and a TV station. Nine counties, Boone and Callaway among them. Seven fitted crowded weeklies,
+  Boone County Journal among them (counted by `analysis/spillover_outlets.py`).
 - **Border distance** (candidate, in the border form): miles from the registry point to the nearest edge of the home
   county, logged, floored at half a mile. 68 of 85 fitted outlets are at a street address, 15 at a town centroid
   (location_basis). Set to 0 for broadcasters (a station's reach is its signal, not its office) and for an outlet
@@ -1539,12 +1523,12 @@ bound.
 
 | Change | Effect |
 |---|---|
-| Mid Rivers Newsmagazine → St. Charles, Greene County Commonwealth → Greene; both fitted | +2 fitted outlets; the Commonwealth becomes a crowded weekly (Greene) |
-| Campus newspapers out (11 outlets; 5 had 10+ stories: Griffon News, The Arrow, North West Missourian, Student Life, The Standard) | −5 outlets; three of them were crowded weeklies |
-| Print-outlet count: `EXCLUDE` (incl. `CAMPUS`) out; one market rule (active, or closed but publishing in March) in every script | Counts change in nine counties; Mid Rivers counted in St. Charles |
-| Crowded weekly requires a print outlet | KC Beacon (digital native) out of the term |
-| Frequency codes filled from the Missouri Official Manual 2025–2026 where blank (14 outlets; `coverage/source_frequency.csv`) | The Cash-Book Journal (Cape Girardeau) becomes a crowded weekly |
-| One home rule (city counties + Kansas City, Kansas) for every outlet | 31 outlets gain home counties; 330 centred stories move to home (213 beyond the 2026-10-17 Kansas City rule); 434 mention-only stories lose their mention credit |
+| Two outlets homed with the county they cover (`HOME_COUNTY`); both fitted | +2 fitted outlets; one becomes a crowded weekly |
+| Campus newspapers out (11 outlets; 5 had 10+ stories) | −5 outlets; three of them were crowded weeklies |
+| Print-outlet count: `EXCLUDE` (incl. `CAMPUS`) out; one market rule (active, or closed but publishing in March) in every script | Counts change in nine counties; the re-homed outlets counted in the county they cover |
+| Crowded weekly requires a print outlet | One digital-native outlet out of the term |
+| Frequency codes filled from the Missouri Official Manual 2025–2026 where blank (14 outlets; `coverage/source_frequency.csv`) | One more outlet becomes a crowded weekly |
+| One home rule (city counties + the same-named city across the state line) for every outlet | 31 outlets gain home counties; 330 centred stories move to home (213 beyond the 2026-10-17 rule for that one city); 434 mention-only stories lose their mention credit |
 | Selection procedure: hypothesis terms broadcaster + print outlets; exploratory additions through the nested guard | Crowded weekly and border distance not adopted (the border form was adopted 2026-10-24 under a rule fixed beforehand, then replaced) |
 | Inference: CRV3 standard errors with t(47); county-cluster bootstrap | Replaces clustered z |
 | County and outlet expectations held out (fit without the county) | One computation feeds the county table, the sensitivity table, the chart and `spillover_quoted_rows.csv` |
@@ -1566,18 +1550,14 @@ Attribution of the crowded-weekly change (each step added to the previous; CRV1 
 | + one home rule | −0.18 | 0.31 |
 | + border for print and digital only (border form) | −0.20 | 0.27 |
 
-Frequency codes: The Maryville Daily Forum and The Daily/Dexter Statesman were checked against the Official Manual and
-kept as weeklies (Manual: "Maryville Forum", Thursdays; "The Statesman", Wednesdays); Richmond Daily News likewise
-(Fridays). Neither county has a TV station, so neither code reaches the term. Codes filled where blank, weekly: The
-Banner Press, The Cash-Book Journal, Aurora Advertiser, St. Louis Business Journal, Tribune and Times, Cedar County
-Republican and Stockton Journal, Chariton Marquee, Kahoka Hometown Journal, Clinton County Leader (Plattsburg),
-Springfield Business Journal, Hermitage Index, Tipton Times, Community News; bi-weekly: West & Mid Rivers
-Newsmagazine. Sensitivity, not adopted: the Manual's print schedule for every outlet it lists (20 codes change;
-Kirksville Daily Express, The Mexico Ledger, The Fulton Sun, Daily Journal and Constitution-Tribune become weeklies;
-Southeast Missourian tri-weekly): crowded counties fall from nine to six (Adair, Callaway, Cape Girardeau leave);
-crowded weekly −0.28 (p 0.14); held-out 5.85 / 4.54. Frequency codes are kept as filled; moot without the
-crowded-weekly term. Border distance 0 for an outlet outside its home county is kept (comment in
-`spillover_outlets.py`).
+Frequency codes: three outlets with "Daily" in their names were checked against the Official Manual and kept as
+weeklies (the Manual lists one print day each); two of them are in counties with no TV station, so their codes do not
+reach the term. Codes filled where blank (`coverage/source_frequency.csv`): 13 weekly, 1 bi-weekly. Sensitivity, not
+adopted: the Manual's print schedule for every outlet it lists (20 codes change; five outlets, The Mexico Ledger and
+The Fulton Sun among them, change from daily to weekly, one to tri-weekly): crowded counties fall from nine to six
+(Callaway and two others leave); crowded weekly −0.28 (p 0.14); held-out 5.85 / 4.54. Frequency codes are kept as
+filled; moot without the crowded-weekly term. Border distance 0 for an outlet outside its home county is kept (comment
+in `spillover_outlets.py`).
 
 ### Data: March enrichment re-run and Sports (2026-10-17)
 
@@ -1590,7 +1570,7 @@ ROT47 ciphertext was tested as a quality criterion and withdrawn: place enrichme
 body for the six affected outlets.
 
 **Sports re-run.** The 1,837 enriched March Sports stories (CIN) were re-run under focus-v4, the rule that centres a
-game on the publication's own team; 1,827 completed (four hang on one LLM call every run and stay unenriched). The
+game on the publication's own team; 1,827 completed (four hang on one language-model call every run and stay unenriched). The
 re-run mostly placed stories that had no centre: 679 gained one (506 home, 173 away). Of stories placed before, 23
 moved away → home and 4 home → away; the away share of placed Sports stories is 18.0% for print/digital (17.0%
 before) and 34.3% for broadcast (35.7%). In a sample of 45 away-centred re-run stories about 13 were the outlet's own
@@ -1607,8 +1587,8 @@ centred in another county and 43 that only mention one; KOMU had 83 of 263 and 3
 
 Historical record; every figure in this subsection is superseded (Superseded figures). spillover ~ broadcaster + weekly
 in a county with a daily and a TV station + log miles from the outlet's town to its county edge + log(1 + print and
-digital outlets in the county). Fitted on well-collected outlets with 20+ placed stories; Mid Rivers Newsmagazine,
-Greene County Commonwealth and Three Rivers Publishing left out of the fit. Border and print-outlet terms found by
+digital outlets in the county). Fitted on well-collected outlets with 20+ placed stories; the two outlets published
+outside the county they cover and one three-paper registry entry left out of the fit. Border and print-outlet terms found by
 trying 11 additions on held-out error, with a nested figure reported beside it. Tests run on that model and not rerun
 (text in git, commit `63f915f`): a weekly alone in its county, the terms by outlet type and for non-weeklies only,
 market position, fits on all 128 outlets before the quality restriction, outlet-profile terms (`spillover_profile.py`),
@@ -1693,8 +1673,8 @@ Travel: table below (audit round 3; RUCC flag, before 2026-10-25; not rerun unde
 are not reported. The index's journalists per 100,000 (MuckRack) is not used: newsroom staffing is measured directly
 from bylines in the stories collected, and adds nothing to spillover (row above). Indicators that do not vary
 across Missouri counties were excluded (the volunteer rate is one state figure, 29.8%, for every county; library visits
-and mental-health providers are missing for some counties). An earlier run kept the volunteer rate: merging St. Louis
-city and county left a rounding difference that standardizing turned into a variable singling out St. Louis, and its
+and mental-health providers are missing for some counties). An earlier run kept the volunteer rate: merging the independent
+city with its county left a rounding difference that standardizing turned into a variable singling out that unit, and its
 apparent effect (spillover 13.4 points with four indicators) was an artifact. With it removed and selection made
 without seeing the held-out county, adding several indicators makes spillover predictions worse (15.3 against 15.0 for
 all outlets; 15.4 against 14.1 for well-collected outlets).
@@ -1731,31 +1711,35 @@ number since 2024): 107 hospitals in 67 counties (`build_hospitals.py`). Countie
 residents leaving; hospital terms do not improve held-out travel once each county's overall draw is measured
 (coverage: `hospital_test.py` 4.46 → 4.45, RUCC flag).
 
-## Revealed media market by travel pattern (2026-10-17; K rule 2026-10-24; multi-part ensemble core 2026-10-25)
+## Revealed media market by travel pattern (2026-10-17; K rule 2026-10-24; civic interest area 2026-10-25)
 
 A town's revealed media market is (1) crossover of its residents into other counties, the potential demand, and (2)
 spillover between the county pair in both directions, the supply. Residents do not share one travel pattern, so the
 market is the most common pattern among them; secondary and tertiary patterns are separate maps. From 2026-10-20 each
-mapped pattern is a **civic interest area**; this paper's area is the multi-part core of a 1,728-version ensemble of the
+mapped pattern is a **civic interest area**; this paper's area is the multi-part core of a 6,912-version ensemble of the
 network-tie map (The civic interest area, below).
+
+**Scope** (authors' decision, 2026-10-25). Civic interest areas are drawn for the Columbia–Jefferson City television
+market only: its eight study towns enter the K rule and the minimum-size evidence, and areas are drawn and reported for
+Columbia, Mexico and Linn. The travel, coverage and spillover models stay statewide.
 
 **Patterns** (`flows/travel_patterns.py`). Advan Neighborhood Patterns Plus, January–July 2026 (the months on 2020
 block groups): for each home block group and destination, reach = residents seen in the destination's busiest block
 group / residents seen at home, mean over the months the block group is observed (50+ residents at home). A missing
-home-month is missing, not zero: left out of every mean and masked in every fit and score (Kansas City 229 of 5,236
-home-months missing, Columbia 4 of 1,106, St. Joseph 1 of 756, none elsewhere). Destinations: towns (2020 places),
-rural block groups, Missouri counties outside the TV market; own town masked. Travel is decomposed by non-negative
-matrix factorization (mixed membership): each block group's travel is a weighted mix of K recurring patterns. Final
-fit: lowest loss of 10 starts; masked multiplicative updates computed as the full product less the masked cells
-(identical to 1e-14, ~6x faster).
+home-month is missing, not zero: left out of every mean and masked in every fit and score (4 of 1,106 home-months).
+Destinations: towns (2020 places), rural block groups, Missouri counties outside the TV market; own town masked. Travel
+is decomposed by non-negative matrix factorization (mixed membership): each block group's travel is a weighted mix of K
+recurring patterns. Final fit: lowest loss of 10 starts; masked multiplicative updates computed as the full product
+less the masked cells (identical to 1e-14, ~6x faster). The patterns are fitted on the market's home counties
+(Audrain, Boone, Osage; `flows/regions.json`), on Missouri destinations.
 
 **Residents** (2026-10-24): each block group's ACS 2020–2024 population (B01003), through the calibrated
-per-block-group denominator of crossover (`crossover_bg_month_mo_2026.csv`: people = devices × ACS population / D),
-mean over January–July, allocated to patterns by the travel each carries and ranked: primary, secondary, tertiary.
-Lancaster (716 by ACS) cannot pass the 1,000-resident test.
+per-block-group denominator of crossover (`analysis/crossover_bg_month_mo_2026.csv`: people = devices × ACS
+population / D), mean over January–July, allocated to patterns by the travel each carries and ranked: primary,
+secondary, tertiary.
 
-**K rule (authors, 2026-10-24, per town).** K = the largest K (grid 1–12, extended while its last K passes; the
-script stops with an error if none passes) at which every pattern passes:
+**K rule** (authors' decision, 2026-10-24, per town). K = the largest K (grid 1–12, extended while its last K passes;
+the script stops with an error if none passes) at which every pattern passes:
 
 | Test | Measure | Threshold |
 |---|---|---|
@@ -1765,27 +1749,14 @@ script stops with an error if none passes) at which every pattern passes:
 
 K is selected on this odd/even split, so the areas' month-split stability below is not an independent test of K.
 
-Per town, not per market: the area rule is per town, and a market's share depends on which home counties form it
-(rejected). A 5% level was rejected. Held-out month error (all 105 4 / 2 / 1 month partitions) is printed as a
-persistence diagnostic only and does not choose K. Every K's tests, town by town, are in each market's
-`patterns.json`.
-
-| Market | K | Carrying town of each pattern | K + 1 fails on |
-|---|---:|---|---|
-| Columbia-Jefferson City | 2 | Vandalia, Ashland | odd/even months (0.87) |
-| Springfield | 7 | Springfield, Republic, Seymour, Republic, Springfield, Marshfield, Cassville | starts, months |
-| Paducah-Cape Girardeau | 3 | Sikeston, Marble Hill, Jackson | no town (Marble Hill 643 residents), months |
-| Ottumwa-Kirksville | 2 | Macon, Kirksville | no town (Lancaster 695 residents) |
-| Joplin | 4 | Neosho, Webb City, Lamar, Carthage | no town (Neosho 4%) |
-| Kansas City | 5 | Lexington, Blue Springs, Independence, Independence, Harrisonville | no town, months |
-| St. Joseph | 5 | St. Joseph, St. Joseph, St. Joseph, Savannah, Maryville | months (0.87) |
-
-K is unchanged by the disjoint seeds of round 3. The carrying town is the one where the pattern holds the most of the
-residents among the towns that pass. Not monotone: Joplin K = 3 fails starts (0.75) and K = 4 passes; Kansas City K = 2 and 4 fail, 3 and 5 pass; St.
-Joseph K = 4 fails, 5 passes. Sensitivity (town threshold 10 / 15 / 20% × cosine 0.85 / 0.90 / 0.95): Columbia 3 / 2 /
-2 at every town threshold; Springfield 7 (6 at 20%); Cape Girardeau 3; Kirksville 2; Joplin 4; Kansas City 5 (3 at
-20%); St. Joseph 6 / 5 / 2 (5 / 5 / 2 at 20%) (second review; not restated in round 3). Kept fit, Columbia (second review): all 10 starts reach the same loss; matched cosine
-1.00; kept-to-half cosines 0.99 / 0.99 and 1.00 / 1.00; odd/even 0.95 and 1.00.
+Result: **K = 2** (carrying towns Vandalia and Ashland: the town where the pattern holds the most residents among the
+towns that pass); K = 3 fails on the odd/even months (0.87). Per town, not per market: the area rule is per town, and a
+market's share depends on which home counties form it (rejected). A 5% level was rejected. Held-out month error (all
+105 4 / 2 / 1 month partitions) is printed as a persistence diagnostic only and does not choose K. Every K's tests,
+town by town, are in the market's `patterns.json`. K is unchanged by the disjoint seeds of audit round 3. Sensitivity
+(town threshold 10 / 15 / 20% × cosine 0.85 / 0.90 / 0.95): K = 3 / 2 / 2 at every town threshold (audit round 2).
+Kept fit (audit round 2): all 10 starts reach the same loss; matched cosine 1.00; kept-to-half cosines 0.99 / 0.99 and
+1.00 / 1.00; odd/even 0.95 and 1.00.
 
 | Town | Residents allocated to the area (ACS) | Share of the town's residents |
 |---|---:|---:|
@@ -1795,16 +1766,16 @@ Joseph K = 4 fails, 5 passes. Sensitivity (town threshold 10 / 15 / 20% × cosin
 
 **Market test** (`flows/market_patterns.py`). For each county in a pattern: crossover = the town's residents in the
 pattern × the county's share of the pattern's travel; spillover both ways, March 2026, local outlets only, weighted as
-the adopted measure (current areas; printed by `tie_footprint.py`, `logs8/tie_columbia.log`). Mexico-Boone: ~832
-residents crossing, Audrain outlets' stories about Boone 10.0%, Boone outlets' about Audrain 0.5% -- demand and
-one-way supply. Linn-Cole: ~289 crossing, 8.1% and 0.2%. Columbia's area is Boone-centred (Boone 45% of its travel;
-St. Louis, the next county, 6%).
+the adopted measure (printed by `tie_footprint.py`, `logs8/tie_columbia.log`). Mexico-Boone: ~832 residents crossing,
+Audrain outlets' stories about Boone 10.0%, Boone outlets' about Audrain 0.5% -- demand and one-way supply. Linn-Cole:
+~289 crossing, 8.1% and 0.2%. Columbia's area is Boone-centred (Boone 45% of its travel; the next county, outside the
+TV market, 6%).
 
-**Outlet homes** (authors, 2026-10-24): an outlet's home county is the county it is filed under, except Mid Rivers
-Newsmagazine (St. Charles) and Greene County Commonwealth (Greene) (`excluded_outlets.HOME_COUNTY`); their home town
-for the incoming tie and the outlet circles is the covered county's seat, St. Charles city (not O'Fallon, the larger)
-and Springfield. Registry: the pinned copy (`excluded_outlets.registry()`). `EXCLUDE` (campus papers,
-statewide outlets, Dos Mundos, KHQA 7) is out of every coverage term.
+**Outlet homes** (authors' decision, 2026-10-24): an outlet's home county is the county it is filed under, except two
+outlets published outside the county they cover, which are homed with the covered county (`excluded_outlets.HOME_COUNTY`);
+their home town for the incoming tie and the outlet circles is the covered county's seat. Neither is in the TV market.
+Registry: the pinned copy (`excluded_outlets.registry()`). `EXCLUDE` (campus papers, statewide outlets and the two
+outlets filed outside Missouri) is out of every coverage term.
 
 **Local index, by 3 km hexagon** (adopted 2026-10-17; replaced the same day by the network tie). A place is local to a
 resident through crossover (travel there), spillover out (home outlets' news located there) and spillover in (its
@@ -1827,7 +1798,7 @@ City 0.25 / 0.01.
 place by travelling there, and news ties strengthen that tie. "Local" is defined by travel; coverage amplifies a travel
 tie and never creates one.
 
-  tie(H, X) = travel(H -> X) x (1 + 0.3 out + 0.3 in + 0.7 shared places + 0.7 shared coverage), capped at home = 100
+  tie(H, X) = travel(H -> X) x (1 + ω (0.3 out + 0.3 in + 0.7 shared places + 0.7 shared coverage)), capped at home = 100
 
 | Term | Measure (0-1) |
 |---|---|
@@ -1837,212 +1808,237 @@ tie and never creates one.
 | shared places | overlap coefficient sum_Y min(H's travel share at Y, X's outlets' coverage share at Y), third places only |
 | shared coverage | overlap coefficient between H's outlets' and X's outlets' coverage, third places only |
 
-Travel is worth more than coverage: the coverage weights sum to 2 (raised from 1 on 2026-10-17, when at 1 news ties
-lifted a typical tie only 5-15% and barely showed), so coverage at its strongest triples a travel tie and a place
-travelled to a third as often can at most tie it. Where news ties lift a tie by 10%+, the map marks the hexagon with an
-orange dot sized by the lift (10%, 25%, 50%+). The overlaps (network closure: two places embedded in the same third
+ω is the news weight, 1 in the 2026-10-17 tie and one of the ensemble's choices (0, ½, 1, 2) since 2026-10-25. Travel
+is worth more than coverage: the coverage weights sum to 2 (raised from 1 on 2026-10-17, when at 1 news ties lifted a
+typical tie only 5-15% and barely showed), so at ω = 1 coverage at its strongest triples a travel tie and a place
+travelled to a third as often can at most tie it. The overlaps (network closure: two places embedded in the same third
 places) carry 0.7 of it, the single direct ties 0.3. A third place strengthens the pair, not itself -- Columbia
 residents in Centralia, which the Mexico Ledger covers, strengthens Columbia-Mexico; Centralia's own tie is its own
 travel and coverage -- so no coverage is counted twice. KRCG (registry town New Bloomfield) overlaps nearly every
 town's coverage, but almost no one travels to New Bloomfield, so it stays faint: news is made there, but it is not
-local to most residents. Weight sensitivity and the tie values quoted on 2026-10-17 were computed on the K = 6 areas
-and are not rerun (appendix).
+local to most residents. From 2026-10-17 to 10-24 the single-drawing map marked with an orange dot each hexagon where
+news ties lift a tie by 10%+; the published map carries no dots. Weight sensitivity and the tie values quoted on
+2026-10-17 were computed on the K = 6 areas and are not rerun (appendix).
 
 **Areas per town** (adopted 2026-10-17, rule unchanged): a pattern is mapped as an area only if 10%+ of the town's
 residents follow it AND, beyond the primary, 1,000+ residents; the primary is always kept; at most three. A stated
-threshold, like the hexagon floor of 5; held-out error does not test it. All 36 study towns, K = 6 (superseded
-2026-10-24) -> current (residents ACS; unchanged in round 3, `towns_v7`):
+threshold, like the hexagon floor of 5; held-out error does not test it. The market's eight study towns, K = 6
+(superseded 2026-10-24) -> current (residents ACS):
 
-| Market | Town | K | Areas | Shares, % | Residents |
-|---|---|---|---|---|---|
-| columbia | Columbia | 6 -> 2 | 2 -> 1 | 72 / 16 -> 93 | 76,912 / 17,513 -> 103,086 |
-| columbia | Mexico | 6 -> 2 | 1 -> 1 | 74 -> 86 | 5,241 -> 5,685 |
-| columbia | Linn | 6 -> 2 | 1 -> 1 | 92 -> 85 | 1,641 -> 1,172 |
-| columbia | Ashland | 6 -> 2 | 2 -> 1 | 79 / 19 -> 100 | 13,219 / 3,141 -> 9,089 |
-| columbia | Centralia | 6 -> 2 | 2 -> 2 | 50 / 26 -> 58 / 42 | 2,937 / 1,516 -> 3,296 / 2,380 |
-| columbia | Vandalia | 6 -> 2 | 1 -> 1 | 88 -> 100 | 3,064 -> 3,238 |
-| columbia | Hallsville | 6 -> 2 | 1 -> 1 | 68 -> 64 | 1,216 -> 1,360 |
-| columbia | Belle | 6 -> 2 | 1 -> 1 | 100 -> 74 | 1,099 -> 965 |
-| springfield | Springfield | 6 -> 7 | 3 -> 3 | 31 / 31 / 18 -> 26 / 23 / 17 | 47,874 / 46,689 / 27,425 -> 44,074 / 38,491 / 28,196 |
-| springfield | Republic | 6 -> 7 | 2 -> 3 | 48 / 31 -> 40 / 17 / 16 | 9,997 / 6,475 -> 5,945 / 2,526 / 2,349 |
-| springfield | Marshfield | 6 -> 7 | 2 -> 2 | 52 / 46 -> 52 / 46 | 5,827 / 5,231 -> 4,823 / 4,236 |
-| springfield | Monett | 6 -> 7 | 1 -> 1 | 84 -> 85 | 5,435 -> 5,817 |
-| springfield | Cassville | 6 -> 7 | 1 -> 1 | 93 -> 93 | 3,259 -> 3,120 |
-| springfield | Seymour | 6 -> 7 | 1 -> 1 | 82 -> 85 | 2,530 -> 6,288 |
-| cape | Cape Girardeau | 6 -> 3 | 3 -> 2 | 36 / 28 / 18 -> 70 / 22 | 13,587 / 10,397 / 6,611 -> 27,274 / 8,443 |
-| cape | Sikeston | 6 -> 3 | 1 -> 1 | 78 -> 94 | 11,037 -> 12,386 |
-| cape | Jackson | 6 -> 3 | 2 -> 2 | 61 / 16 -> 82 / 16 | 7,582 / 2,025 -> 9,250 / 1,758 |
-| cape | Scott City | 6 -> 3 | 2 -> 1 | 47 / 33 -> 65 | 1,647 / 1,156 -> 1,543 |
-| cape | Marble Hill | 6 -> 3 | 1 -> 1 | 33 -> 64 | 743 -> 1,286 |
-| kirksville | Kirksville | 6 -> 2 | 2 -> 2 | 72 / 14 -> 87 / 13 | 14,301 / 2,781 -> 14,898 / 2,221 |
-| kirksville | Macon | 6 -> 2 | 1 -> 1 | 70 -> 92 | 3,842 -> 5,906 |
-| kirksville | Lancaster | 6 -> 2 | 1 -> 1 | 50 -> 100 | 541 -> 716 |
-| joplin | Joplin | 6 -> 4 | 3 -> 2 | 58 / 17 / 16 -> 72 / 25 | 31,491 / 9,291 / 8,940 -> 37,659 / 13,072 |
-| joplin | Carthage | 6 -> 4 | 3 -> 3 | 43 / 35 / 12 -> 37 / 35 / 26 | 4,335 / 3,545 / 1,221 -> 5,015 / 4,675 / 3,413 |
-| joplin | Webb City | 6 -> 4 | 2 -> 1 | 63 / 20 -> 87 | 7,780 / 2,511 -> 10,804 |
-| joplin | Neosho | 6 -> 4 | 1 -> 1 | 80 -> 85 | 8,305 -> 9,590 |
-| joplin | Lamar | 6 -> 4 | 1 -> 1 | 73 -> 88 | 3,870 -> 4,239 |
-| kansascity | Independence | 6 -> 5 | 3 -> 3 | 40 / 27 / 10 -> 52 / 20 / 17 | 43,227 / 29,383 / 10,741 -> 62,939 / 24,076 / 20,952 |
-| kansascity | Lee's Summit | 6 -> 5 | 3 -> 3 | 51 / 22 / 13 -> 50 / 26 / 16 | 86,012 / 36,956 / 21,724 -> 49,956 / 26,435 / 16,311 |
-| kansascity | Blue Springs | 6 -> 5 | 1 -> 1 | 72 -> 78 | 54,202 -> 40,986 |
-| kansascity | Grain Valley | 6 -> 5 | 2 -> 2 | 72 / 20 -> 76 / 20 | 16,597 / 4,587 -> 10,567 / 2,710 |
-| kansascity | Harrisonville | 6 -> 5 | 2 -> 2 | 80 / 14 -> 84 / 11 | 9,932 / 1,710 -> 9,255 / 1,176 |
-| kansascity | Lexington | 6 -> 5 | 1 -> 1 | 81 -> 82 | 5,020 -> 4,940 |
-| stjoseph | St. Joseph | 6 -> 5 | 3 -> 3 | 34 / 22 / 17 -> 32 / 30 / 24 | 17,542 / 11,560 / 9,055 -> 21,854 / 20,122 / 16,335 |
-| stjoseph | Savannah | 6 -> 5 | 2 -> 2 | 37 / 25 -> 48 / 26 | 1,971 / 1,301 -> 2,718 / 1,481 |
-| stjoseph | Maryville | 6 -> 5 | 2 -> 2 | 77 / 14 -> 73 / 15 | 6,740 / 1,184 -> 6,844 / 1,432 |
+| Town | Areas | Shares, % | Residents |
+|---|---|---|---|
+| Columbia | 2 -> 1 | 72 / 16 -> 93 | 76,912 / 17,513 -> 103,086 |
+| Mexico | 1 -> 1 | 74 -> 86 | 5,241 -> 5,685 |
+| Linn | 1 -> 1 | 92 -> 85 | 1,641 -> 1,172 |
+| Ashland | 2 -> 1 | 79 / 19 -> 100 | 13,219 / 3,141 -> 9,089 |
+| Centralia | 2 -> 2 | 50 / 26 -> 58 / 42 | 2,937 / 1,516 -> 3,296 / 2,380 |
+| Vandalia | 1 -> 1 | 88 -> 100 | 3,064 -> 3,238 |
+| Hallsville | 1 -> 1 | 68 -> 64 | 1,216 -> 1,360 |
+| Belle | 1 -> 1 | 100 -> 74 | 1,099 -> 965 |
 
-Areas: 58 in 36 towns (63 at K = 6; printed by `analysis/market_stability.py`); none changed in round 3; the count
-changed for 7 of 36 towns against K = 6: Columbia 2 -> 1, Ashland 2 -> 1, Cape Girardeau 3 -> 2,
-Scott City 2 -> 1, Joplin 3 -> 2, Webb City 2 -> 1 (fewer); Republic 2 -> 3 (more).
+Areas: 11 -> 9 in 8 towns (printed by `analysis/market_stability.py`: "areas in all: 9 in 8 towns").
 
-### The civic interest area: a multi-part core of a 1,728-version ensemble (2026-10-25; user D2-A, D3-A, D4-A)
+### The civic interest area: the multi-part core of a 6,912-version ensemble (2026-10-25)
 
-**Tie.** The paper's map is the network-tie area (`market_patterns.py` idx["net"]: travel × (1 + 0.3 out + 0.3 in +
-0.7 shared places + 0.7 shared coverage), gate, spatial lag and direction; home 100, flagged explicitly; destinations
-capped at 99; the busiest place 50). Towns of 2+ hexagons are spread like rural block groups (D3-A): half by
-OpenStreetMap destinations ((destinations + DFLOOR) / the town's mean), half by 2020 population, the town's mean kept;
-a city is no longer one value over all its hexagons. The busiest place's mean is 50 (the authors' rule); its dense
-hexagons rise above it, to the cap.
+**Tie.** The paper's map is the network-tie area (`market_patterns.py` idx["net"]: travel × (1 + ω (0.3 out + 0.3 in +
+0.7 shared places + 0.7 shared coverage)), gate, spatial lag and direction; home 100, flagged explicitly; destinations
+capped at 99; the busiest place 50). Towns of 2+ hexagons are spread like rural block groups: half by OpenStreetMap
+destinations ((destinations + DFLOOR) / the town's mean), half by 2020 population, the town's mean kept; a city is no
+longer one value over all its hexagons. The busiest place's mean is 50 (the authors' rule); its dense hexagons rise
+above it, to the cap.
 
 **Ensemble** (`flows/area_ensemble.py`): a multiverse analysis (Steegen et al. 2016). Every version draws the map under
-one combination of seven drawing choices; same K, patterns, data and news weights. Full factorial, 1,728 equally
-weighted versions (middle values marked):
+one combination of seven drawing choices and the news weight ω; same K, patterns and data. Full factorial: 1,728
+combinations of the drawing choices (3 × 2 × 4 × 3 × 3 × 2 × 4) × 4 news weights = **6,912 versions**, weighted
+equally. The reference level of each choice ("ref.") is used only by the one-drawing diagnostics and carries no extra
+weight.
 
-| Drawing choice | Levels | n |
+| Choice | Levels | n |
 |---|---|---:|
-| Hexagon size (grid rebuilt) | 2, 3 (middle), 4 km | 3 |
-| TRAVEL_TOP | 0.5 (busiest place 50, middle), 1.0 | 2 |
-| Dasymetric spread (rural block groups and towns) | off, DFLOOR 0.1, 0.25 (middle), 1 | 4 |
-| LAMBDA (spatial lag; rings in km) | 0, 0.25 (middle), 0.5 | 3 |
-| Display selectivity | 40, 50 (middle), 60% | 3 |
-| Distance rule (in km) | on (middle), off | 2 |
-| Reach: within one version, drawn pieces join that version's body within this distance | 10, 15 (middle), 25 km, none | 4 |
+| Hexagon size (grid rebuilt) | 2, 3 (ref.), 4 km | 3 |
+| TRAVEL_TOP | 0.5 (busiest place 50, ref.), 1.0 | 2 |
+| Dasymetric spread (rural block groups and towns) | off, DFLOOR 0.1, 0.25 (ref.), 1 | 4 |
+| LAMBDA (spatial lag; rings in km) | 0, 0.25 (ref.), 0.5 | 3 |
+| Display selectivity | 40, 50 (ref.), 60% | 3 |
+| Distance rule (in km) | on (ref.), off | 2 |
+| Reach: drawn pieces join the version's body within this distance; D90: every drawn piece starting within the town's D90 of its centre | 10, 15 (ref.), 25 km, D90 | 4 |
+| News weight ω: the four news weights (out 0.3, in 0.3, shared places 0.7, shared coverage 0.7) multiplied together | 0 (travel only), ½, 1 (ref.), 2 | 4 |
 
-A full factorial weights every level of every choice equally, so the uniform weighting and the marginal-balanced one
-coincide; the script checks that both give the same p. Held at their middle values: GAMMA 0.5, the tie cut 1, the
-floor 5 (never binding), the news weights. Every distance is in km on every grid (the lag's rings at 2.6 / 5.2 / 7.8
+The D90 level of the reach replaces the level "none", and the news weight enters as a choice (authors' decision,
+2026-10-25). A full factorial weights every level of every choice equally, so the uniform weighting and the
+marginal-balanced one coincide; the script checks that both give the same p. Held at their reference values: GAMMA 0.5,
+the tie cut 1, the floor 5 (never binding). Every distance is in km on every grid (the lag's rings at 2.6 / 5.2 / 7.8
 km, the distance rule over 10.4 km inside the TV market and 5.2 km outside, the reach). A version's 2 or 4 km hexagons
-are mapped onto the published 3 km grid by fractional overlap. **p** = the mean over versions: the **probability**,
-under equal weighting of the 1,728 versions, that the place is part of the area — "how likely the place is part of the
-area" — conditional on the range of the seven drawing choices. It is not a confidence: it varies drawing choices, not
-data; data uncertainty is month-split stability (below). No single version is produced or exported as a map: one
-version is a small core that does not depict the area.
+are mapped onto the published 3 km grid by fractional overlap: each 3 km hexagon takes the fraction of its area the
+version draws. Check: the version at the reference levels reproduces the drawing those levels give (Jaccard 1.000).
 
-**The area is multi-part** (authors, 2026-10-25; `flows/area_core.py`): the home body plus every core piece (p ≥ 0.5) of
-3 or more hexagons, wherever it lies; 1–2-hexagon specks leave the outline but keep their shading; non-home parts are
-labelled by their largest town. Reason: Columbia is Mexico's dominant destination (Audrain → Boone 39% of
-out-of-county visits, 43% of work-hours visits, 34% of out-commuters, LODES JT01) but lies ~34 km (nearest hexagons)
-from Mexico's home body; a rule keeping only the body and pieces within reach of it would have cut Columbia out. km² on
-the ground: 5.85 × cos(latitude) / cos(38.7°) per hexagon (the hexagon plane is scaled at 38.7° N). People = 2020
-population of the area's hexagons (block-group population over the hexagons whose centres lie in it), beside the
-residents allocated to the area's travel pattern.
+**p** = the mean over versions: the **probability**, under equal weighting of the 6,912 versions, that the place is part
+of the area -- "how likely the place is part of the area" -- conditional on the range of the choices. It is not a
+confidence: it varies drawing choices and the news weight, not data; data uncertainty is month-split stability
+(below). No single version is drawn or exported as a map.
+
+**The area is multi-part** (authors' decision, 2026-10-25; `flows/area_core.py`; p ≥ 0.8 also reported): the home body
+(the core piece holding home) plus every other core piece (p ≥ 0.5) of 3 or more hexagons whose nearest hexagon lies
+within the town's regular-travel distance D90 of its centre of population, each outlined and labelled by its largest
+town. Core specks of 1–2 hexagons leave the outline but keep their shading. A piece of 3+ hexagons beyond D90 is not a
+part: it is reported as a distant tie. Reason for parts: Columbia is Mexico's dominant destination (Audrain → Boone 39%
+of out-of-county visits, 43% of work-hours visits, 34% of out-commuters, LODES JT01) and lies 33.8 km (nearest
+hexagons) from Mexico's home body; a rule keeping only the body would cut it out. km² on the ground: 5.85 ×
+cos(latitude) / cos(38.7°) per hexagon (the hexagon plane is scaled at 38.7° N). People inside = 2020 population of the
+area's hexagons (block-group population over the hexagons whose centres lie in it), by p band and split into the home
+town, the other towns of 2,500+ the core takes in, and the rest -- beside the residents allocated to the area's travel
+pattern (Columbia 103,086, Mexico 5,685, Linn 1,172).
 
 **Month-split stability** (data uncertainty; not validity; K was selected on the same split): the whole network-tie
 ensemble on each half of the year, each half on its own fit (W and H refitted on odd or even months, disjoint seeds,
 matched to the kept patterns) and its travel: r(p) between halves over every hexagon drawn in either, and over the
 contested ones (0.1 ≤ p ≤ 0.9); the mean |p_odd − p_even|; the Jaccard of the halves' p ≥ 0.5 cores. Home left out.
 
-Current results, built areas (from unrounded p; `flows/area_core.py`, `flows/area_ensemble.py`, single source
-`flows/reach/probability_columbia.json` for the Columbia region; Cape Girardeau, Kansas City and St. Joseph have no
-built area and no ensemble run):
+### The regular-travel distance D90 (2026-10-25)
+
+`flows/regular_distance.py`: per study town, Dq = the distance from the town's **centre of population** (the
+2020-population-weighted mean of its home block groups' Census population centres) within which q% of its residents'
+regular travel lies. **Regular** = a destination block group seen from the home block group in all 7 months
+(January–July 2026; authors' decision, 2026-10-25), tested per home block group, the patterns' home unit. Weight =
+residents seen there (device home counts), summed over the months and the town's home block groups (the visit weight of
+`analysis/activity_space.py`). The home block group's own row (residents seen at home) is not travel; travel inside the
+town counts. Data: the January–July 2026 block-group flows the patterns are fitted on. Not adopted: regularity per town
+(every destination of a large town passes). The earlier rule, 4+ of 7 months (`analysis/activity_space.py`), is shown
+beside it:
+
+| Town | Home block groups | D80 km: 4+ of 7 → 7 of 7 | D90 km | D95 km | Regular destinations |
+|---|---:|---|---|---|---|
+| Columbia | 82 | 37.1 → 7.4 | 103.0 → **23.9** | 165.1 → 46.2 | 31,675 → 10,619 |
+| Mexico | 7 | 47.5 → 45.6 | 51.8 → **48.1** | 71.2 → 49.8 | 1,573 → 641 |
+| Linn | 1 | 71.1 → 64.7 | 101.5 → **70.5** | 122.6 → 84.4 | 677 → 233 |
+| Ashland | 4 | 26.7 → 24.3 | 68.4 → 31.1 | 109.4 → 59.7 | 2,053 → 942 |
+| Centralia | 4 | 40.6 → 35.5 | 67.7 → 44.3 | 105.7 → 64.9 | 1,681 → 816 |
+| Vandalia | 3 | 55.0 → 45.7 | 77.8 → 57.2 | 85.5 → 77.4 | 695 → 274 |
+| Hallsville | 1 | 39.8 → 30.1 | 72.8 → 44.5 | 115.2 → 64.8 | 500 → 229 |
+| Belle | 1 | 54.0 → 49.1 | 69.2 → 62.7 | 93.7 → 67.0 | 267 → 98 |
+
+Under 7 of 7 every D90 is under 60 miles (97 km). Columbia's falls most (103.0 → 23.9 km): its residents' travel seen
+in every month lies mostly inside the city.
+
+**The 7-of-7 rule and detection.** Advan sees a sample of devices, so a rarely visited distant destination can fail
+"every month" through detection as well as behaviour: the rule leans toward busy, nearby places. Mexico's and Linn's
+areas are the same under 4+ of 7 and 7 of 7; Columbia's changes (it loses Jefferson City and Moberly; appendix).
+
+**The limit applies to separate parts, not to the home body** (authors' decision, 2026-10-25). Columbia's home body
+reaches 32.3 km from the town's centre: 18 of its 168 hexagons lie beyond 23.9 km. Clipping a continuous body at a
+radius would draw an artificial edge. No body hexagon of Mexico or Linn lies beyond its D90.
+
+Parts kept and dropped under each limit (7 of 7; 6,912 versions; distance = the part's nearest hexagon from the town's
+centre):
+
+| Area | Limit | Parts kept (km from centre) | Dropped (km from centre) | Area km² / people |
+|---|---|---|---|---|
+| Columbia | D80 7.4 km | -- | Jefferson City (41.2) | 979 / 161,321 |
+| Columbia | **D90 23.9 km** | -- | **Jefferson City (41.2; 10 hexagons, 32,125 people)** | **979 / 161,321** |
+| Columbia | D95 46.2 km | Jefferson City (41.2) | -- | 1,038 / 193,446 |
+| Mexico | D80 45.6 km | Columbia (40.5), Fulton (32.3), Centralia (21.7), rural Audrain (14.0) | -- | 802 / 123,946 |
+| Mexico | **D90 48.1 km** | the same | -- | **802 / 123,946** |
+| Mexico | D95 49.8 km | the same | -- | 802 / 123,946 |
+| Linn | D80 64.7 km | Columbia (64.0), rural Osage (16.5) | -- | 896 / 139,001 |
+| Linn | **D90 70.5 km** | the same | -- | **896 / 139,001** |
+| Linn | D95 84.4 km | the same | -- | 896 / 139,001 |
+
+Jefferson City leaves Columbia's area: its nearest core hexagon lies 41.2 km from Columbia's centre, beyond 23.9 km, and
+it is reported as a distant tie. Moberly forms no core part: it is drawn inside the version's area in 54% of the
+versions, and its highest hexagon likelihood is 0.44. Columbia stays a part of Mexico's area (40.5 km against 48.1) and
+of Linn's (64.0 km against 70.5). Towns outside the TV market lie beyond every version's area (drawn only beyond D90 or
+the reach).
+
+### Results (6,912 versions)
+
+All figures printed by `flows/area_ensemble.py` and `flows/area_core.py` from unrounded p.
 
 | Area | The area (parts kept): km² / people | All core hexagons (p ≥ 0.5): km² / people | People by p band: 0.5–0.8 / ≥ 0.8 | p ≥ 0.8: km² | Month-split r(p): all / contested (n) | Mean \|p_odd − p_even\| | Core Jaccard odd / even |
 |---|---|---|---|---:|---|---:|---:|
-| **Columbia** | 1,079 / 207,883 | 1,166 / 212,133 | 38,714 / 173,419 | 583 | 0.994 / 0.990 (540) | 0.016 | 0.85 |
-| **Mexico** | 785 / 123,873 | 802 / 124,002 | 111,840 / 12,163 | 308 | 0.978 / 0.956 (377) | 0.029 | 0.88 |
-| **Linn** | 890 / 132,531 | 949 / 133,522 | 93,965 / 39,557 | 346 | 0.901 / 0.734 (362) | 0.043 | 0.72 |
-| Springfield I | 658 / 261,135 | 658 / 261,135 | 56,871 / 204,264 | 335 | 0.987 / 0.967 (140) | 0.027 | 0.89 |
-| Springfield II | 1,031 / 268,808 | 1,097 / 270,617 | 38,616 / 232,002 | 578 | 0.964 / 0.898 (477) | 0.024 | 0.77 |
-| Springfield III | 783 / 311,365 | 795 / 311,857 | 44,912 / 266,945 | 502 | 0.899 / 0.756 (274) | 0.044 | 0.68 |
-| Joplin I | 454 / 109,679 | 466 / 109,818 | 16,085 / 93,733 | 275 | 0.995 / 0.982 (144) | 0.014 | 0.84 |
-| Joplin II | 892 / 102,696 | 946 / 106,350 | 21,705 / 84,645 | 491 | 0.984 / 0.958 (384) | 0.024 | 0.85 |
-| Kirksville I | 1,271 / 30,376 | 1,345 / 30,865 | 9,387 / 21,479 | 624 | 0.970 / 0.927 (695) | 0.032 | 0.86 |
-| Kirksville II | 1,917 / 174,392 | 1,997 / 174,960 | 44,468 / 130,493 | 543 | 0.832 / 0.667 (906) | 0.069 | 0.54 |
+| **Columbia** | 979 / 161,321 | 1,073 / 194,485 | 47,491 / 146,994 | 536 | 0.995 / 0.990 (394) | 0.014 | 0.86 |
+| **Mexico** | 802 / 123,946 | 831 / 124,228 | 111,976 / 12,252 | 320 | 0.978 / 0.955 (371) | 0.030 | 0.87 |
+| **Linn** | 896 / 139,001 | 955 / 139,992 | 100,435 / 39,557 | 346 | 0.895 / 0.732 (368) | 0.056 | 0.72 |
 
-Parts of each area (hexagons, km², gap to the home body between nearest hexagons, people) and specks left out of the
-outline:
-
-| Area | Parts | Specks (1–2 hexagons) |
+| Area | Parts (hexagons, km², km from the home body, people) | Specks left out of the outline |
 |---|---|---|
-| Columbia | Columbia (home) 165, 962 km², 160,816; Jefferson City 13, 76 km², 7.8 km, 35,606; Moberly 7, 41 km², 33.8 km, 11,460 | 12 specks, 15 hexagons (nearest 5.2 km, farthest 18.2 km) |
-| Mexico | Mexico (home) 92, 535 km², 15,507; Columbia 20, 117 km², 33.8 km, 102,884; rural Audrain 14, 81 km², 5.2 km, 387; rural Audrain 3, 17 km², 7.8 km, 104; Fulton 3, 17 km², 10.4 km, 2,065; Centralia 3, 17 km², 18.2 km, 2,925 | 2 specks, 3 hexagons (nearest 5.2 km, farthest 15.6 km) |
-| Linn | Linn (home) 134, 785 km², 56,509 (Jefferson City inside it); Columbia 12, 70 km², 36.4 km, 75,883; rural Osage 6, 35 km², 7.8 km, 140 | 9 specks, 10 hexagons (nearest 5.2 km, farthest 31.2 km) |
-| Springfield I | Springfield (home) 106, 634 km², 254,036; Branson 4, 24 km², 7.8 km, 7,099 | none |
-| Springfield II | Springfield (home) 166, 989 km², 267,990; rural Dallas 4, 24 km², 7.8 km, 498; rural Greene 3, 18 km², 5.2 km, 319 | 9 specks, 11 hexagons (nearest 5.2 km, farthest 26.0 km) |
-| Springfield III | Springfield (home) 100, 597 km², 293,997; rural Christian 16, 96 km², 7.8 km, 2,722; Branson 11, 66 km², 36.4 km, 13,744; rural Greene 4, 24 km², 7.8 km, 902 | 2 specks, 2 hexagons (nearest 5.2 km, farthest 7.8 km) |
-| Joplin I | Joplin (home) 76, 454 km², 109,679 | 2 specks, 2 hexagons (5.2 km) |
-| Joplin II | Joplin (home) 146, 874 km², 102,470; rural McDonald 3, 18 km², 13.0 km, 226 | 9 specks, 9 hexagons (nearest 5.2 km, farthest 28.6 km) |
-| Kirksville I | Kirksville (home) 206, 1,179 km², 24,954; Macon 10, 58 km², 20.8 km, 5,075; rural Schuyler 3, 17 km², 13.0 km, 85; rural Schuyler 3, 17 km², 5.2 km, 262 | 11 specks, 13 hexagons (nearest 5.2 km, farthest 31.2 km) |
-| Kirksville II | Kirksville (home) 47, 269 km², 17,926; Moberly 227, 1,311 km², 23.4 km, 28,650; Columbia 30, 175 km², 127.3 km, 124,970; rural Boone 10, 58 km², 116.9 km, 1,434; rural Macon 6, 34 km², 5.2 km, 961; rural Macon 3, 17 km², 20.8 km, 60; rural Macon 3, 17 km², 18.2 km, 68; rural Macon 3, 17 km², 5.2 km, 43; rural Boone 3, 18 km², 150.7 km, 280 | 12 specks, 14 hexagons (nearest 5.2 km, farthest 153.3 km) |
+| Columbia | Columbia (home) 168, 979, --, 161,321. Beyond D90, not a part: Jefferson City 10 hexagons, 59 km², 41.2 km from the centre, 32,125 | 5 (6 hexagons) |
+| Mexico | Mexico (home) 109, 634, --, 15,968; **Columbia 20, 117, 33.8, 102,884**; Fulton 3, 17, 10.4, 2,065; Centralia 3, 17, 7.8, 2,925; rural Audrain 3, 17, 5.2, 104 | 4 (5 hexagons) |
+| Linn | Linn (home; Jefferson City inside) 134, 785, --, 56,509; Columbia 13, 76, 36.4, 82,353; rural Osage 6, 35, 7.8, 140 | 9 (10 hexagons) |
 
-People count everyone living in the area's hexagons, the destination cities included; the residents allocated to each
-pattern are 103,086 (Columbia), 5,685 (Mexico) and 1,172 (Linn). **Mexico's Boone hexagons: 51 at p ≥ 0.2, 23 at p ≥
-0.5 (20 of them the Columbia part, kept), 1 at p ≥ 0.8** (`area_ensemble.py`, boone_hexagons).
+People inside count everyone living in the area's hexagons, the destination cities included. **Mexico's Boone
+hexagons: 51 likely 20%+, 24 likely 50%+ (20 of them the Columbia part, kept), 1 likely 80%+.** Linn's thin
+one-block-group travel is the least stable of the three (contested r 0.732, core Jaccard 0.72).
 
-**Towns drawn often but outside the area** (towns of 2,500+ drawn somewhere in 50%+ of the versions, inside a version's
-area or beyond its reach, yet with no hexagon at p ≥ 0.5; share of versions drawing the town / share drawing it inside
-the version's area / its highest hexagon p): Columbia — Kansas City 0.93 / 0.23 / 0.23, Springfield 0.82 / 0.20 /
-0.18, Fulton 0.76 / 0.58 / 0.45, Independence 0.70 / 0.17 / 0.15, Lee's Summit 0.69 / 0.17 / 0.14, Macon 0.54 / 0.28 /
-0.21; Mexico — Moberly 0.74 / 0.35 / 0.23; Linn — Ashland 0.78 / 0.67 / 0.36, Springfield 0.71 / 0.18 / 0.13.
-Mechanism: a town counts toward a hexagon's p only where it falls inside a version's area (within that version's reach
-of its body), and versions draw different hexagons of it (grid size, spread), so each hexagon can stay under 0.5 while
-the town is drawn in most versions.
+**Towns drawn often but outside the area** (towns of 2,500+ that half or more of the versions draw somewhere, inside
+their area or beyond its reach, yet with no hexagon likely 50% or more; share of versions drawing the town anywhere /
+inside the version's area / its highest hexagon likelihood): Columbia -- Moberly 0.87 / 0.54 / 0.44, Centralia 0.82 /
+0.54 / 0.43, Fulton 0.74 / 0.39 / 0.30, Boonville 0.73 / 0.47 / 0.37; Mexico -- Moberly 0.73 / 0.17 / 0.12; Linn --
+Ashland 0.79 / 0.67 / 0.37. Towns outside the TV market drawn this often (five for Columbia, one for Linn) fall inside a
+version's area in at most 14% of the versions. A town counts toward a hexagon's likelihood only where it falls inside a
+version's area, and versions draw different hexagons of it (grid size, spread), so each hexagon can stay under 0.5
+while the town is drawn in most versions.
 
-Distant ties, share of versions drawing the town beyond the version's reach (≥ 0.2; the other half of the same count):
-Columbia — Kansas City 0.70, Springfield 0.57, rural Monroe 0.32, St. Louis 0.29, rural Shannon 0.22, Osage Beach 0.22,
-St. Peters 0.20; Mexico — Moberly 0.28, Columbia 0.27 (Columbia is nonetheless a part of Mexico's area: its hexagons are
-inside the reach in most versions); Linn — Springfield 0.51, rural Shannon 0.36; Springfield II — Kansas City 0.68,
-Joplin 0.58, Branson 0.56, Clinton 0.42, St. Louis 0.40, Lebanon 0.37, rural Dallas 0.27, Rolla 0.22; Springfield III —
-Kansas City 0.59, Lebanon 0.55, Joplin 0.44, West Plains 0.44, rural Howell 0.33, Clinton 0.27, Branson 0.20, rural
-Webster 0.20; Joplin I — Springfield 0.60; Joplin II — Springfield 0.68, Kansas City 0.29, Nevada 0.24; Kirksville I —
-Kansas City 0.57, Columbia 0.46, Hannibal 0.39, rural Shannon 0.37, rural Scotland 0.30, rural Sullivan 0.23, Moberly
-0.20; Kirksville II — Kansas City 0.62, Hannibal 0.60, Branson 0.40, Jefferson City 0.23, rural Ralls 0.21. Linn's thin
-one-block-group travel is the least stable of the Columbia region (contested r 0.734); Kirksville II is the least
-stable built area (contested r 0.667, core Jaccard 0.54).
+**Distant ties** (share of versions drawing the town beyond their area): Columbia -- rural Monroe 0.44, Moberly 0.32,
+Fulton 0.32; Mexico -- Moberly 0.42, Columbia 0.26; towns outside the TV market: three for Columbia (0.39–0.93), one for
+Linn (0.68). Jefferson City, beyond Columbia's D90, is a distant tie of the core (10 hexagons likely 50%+, 32,125
+people).
 
-**What the news terms change** (disclosed): the network-tie p ≥ 0.5 core against the travel-only core of the same
-ensemble — Columbia 198 hexagons in both, 2 network-only, 18 travel-only (Jaccard 0.91); Mexico 133 / 5 / 13 (0.88);
-Linn 161 / 1 / 8 (0.95).
+**The news weight alone** (each level = the 1,728 versions of the seven drawing choices; mean and largest |p_level − p|
+over the hexagons either draws, home left out):
 
-**Busiest hexagon instead of busiest place (sensitivity, BUSIEST=hexagon).** Scaling so the busiest HEXAGON is 50
-avoids the cap but lowers every other hexagon by the busiest town's peak weight, and the floor of 5 then cuts most rural
-hexagons: cores Columbia 811 km², Mexico 285, Linn 270 (`logs7/probability_columbia_busiest_hexagon.json`). Not
-adopted: the authors' rule is the busiest place.
+| Area | ω | Area km² / people | Parts | Mean / max \|p_level − p\| | Core Jaccard vs all | Month-split r: all / contested |
+|---|---|---|---|---|---:|---|
+| Columbia | 0 (travel only) | 1,049 / 162,809 | rural Boone | 0.008 / 0.09 | 0.92 | 0.995 / 0.988 |
+| Columbia | ½ | 991 / 161,529 | -- | 0.003 / 0.03 | 0.99 | 0.995 / 0.989 |
+| Columbia | 1 | 956 / 160,738 | -- | 0.002 / 0.02 | 0.97 | 0.995 / 0.990 |
+| Columbia | 2 | 939 / 160,401 | -- | 0.009 / 0.10 | 0.94 | 0.995 / 0.990 |
+| Mexico | 0 | 820 / 109,941 | Columbia (16 hexagons), rural Callaway, rural Audrain, Centralia | 0.011 / 0.09 | 0.91 | 0.975 / 0.950 |
+| Mexico | ½ | 820 / 120,524 | Columbia (19), rural Callaway, rural Audrain, Fulton, Centralia | 0.004 / 0.04 | 0.98 | 0.977 / 0.953 |
+| Mexico | 1 | 785 / 123,873 | Columbia (20), rural Audrain (2), Fulton, Centralia | 0.003 / 0.03 | 0.96 | 0.979 / 0.956 |
+| Mexico | 2 | 738 / 129,772 | Columbia (22), rural Audrain (2), Fulton, Centralia | 0.013 / 0.10 | 0.85 | 0.981 / 0.960 |
+| Linn | 0 | 931 / 146,208 | Columbia (16), rural Osage | 0.007 / 0.05 | 0.95 | 0.885 / 0.699 |
+| Linn | ½ | 902 / 140,935 | Columbia (14), rural Osage | 0.002 / 0.02 | 0.98 | 0.891 / 0.721 |
+| Linn | 1 | 890 / 132,531 | Columbia (12), rural Osage | 0.002 / 0.02 | 0.99 | 0.896 / 0.738 |
+| Linn | 2 | 855 / 120,161 | Columbia (10), rural Osage | 0.007 / 0.06 | 0.94 | 0.904 / 0.768 |
 
-**Grain Valley I** (Kansas City market, not a built area; no ensemble run; a one-drawing diagnostic) draws no hexagon
-beyond home at the middle values: with towns spread by population and destinations, 64 Kansas City-area hexagons reach the cap of 99, the 50%
-selectivity floor rises to 99 and none of them touches home.
+Stronger news ties shrink every area (selectivity holds the share of ties fixed, so amplified hexagons crowd out
+others) and move Mexico's area toward Columbia and Linn's away from it. Against the ω = 1 level alone, the 6,912
+versions add 23 km² to Columbia's area, 17 to Mexico's and 6 to Linn's; month-split r is unchanged to the second
+decimal (core Jaccard odd/even 0.88 → 0.86, 0.88 → 0.87, 0.72 → 0.72).
 
-**Map** (`market_pattern_print.html`, renders `flows/print/civic_area_<town>.png`; authors, 2026-10-25): hexagons shaded
-by p, keyed **"How likely the place is part of the area"** (10%, 20%, 40%, 60%, 80%+, with "under 10%" on one line),
-every hexagon at p ≥ 0.1 shaded; the area's parts outlined in plain mid-grey ink (#6f6d66 at 0.8; an indicator, no
-casing), each non-home part labelled by its largest town. Subtitle: **"Across 1,728 equally plausible ways of drawing
-the map; outlined: the area, places likely 50% or more (N km²)"**. The note under the map gives the residents and the
-tie, and: "Each of the 1,728 versions (seven drawing choices: ...) is weighted equally, so the likelihood is
-conditional on that range of choices." No single-version map is drawn; the orange news-tie dots belonged to that map
-only and are not produced. No selectivity, distance rule or outline step (they are in the ensemble). `?measure=lift`:
+**Busiest hexagon instead of busiest place** (sensitivity, BUSIEST=hexagon; 1,728 versions at ω = 1, not rerun on the
+6,912). Scaling so the busiest HEXAGON is 50 avoids the cap but lowers every other hexagon by the busiest town's peak
+weight, and the floor of 5 then cuts most rural hexagons: cores Columbia 811 km², Mexico 285, Linn 270
+(`logs7/probability_columbia_busiest_hexagon.json`). Not adopted: the authors' rule is the busiest place.
+
+**Map** (`flows/market_pattern_print.html`; renders `flows/print/civic_area_<town>.png`; authors' decision,
+2026-10-25): hexagons shaded by p, keyed **"How likely the place is part of the area"** (10%, 20%, 40%, 60%, 80%+, with
+"under 10%" on one line), every hexagon at p ≥ 0.1 shaded; the area's parts outlined in plain mid-grey ink (#6f6d66 at
+0.8; an indicator, no casing), each non-home part labelled by its largest town. Subtitle: **"Across 6,912 equally
+plausible ways of drawing the map; outlined: the area, places likely 50% or more (N km²)"**. The note under the map
+gives the residents and the tie; the drawing choices and the news weight, weighted equally, so that the likelihood is
+conditional on that range of choices; and the rule with its limit: "... provided it starts within N km of the town's
+centre -- the distance within which 90% of its residents' regular travel (places visited in every one of the seven
+months) lies". No selectivity, distance rule or outline step outside the ensemble (they are in it). `?measure=lift`:
 the network tie against the travel-only tie (news alone). Exports carry p and the multi-part area only:
-`flows/civic_interest_areas.csv` (4,782 rows: every hexagon at p ≥ 0.1, with p, in_area, part, home) and the civic grid
-(`areas_p`: p and the parts); p is derived from Advan travel at the hexagon level (Open: licence).
-
-Earlier drawing sensitivity (2026-10-24, second review; travel-only area, 3 km; superseded as a basis by the ensemble):
-hexagon 2 km / 4 km area IoU 0.41–0.43 / 0.34–0.43; TRAVEL_TOP 1.0 0.37–0.56; no dasymetric spread 0.40–0.46;
-selectivity 40% / 60% 0.53–0.72 / 0.38–0.57; no distance rule 0.49–0.76 (`area_sensitivity.csv`). Split-half agreement
-is **month-split stability**, not validity.
+`flows/civic_interest_areas.csv` (1,251 rows: every hexagon at p ≥ 0.1 of the three areas, with p, in_area, part,
+home) and the civic grid (`areas_p`: p and the parts); p is derived from Advan travel at the hexagon level (Open:
+licence).
 
 **Rural shading, dasymetric** (adopted 2026-10-17): Advan locates travel no finer than a block group, and a rural one
-covers 30-60 hexagons (Barton County outside Lamar: 5 block groups). Within a rural block group, travel is spread by
-OpenStreetMap destinations (115,453 statewide, `flows/build_destinations.py`): a hexagon's weight is (destinations +
-0.25) / the block group's mean of the same, so the block group's average is kept, farmland falls and destinations rise;
-travel capped at 1. Towns kept one value until round 3; towns of 2+ hexagons are now spread the same way, half by destinations and
-half by population (The civic interest area). A floor of 1 left sparse rural counties one flat band.
+covers 30-60 hexagons. Within a rural block group, travel is spread by OpenStreetMap destinations (115,453 in Missouri,
+`flows/build_destinations.py`): a hexagon's weight is (destinations + 0.25) / the block group's mean of the same, so the
+block group's average is kept, farmland falls and destinations rise; travel capped at 1. Towns kept one value until
+audit round 3; towns of 2+ hexagons are now spread the same way, half by destinations and half by population (Tie,
+above). A floor of 1 left sparse rural counties one flat band.
 
-**Network tie, revised** (2026-10-17, Columbia first; other markets after the weights settle):
-- (Removed 2026-10-24, stage 3.) Home county: home outlets' market is their county, so every home-county hexagon carried their outgoing tie (1.0).
-  Before, outgoing coverage was compared with the home town, and rural home-county hexagons got almost none.
+**Network tie, revised** (2026-10-17):
+- (Removed 2026-10-24.) Home county: home outlets' market is their county, so every home-county hexagon carried their
+  outgoing tie (1.0). Before, outgoing coverage was compared with the home town, and rural home-county hexagons got
+  almost none.
 - Shared coverage counts only places in the town's own market (travel 0.05+ of the busiest). Two newsrooms both
-  reporting statewide news (the capital, the university) had tied Columbia to Kansas City.
+  reporting statewide news (the capital, the university) had tied Columbia to distant metropolitan areas outside the TV
+  market.
 - Spatial network effect: adjacency tie' = tie + 0.25 x ring-weighted mean of neighbours (rings 1-3 at 1/2, 1/4, 1/8),
   only where residents travel; direction x (1 + 0.5 R cos(bearing - the market's mean bearing)), R the tie-weighted
   resultant length -- a market's direction strengthens, the opposite side weakens. On a hexagon grid queen and rook
@@ -2050,73 +2046,65 @@ half by population (The civic interest area). A floor of 1 left sparse rural cou
 - Gate on the shared ties: shared places and shared coverage count only when the pair already covers each other (out +
   in of 0.10+ of home). Without it, Columbia's heavy coverage of Jefferson City, where Linn residents go, tied Linn to
   Columbia although the two barely cover each other.
-- Dots only outside the home county: home outlets' coverage of their own county is the baseline of local news and
-  stays in the blue shade; dotting it buried the ties between places under a uniform blanket.
-- Headroom: travel is scaled so a town's busiest destination is 50 (from stage 3, after the town's own units are masked; from round 3 the busiest place's mean, destinations capped
-  at 99); home stays 100. At 100 the top destination started
-  at the cap and its news ties could not show (Linn's paper covering Jefferson City, Linn's busiest destination).
-- Orange dots mark what news coverage alone adds (before the spatial effect): 10%, 25%, 50%+.
+- Headroom: travel is scaled so a town's busiest destination is 50 (from 2026-10-24, after the town's own units are
+  masked; from audit round 3 the busiest place's mean, destinations capped at 99); home stays 100. At 100 the top
+  destination started at the cap and its news ties could not show (Linn's paper covering Jefferson City, Linn's busiest
+  destination).
+- Orange dots (2026-10-17 to 10-24, single-drawing map only): what news coverage alone adds, before the spatial effect,
+  outside the home county.
 - ONE SCALE (adopted 2026-10-17; replaces a TV-market frame and a zoom rule): every map is a fixed frame about 190 x 180
   km -- the size of the Columbia-Jefferson City TV market, some 12-16 counties -- centred on the town's area (the
-  tie-weighted centre of its hexagons of 10+), shifted only to keep the home county in view. Three counties (St.
-  Joseph's, Kirksville's TV markets) was too close; 26-27 (Springfield's) too far. The TV-market outline stays
-  as a reference line. Travel data and county lines cover Missouri only: across a state line the frame is blank.
-- Display selectivity: each map shows only the hexagons holding the strongest 50% of its ties outside home (floor never
-  below 5; isolated hexagons need up to twice it). Cuts the long tail so compact and diffuse areas read alike. At 80%
-  the floor fell to 3-4 and cut nothing. In the published map selectivity is one of the ensemble's drawing choices (40, 50, 60%).
+  tie-weighted centre of its hexagons of 10+), shifted only to keep the home county in view. A three-county frame was
+  too close, a 26-27-county frame too far. The TV-market outline stays as a reference line. Travel data and county
+  lines cover Missouri only: across a state line the frame is blank.
+- Display selectivity: each drawing shows only the hexagons holding the strongest 50% of its ties outside home (floor
+  never below 5; isolated hexagons need up to twice it). Cuts the long tail so compact and diffuse areas read alike. At
+  80% the floor fell to 3-4 and cut nothing. In the published map selectivity is one of the ensemble's drawing choices
+  (40, 50, 60%).
 
 **Frame and display** (adopted 2026-10-17): destinations are all of Missouri (towns and rural block groups) so travel
 across a TV-market border is measured. Hexagons show at 5+ inside the TV market and 10+ outside it, so one-off distant
 trips and rural destination clusters stay off. Labels: home town bold; up to 8 towns on shaded hexagons in ink; up to 4
-unshaded towns of 20,000+ in small grey.
+unshaded towns of 20,000+ in small grey. The patterns use Missouri destinations only: trips into Kansas, Illinois, Iowa
+and Arkansas are not in them.
 
-**Markets fitted separately** (`flows/regions.json`; `build_homes.py`, `travel_patterns.py <region>`,
-`market_patterns.py <region>`): each TV market's patterns are fitted on its own home counties only, so adding a market
-never changes another's maps (Columbia's fit verified identical after the change, 2026-10-17). Seven: Columbia-Jefferson City (Audrain, Boone, Osage), Springfield (Greene, Webster,
-Barry), Paducah-Cape Girardeau (Cape Girardeau, Scott, Bollinger), Ottumwa-Kirksville (Adair, Macon, Schuyler), Joplin
-(Jasper, Newton, Barton), Kansas City (Jackson, Cass, Lafayette), St. Joseph (Buchanan, Andrew, Nodaway). K by market
-under the K rule above (2-7). Advan covers Missouri destinations only: trips into Kansas, Illinois, Iowa and Arkansas
-are not seen (largest for Kansas City). Macon County had no local stories in March: no outgoing coverage there.
-
-**Figure** (`flows/market_pattern_print.html`; the probability map with the multi-part area outlined (The civic interest area, Map); no
-single-version map; title
-"<Town>'s civic interest area" since 2026-10-20, earlier "<town>'s revealed news market"): a modelled map on the hexagon grid; hexagons of 5+ shaded, one ring of empty hexagons as a
-border, labels never on a dark (20+) hexagon. A shaded rural block group or tract can cover half a county; the grid
-marks the figure as a model.
+**Figure** (`flows/market_pattern_print.html`; the probability map with the multi-part area outlined (Map, above); title
+"<Town>'s civic interest area" since 2026-10-20, earlier "<town>'s revealed news market"): a modelled map on the
+hexagon grid; one ring of empty hexagons as a border, labels never on a dark (20+) hexagon. A shaded rural block group
+or tract can cover half a county; the grid marks the figure as a model.
 
 Superseded on the way (kept in `flows/`): tract reach maps (`build_reach_map.py`, a shrunk logistic model chosen on
 held-out months, corridor term adopted, direction and home-town terms no gain) and a travel x coverage interest index
 (`build_interest_map.py`, w = 0.5/1/2, with road corridors from `build_transit_lines.py`).
 
-### Changes, 2026-10-24/25 (stages 3 and round 3): civic interest areas
+### Changes, 2026-10-24/25: civic interest areas
 
 | Change | Script |
 |---|---|
-| K rule per town (option A) with independent-half month-split stability; carrying town and failing test printed; sensitivity table; held-out month error a persistence diagnostic only | `flows/travel_patterns.py` |
+| Columbia–Jefferson City TV market only: every default, list and loop over markets (authors' decision, 2026-10-25) | `flows/area_ensemble.py`, `flows/export_figures.py`, `flows/export_civic_grid.py`, `flows/regular_distance.py`, `analysis/market_stability.py`, `analysis/tie_footprint.py` |
+| Area = ensemble core (p ≥ 0.5) kept as parts: home body + every piece of 3+ hexagons within D90; specks keep their shading, out of the outline; parts labelled by largest town; QA on the travel-only core; no single-version map or export | `flows/area_ensemble.py`, `flows/area_core.py`, `analysis/area_coverage_alignment.py`, `analysis/cin_diet.py`, `analysis/market_evidence.py`, `flows/market_pattern_print.html`, `flows/export_area_table.py`, `flows/export_civic_grid.py` |
+| Regular-travel distance D80 / D90 / D95 per study town (regular = seen in all 7 months); the D90 limit on parts, not on the home body; the reach's level "none" replaced by D90 | `flows/regular_distance.py` (new), `flows/area_core.py`, `flows/area_ensemble.py`, `flows/market_pattern_print.html` |
+| News weight ω (0, ½, 1, 2) as a choice: 6,912 versions; each level's core and stability reported | `flows/area_ensemble.py`, `flows/area_core.py`, `flows/market_pattern_print.html` |
+| p stated as a probability under equal weighting of the versions (multiverse); key, subtitle and grey outline (#6f6d66, 0.8) | `flows/area_ensemble.py`, `flows/market_pattern_print.html`, `flows/export_area_table.py` |
+| K rule per town with independent-half month-split stability; carrying town and failing test printed; sensitivity table; held-out month error a persistence diagnostic only | `flows/travel_patterns.py` |
 | Residents: ACS population through the calibrated per-block-group denominator; used by the K rule's 1,000 test | `flows/travel_patterns.py` |
 | Missing home-months NaN-masked in every mean, fit and score | `flows/travel_patterns.py` |
 | Month-split stability on independent halves: W and H refitted per half, matched to the kept patterns (the odd fit's order had been reported as the kept order); half fits written to `patterns_halves.json` | `flows/travel_patterns.py`, `analysis/confidence_layer.py`, `flows/pattern_halves.py` (now a check) |
+| Month-split stability: relabelled; disjoint seeds; r on contested hexagons and mean absolute difference; K-selection caveat | `flows/travel_patterns.py`, `analysis/confidence_layer.py`, `flows/area_ensemble.py`, `analysis/selection_sensitivity.py` |
 | Town's own units masked before the busiest place is set to 50 and before county shares; town travel weighted by residents (people's visits) | `flows/market_patterns.py`, `analysis/confidence_layer.py`, `analysis/market_evidence.py` |
 | Blanket home-county outgoing tie (out = 1) removed | `flows/market_patterns.py` |
 | Hexagon county from the block group holding its centre | `flows/market_patterns.py` |
 | Statewide / national / international stories out of the ties, as in coverage density | `flows/market_patterns.py` |
-| Travel-only index (idx["travel"]) beside the network tie; two outlines (published network tie; travel-only footprint) | `flows/market_patterns.py`, `analysis/confidence_layer.py` |
-| One area measure: hexagons inside the outline × 5.85 km² (stage 3; replaced by the core, latitude-corrected, round 3); smoothing buffer on the km plane (isotropic) | `analysis/confidence_layer.py` |
-| Settings ensemble (432 versions, connected-body rule at 15 km; superseded) | `flows/area_ensemble.py`, `flows/market_pattern_print.html`, `flows/export_area_table.py`, `flows/export_civic_grid.py` |
+| Travel-only index (idx["travel"]) beside the network tie | `flows/market_patterns.py`, `analysis/confidence_layer.py` |
 | `?measure=lift`: network tie against the travel-only tie (news alone) | `flows/market_pattern_print.html` |
-| Area = ensemble core (p ≥ 0.5) of 1,728 versions; outline a drawing aid only; QA on the travel-only core (round 3; superseded 2026-10-25 by the multi-part area) | `flows/area_ensemble.py`, `analysis/confidence_layer.py`, `analysis/area_coverage_alignment.py`, `analysis/cin_diet.py`, `analysis/market_evidence.py`, page |
-| Towns spread by destinations and population; reach factor 10 / 15 / 25 km / none (a drawing choice within each version) replaces the fixed 15 km rule | `flows/market_patterns.py`, `flows/area_ensemble.py` |
-| "Replicability" relabelled month-split stability; disjoint seeds for the halves; r on contested hexagons and mean absolute difference; K-selection caveat | `flows/travel_patterns.py`, `analysis/confidence_layer.py`, `flows/area_ensemble.py`, `analysis/selection_sensitivity.py` |
+| Towns spread by destinations and population; reach a drawing choice within each version; distant pieces reported as separate ties | `flows/market_patterns.py`, `flows/area_ensemble.py` |
 | Home from `home_hexes_of` everywhere; destinations capped at 99 | `flows/market_patterns.py`, `analysis/tie_footprint.py`, `analysis/confidence_layer.py`, `analysis/selection_sensitivity.py`, `analysis/market_stability.py`, `analysis/market_evidence.py`, `analysis/area_coverage_alignment.py`, `flows/area_ensemble.py` |
 | 2 and 4 km versions onto the 3 km grid by fractional overlap; lag rings, distance rule and reach in km | `flows/area_ensemble.py`, `flows/market_patterns.py` |
 | People by p band and by town; marginal-balanced weighting checked | `flows/area_ensemble.py` |
 | `pick()` stops when no K passes; the town test masks own units | `flows/travel_patterns.py` |
 | News terms' cell-level effect disclosed | `analysis/confidence_layer.py`, `flows/area_ensemble.py` |
-| Area multi-part: home body + every p ≥ 0.5 piece of 3+ hexagons; specks keep shading; parts labelled by largest town (authors, 2026-10-25) | `flows/area_core.py` |
-| p stated as a probability under equal weighting of the 1,728 versions (multiverse); single-version map and its exports dropped; key, subtitle and grey outline (#6f6d66, 0.8) (authors, 2026-10-25) | `flows/area_ensemble.py`, `flows/market_pattern_print.html`, `flows/export_area_table.py` |
-| Multi-part figures from unrounded p for every built area (Kirksville added); distant ties restated as towns drawn in 50%+ of versions with no hexagon at p ≥ 0.5; travel-only QA core under the multi-part rule; tie summary printed from the settings each run recorded | `flows/area_core.py`, `flows/area_ensemble.py`, `analysis/area_coverage_alignment.py`, `analysis/tie_footprint.py` |
-| Hexagon area corrected by latitude | `flows/area_ensemble.py`, `analysis/area_coverage_alignment.py` |
-| Quoted numbers printed by their scripts (Boone hexagons, area count, tie median) | `flows/area_ensemble.py`, `analysis/market_stability.py`, `analysis/tie_footprint.py` (SUMMARY=1) |
+| Hexagon area corrected by latitude | `flows/area_ensemble.py`, `flows/area_core.py`, `analysis/area_coverage_alignment.py` |
+| Quoted numbers printed by their scripts (Boone hexagons, area count, tie median with the settings the runs recorded, D values) | `flows/area_ensemble.py`, `flows/area_core.py`, `analysis/market_stability.py`, `analysis/tie_footprint.py` (SUMMARY=1), `flows/regular_distance.py` |
 | BUSIEST=hexagon sensitivity | `flows/market_patterns.py` |
 | Sensitivity table of the travel-only area | `analysis/selection_sensitivity.py` |
 | County-story weight per hexagon capped at the story's weight; town buffer on the km plane; people inside; "none" stated structural; QA label | `analysis/area_coverage_alignment.py`, `analysis/cin_diet.py` |
@@ -2135,21 +2123,22 @@ analysis: county -> civic interest area -> each outlet's zone of service; no sta
 ## Supply (QA only; next paper)
 
 Coverage density and the balanced diet are not results of this paper. They are measured on the **travel-only core**:
-the same 1,728-version ensemble with travel-only ties (idx["travel"]: travel, spatial lag and direction, home 100, no
-news term), core p_travel ≥ 0.5 under the same multi-part rule (home body plus every part of 3+ hexagons; specks out:
-Columbia 8, Mexico 4, Linn 9), so that no news term shapes the area the supply is measured in. The figures below are
-QA diagnostics for the next paper and are kept out of Current results (`analysis/area_coverage_alignment.py`,
-`cin_diet.py`; Columbia region):
+the ensemble's travel-only level, news weight ω = 0 (1,728 versions; idx["travel"]: travel, spatial lag and direction,
+home 100, no news term), core p_travel ≥ 0.5 under the same multi-part rule and D90 limit (home body plus every part of
+3+ hexagons within D90; specks out: Columbia 2, Mexico 4, Linn 9), so that no news term shapes the area the supply is
+measured in. The figures below are QA diagnostics for the next paper and are kept out of Current results
+(`analysis/area_coverage_alignment.py`, `cin_diet.py`):
 
 | Area (travel-only core, multi-part) | km² | People inside | Frequent / regular / sporadic / none (QA) | Balanced diet (QA) |
 |---|---:|---:|---|---:|
-| Columbia | 1,195 | 209,594 | 52 / 5 / 43 / 0 | 49% |
+| Columbia | 1,049 | 162,809 | 49 / 6 / 45 / 0 | 49% |
 | Mexico | 820 | 109,941 | 35 / 4 / 61 / 0 | 12% |
 | Linn | 931 | 146,208 | 34 / 6 / 60 / 0 | 28% |
 
 "None" cannot occur: every hexagon lies in a county whose county-level stories reach all its hexagons. County-story
 weight per hexagon is capped at the story's weight; statewide, national and international stories add nothing, in the
-ties as in coverage density.
+ties as in coverage density. The network-tie core against the travel-only core: Jaccard Columbia 0.93, Mexico 0.91,
+Linn 0.95.
 
 ### Coverage density (2026-10-20; QA rerun 2026-10-25)
 
@@ -2234,24 +2223,22 @@ size.
   population (hospital, four-year college, supercenter, interstate, lakes and parks, county seat).
 - Public travel model, not rerun on the adopted outcome: the gap decomposition (`public_gap_corrections.py`) and the
   setting sensitivity (`public_default_sensitivity.py`).
-- Civic interest areas: the multi-part rule has no distance limit — Kirksville II now has a Columbia part 127.3 km
-  from its home body (and rural Boone parts at 116.9 and 150.7 km). A choice to confirm.
-- Civic interest areas: Cape Girardeau, Kansas City and St. Joseph have no built area and no ensemble run; their
-  minimum-size evidence and Grain Valley I are one-drawing diagnostics at the middle values. Supply QA is reported for
-  the Columbia region only.
-- Civic interest areas: p is conditional on the range of the seven drawing choices; a wider or narrower range would
-  change it. The specks rule (pieces under 3 hexagons leave the outline) is a stated threshold, not tested.
+- Civic interest areas: the regular-travel rule (a destination seen in all 7 months) leans toward busy, nearby places,
+  because Advan's device sample can miss a rarely visited distant destination in a month. Columbia's D90 (23.9 km) and its area
+  depend on the rule; Mexico's and Linn's areas do not.
+- Civic interest areas: the minimum-size evidence is a one-drawing diagnostic at the reference levels; the ensemble is
+  run for Columbia, Mexico and Linn only.
+- Civic interest areas: p is conditional on the range of the seven drawing choices and the news weight; a wider or
+  narrower range would change it. The specks rule (pieces under 3 hexagons leave the outline) is a stated threshold,
+  not tested.
 - Civic interest areas: the civic grid carries p, derived from Advan travel at the hexagon level, where it had held
   public Census geography only — check against the Advan licence before it ships to datadesk.
-- Civic interest areas: Kansas City's persistence diagnostic (held-out month error over all 105 partitions, 229 missing
-  home-months masked) is computed and cached; it is slow only on the first run after a data change.
-- Civic interest areas: Grain Valley I draws no hexagon beyond home at the middle values (destinations at the cap of
-  99 lift the selectivity floor to 99). Network-tie values, weight sensitivity and display floors quoted on 2026-10-17
-  were computed on the K = 6 areas and are not rerun. Linn's surface is the least stable (contested r 0.734).
+- Civic interest areas: network-tie values, weight sensitivity and display floors quoted on 2026-10-17 were computed on
+  the K = 6 areas and are not rerun. Linn's surface is the least stable (contested r 0.732).
 - Tie markets: Columbia's public market reaches 0.14 of Advan's beyond Boone (the public model sends Columbia's
-  out-of-county travel to Jefferson City); with the round-3 tie the network terms no longer raise accuracy over travel
-  alone (0.58 against 0.59). The comparison with conventional market definitions (2026-10-18) has not been rescored
-  with home masked and the score taken beyond the home county.
+  out-of-county travel to Jefferson City); with the audit-round-3 tie the network terms no longer raise accuracy over
+  travel alone (market median 0.505 against 0.52). The comparison with conventional market definitions (2026-10-18)
+  has not been rescored with home masked and the score taken beyond the home county.
 
 ## Sources
 
@@ -2316,10 +2303,11 @@ size.
 ## Superseded figures
 
 Every replaced figure, with what replaced it and why. "Was" gives the earlier values in order: 2026-10-16 to 10-18,
-then "audit round 1" and "audit round 2" (2026-10-24; civic-interest-area rows still say "first review" and "second
-review"). "Now" is the current value (2026-10-25, after audit round 3 and the rural flag); "round 3 (RUCC flag)" in "Was" is
-the value just before the rural flag replaced RUCC nonmetro. "Not rerun" = no replacement figure; the old one stands
-only as dated history. Figures for counties other than Audrain, Boone and Osage are kept outside the repository.
+then "audit round 1" and "audit round 2" (2026-10-24). "Now" is the current value (2026-10-25, after audit round 3
+and the rural flag); "round 3 (RUCC flag)" in "Was" is the value just before the rural flag replaced RUCC nonmetro.
+"Not rerun" = no replacement figure; the old one stands only as dated history. Figures for places outside the
+Columbia–Jefferson City TV market are kept outside the repository; model-level statistics over all Missouri counties
+stay.
 
 | Model | Figure (where) | Was | Now | Why |
 |---|---|---|---|---|
@@ -2330,7 +2318,7 @@ only as dated history. Figures for counties other than Audrain, Boone and Osage 
 | Data | Device IDs "stable at least week to week" | 424 block groups, monthly lower in 71, 62 passing the same-scale check | Withdrawn: 376 block groups, lower in 55, 48 passing; 7 show the products' scales differ | Places merged by `PERSISTENT_ID`; cross-product scales unknown; no within-product test |
 | Data | Pass-through discount | Removes 3.0% (2026-10-16); 2.3% (audit round 1); audit round 2 1.74% (county-factor weighting; 2.2% on the statewide scale; old codes 2.32%, codes fixed 3.35%, highway at the statewide norm 2.98%) | 1.81%, empirical-Bayes shrunken, `visits_statewide`-weighted (same weights: old codes 3.04%, codes fixed 4.38%, highway at the statewide norm 3.86%, own store mix unshrunk 2.23%); signed mean excess −0.02% | Convenience stores missing (2017 NAICS); every road stop counted as a highway stop; small pairs unshrunk; weights not the adopted outcome (round 3) |
 | Data | Kingdom City share discounted (Audrain → Callaway) | 20% | Not rerun | Discount redefined |
-| Crossover | Distinct residents seen outside, lower bound | Audrain 41%, Boone 24%, Osage 45%; audit round 2 b = 0.51: 44%, 26%, 57% (bounds 34–53%, 20–31%, 43–69%) | 44%, 26%, 59% (range over b in [0, 1]: 40–44%, 24–26%, 45–66%; over b's interval 43–44%, 26–26%, 57–61%) | Calibrated denominator, b by 2SLS; Kansas destinations; St. Louis unit before the leaving test |
+| Crossover | Distinct residents seen outside, lower bound | Audrain 41%, Boone 24%, Osage 45%; audit round 2 b = 0.51: 44%, 26%, 57% (bounds 34–53%, 20–31%, 43–69%) | 44%, 26%, 59% (range over b in [0, 1]: 40–44%, 24–26%, 45–66%; over b's interval 43–44%, 26–26%, 57–61%) | Calibrated denominator, b by 2SLS; Kansas destinations; city-county unit before the leaving test |
 | Crossover | Detection slope b | — | 0.51 [0.43, 0.59] (reduced form, audit round 2) → 0.621 [0.534, 0.708] (2SLS) | Reduced form attenuated by month-to-month detection noise (first stage 0.82) |
 | Crossover | Bounds | — | Audit round 2: leavers ÷ Σ max(own, E) and ÷ Σ min(own, E) (e.g. Audrain 34–53%) → range of the county figure over a b grid in [0, 1] and over b's interval | R(b) need not be monotone; capping leavers at D breaks the box argument |
 | Crossover | Three-county scripts | — | Audit round 2: `residents_leaving.py` Osage 57%; `unique_people_by_county.py` Audrain → Boone 36.0% → Osage 59%; 35.5% | b by 2SLS |
@@ -2369,13 +2357,13 @@ only as dated history. Figures for counties other than Audrain, Boone and Osage 
 | Travel | Distance form (restricted cubic spline) | Round 3 (RUCC flag): change in held-out error +0.175 [−0.007, +0.384] / +0.000 [−0.154, +0.209]; 25-mile elasticity metro −0.98 / −0.83 / −0.77, nonmetro −0.48 / −0.66 / −0.24 | +0.150 [−0.084, +0.392] / −0.012 [−0.129, +0.123]; urban −0.88 / −0.73 / −0.64, rural −0.70 / −0.77 / −0.53 | Rural flag (2026-10-25) |
 | Travel | All marginal factors | 3.58 / 3.39 / 4.04, 93.1% / 93.6% / 90.4%, within 49% / 49% / 42%, "about 5% gain with all eight"; audit round 1 3.26 / 3.15 / 3.21 / 3.84, −0.11 [−0.31, +0.10], −0.05, +0.58; audit round 2 3.31 / 3.19 / 3.25 / 3.83; −0.11 [−0.31, +0.09]; +0.53 [+0.09, +0.97] | 3.28 / 3.17 / 3.22 / 3.79; −0.12 [−0.31, +0.09]; −0.06 [−0.20, +0.10]; +0.51 [+0.09, +0.95] | Held out; intervals; second-round outcome |
 | Travel | County characteristics, travel column | Baseline 3.51; degree × distance 3.43; hospitals 3.48; audit round 1 baseline 3.26 / 3.45; audit round 2 baseline 3.31 / 3.44 | Baseline 3.28 / 3.44; County characteristics table | Jul–Sep big-flow error selected on the outcome; second-round outcome |
-| Travel | Tier sizes | Hubs 8 | Hubs 8 in `county_class_k4.csv` (114 counties); scored, 9 with St. Louis city (115 homes) | St. Louis city and county scored apart |
+| Travel | Tier sizes | Hubs 8 | Hubs 8 in `county_class_k4.csv` (114 counties); scored, 9 with the independent city (115 homes) | The independent city and its county scored apart |
 | Coverage | Headline elasticity | "About 0.7–0.8% more stories per 1% more visits"; metro 0.49, nonmetro 0.25 (audit round 1); metro 0.50, nonmetro 0.26 (round 3, RUCC flag) | Urban 0.47, rural 0.24 | No distance terms: distance loaded onto visits; rural flag (2026-10-25) |
 | Coverage | Response to travel (calibration; commuting) | 0.52; "falls from 0.52 to 0.36"; twice the travel → 1.4×, then 1.3×; round 3 (RUCC flag) metro 0.50 (1.42×), nonmetro 0.26 (1.19×); pooled 0.37 | Urban 0.47 (1.38×), rural 0.24 (1.18×); pooled 0.38 | Log distance + border only; log visits; hypothesis term; rural flag (2026-10-25) |
 | Coverage | Elasticities | Audit round 1: metro 0.49 (0.066; 0.36–0.62), nonmetro 0.25 (0.061; 0.13–0.37); print 0.51 / 0.25; difference −0.235 (0.039); 1.40× / 1.19×; leave-one-out 0.45–0.53; pooled 0.36 (0.060); audit round 2 0.49 (0.070; 0.36–0.63), 0.25 (0.063; 0.13–0.38); print 0.52 / 0.26; −0.241 (0.040); 1.41× / 1.19×; 0.46–0.54; pooled 0.36 (0.064); round 3 (RUCC flag) 0.50 (0.067; 0.37–0.63), 0.26 (0.061; 0.14–0.38); print 0.52 / 0.26; −0.244 (0.040); 1.42× / 1.19×; leave one out 0.47–0.54; pooled 0.37 (0.061) | Urban 0.47 (0.069; 0.33–0.60), rural 0.24 (0.059; 0.13–0.36); print 0.48 / 0.26; −0.225 (0.047); 1.38× / 1.18×; leave one out 0.417–0.505; pooled 0.38 (0.060) | Second-round outcome; rural flag (2026-10-25) |
 | Coverage | Commuting terms | In +0.51 (p < 0.001), out +0.04; audit round 1 in +0.42 (0.073), out −0.02; audit round 2 in +0.41 (0.073), out −0.03; round 3 (RUCC flag) in +0.41 (0.072), out −0.04 (0.085) | In +0.42 (0.069), out −0.02 (0.087) | Adopted specification; JT01; rural flag (2026-10-25) |
 | Coverage | Held-out error | 4.15 → 4.12; audit round 1 0.913 [0.844, 0.982] / 4.42 [4.00, 4.91] (print 0.939 / 4.53); audit round 2 4.49 [4.04, 4.98] (print 4.59); all destinations 0.915 (print 0.941); round 3 (RUCC flag) primary 4.46 [4.02, 4.93] (print 4.56); all destinations 0.915 (print 0.942) | Primary 4.54 [4.09, 5.04] (print 4.63), per-county mean over 8 folds; all destinations 0.922 (print 0.947) | Destination set chosen partly by the held-out stories; loco folds; second-round outcome; rural flag (2026-10-25) |
-| Coverage | Primary destination set; excluded stories | — | Audit round 2 1,174 pairs; 498 stories in `EXCLUDE` → 1,185 pairs; 547 stories (Dos Mundos and KHQA 7 added) | Outcome; exclusions |
+| Coverage | Primary destination set; excluded stories | — | Audit round 2 1,174 pairs; 498 stories in `EXCLUDE` → 1,185 pairs; 547 stories (the two out-of-state outlets added) | Outcome; exclusions |
 | Coverage | Hypothesis term (nonmetro → rural interaction) | Audit round 1: adopted on held-out error, change −0.143 [−0.221, −0.068] vs pooled; audit round 2 gain +0.125 [+0.048, +0.202] (print +0.090); round 3 (RUCC flag) gain +0.125 [+0.048, +0.203] (print +0.088) | Hypothesis term log visits × rural, gain +0.128 [+0.045, +0.213] (print +0.081) | Selection procedure; rural flag (2026-10-25) |
 | Coverage | Saturation | Response 0.67 → 0.50, p 0.004 / < 0.001, "real and in the predicted direction"; audit round 1 own stories −0.007 (p 0.34), changes ≤ 0.021; audit round 2 nested guard reported as change +0.011 [−0.005, +0.027]; own stories −0.006 (p 0.43); round 3 (RUCC flag) nested guard gain −0.010 [−0.024, +0.004]; own stories −0.006 (p 0.48) | Nested guard gain +0.001 [−0.016, +0.021]: not supported; own stories −0.007 (p 0.38) | Separate non-adopted model; HC1; nested guard; rural flag (2026-10-25) |
 | Coverage | Border test | "±60% at 95%"; raw "about half"; audit round 1 +0.04 [−0.04, +0.12] (print +0.06), raw 6.7% / 7.8% / 15.8%, ring −1.16 (0.52); audit round 2 6.7% / 7.7% / 15.9%, ring −1.22 (0.54) | +0.04 [−0.04, +0.13] (print +0.07); 6.8% / 7.7% / 16.0%; ring −1.23 (0.55) | HC1; specification labelled; second-round outcome |
@@ -2385,7 +2373,7 @@ only as dated history. Figures for counties other than Audrain, Boone and Osage 
 | Coverage | All marginal factors | 4.15 / 4.14 / 4.18; print 4.50 / 4.58 / 4.52; audit round 1 scratch 0.91 / 0.91, 4.42 / 4.39 (print 0.94 / 0.93, 4.53 / 4.50); scripts on outcome-selected destinations 3.47 / 3.78; audit round 2 pooled over pairs: 4.25 / 4.24 / 4.23 / 4.34 (no broadcast 4.37 / 4.38 / 4.36 / 4.41) | Per-county mean over 8 folds on 1%+ of visits: 4.46 / 4.46 / 4.44 / 4.51 (no broadcast 4.56 / 4.54 / 4.57 / 4.58) | Outcome-selected destinations; scratch table; then pooled scoring, not `coverage_model.py`'s per-county mean (round 3) |
 | Coverage | Collection quality | 0.52 → 0.48 (all), 0.50 → 0.42 (print); audit round 1 0.36 → 0.26, 0.34 → 0.25 | Pooled specification 0.36 → 0.25 (all), 0.35 → 0.25 (print and digital); 88 → 33 newsroom counties (rerun 2026-10-25) | Old specification; rerun |
 | Coverage | County characteristics column; hospitals | 4.00; 4.01; audit round 2 `hospital_test.py` 4.25 → 4.26 (no broadcasters 4.37 → 4.36), pooled | Not rerun; `hospital_test.py` 4.46 → 4.45 (no broadcasters 4.56 → 4.54) | Outcome-selected destinations; old specification |
-| Coverage | Out-of-state stories (Dos Mundos, KHQA 7) | Dropped silently (49 stories); audit round 1: open (re-home or exclude) | Excluded (`EXCLUDE`, authors; 547 stories in `EXCLUDE`) | Spanish-language; Illinois newsroom |
+| Coverage | Out-of-state stories (two outlets filed outside Missouri) | Dropped silently (49 stories); audit round 1: open (re-home or exclude) | Excluded (`EXCLUDE`, authors; 547 stories in `EXCLUDE`) | Spanish-language; out-of-state newsroom |
 | Spillover | 2026-10-16 models (whole section) | Broadcaster +0.70, travel out +1.47, held-out 14.5 (broadcaster only 15.5; full 15.3); urban-share model 15.0, well collected 14.1, coefficients +0.65 / −0.81 / +1.17 | Hypothesis terms broadcaster + print outlets: +0.667, −0.387; honest error 6.57 / 5.50 (fitted model 5.98 / 4.66) | Earlier measure (any story touching another county); earlier data |
 | Spillover | 2026-10-17 intermediate re-run | 83 outlets, 46 counties; held-out 7.1 (8.6 before); broadcaster +0.58, crowded weekly −0.47, border −0.17, print outlets −0.42; Boone print 23% / 20% | Boone print 18.3% / 19.3% (held out) | CAMPUS, HOME_COUNTY, market-count rule, one home rule, selection procedure, held-out expectations |
 | Spillover | Fitted outlets, counties | 87, 47 (also 83, 43) | 85, 48 | HOME_COUNTY, CAMPUS |
@@ -2405,7 +2393,7 @@ only as dated history. Figures for counties other than Audrain, Boone and Osage 
 | Spillover | Weekly alone in its county | −0.16 (p 0.28), −0.14, −0.18; nested 7.41 vs 7.36 | Not rerun | Crowded weekly not adopted |
 | Spillover | Market position | p 0.35 / 0.82 / 0.24; mean 9.3 against 8.6; audit round 1 p 0.31–0.70 | CRV3 p 0.34–0.75; mean 6.03–6.07 against 5.90 (border form) | Current data; CRV3 |
 | Spillover | Crowded-county weeklies' median; fits on all 128 outlets; mention weight under town population | 11% vs 24%; 11.5 / 11.1 / 11.2; Boone County Journal 2–21% … Mexico Ledger 14–57% | Not rerun | Model replaced |
-| Spillover | Mid Rivers Newsmagazine, Greene County Commonwealth | Left out of the fit | Fitted with the covered county as home | HOME_COUNTY |
+| Spillover | Two outlets published outside the county they cover | Left out of the fit | Fitted with the covered county as home | HOME_COUNTY |
 | Spillover | Quality selection | Not stated | 24.5% vs 17.5% (r +0.26, p 0.003) | Reported every run |
 | Spillover | All marginal factors | 14.5; 14.9; 14.2 with ridge 0.05; 14.5 with ridge 0.2; "ridge 0.05 is 0.3 points better" | 6.43; 7.00 / 7.66; every combination worse | Current measure and model |
 | Spillover | Crossover–spillover correlation | 68 counties r 0.10 (p 0.43), urban share fixed 0.08; well collected 44 counties r 0.30 (p 0.05) (53 counties, p 0.02 on 2026-10-17 data); audit round 1 all 72 +0.11 (0.36), weighted −0.01 (0.93); well collected 53 +0.35 (0.010), weighted +0.15 (0.27); well-collected counties 29 +0.35 (0.061), +0.20 (0.31); audit round 2 (b = 0.51): +0.18 (0.138) / +0.14 (0.225); +0.41 (0.002) / +0.37 (0.007); +0.40 (0.030) / +0.32 (0.095) | Crossover b = 0.62 (rerun 2026-10-25): all 72 +0.18 (0.120) / +0.17 (0.142); well collected 53 +0.41 (0.003) / +0.40 (0.003); well-collected counties 29 +0.40 (0.034) / +0.34 (0.067) | Crossover rebuilt (b by 2SLS) |
@@ -2427,32 +2415,35 @@ only as dated history. Figures for counties other than Audrain, Boone and Osage 
 | Public | Stage 1 picks and fold structures | Audit round 1: independent towns 23 / 9; major metro `_s_alpha15`; hubs 6 / 3; mode C folds 2, 4, 7 metro-core, 0, 1 pooled hub | Stage 1 table and fold structures (Public-data travel model) | JT01 rebuilds; primary metric |
 | Public | 2026-10-18 structure rebuilt (`public_adjusted_pairs_trnear.csv`) | Audit round 1 segment corrections 3.84; audit round 2 public base 4.47, segment corrections 3.71, + per-destination 3.54 (ad hoc run) | Public base 4.43, segment corrections 3.69, + public destination factor 3.70, + per-destination 3.53 (all destinations; printed by `public_adjusted_model.py`, `logs/adj_trnear.log`) | Outcome; JT01; printed by the script, not an ad hoc run |
 | Public | "Destination pull closes 46% of the gap … together 68%" | 5.35 reference, in-sample | Not rerun | `public_gap_corrections.py` unchanged |
-| Areas | Number of patterns K | K = 6 in every market, chosen on held-out months (2.87 points at K = 1, 2.30 at K = 6, 2.42 at K = 8); same day: paired one-SE rule (K = 5–18; Columbia 11), per-market population and volume (K = 2–5; Columbia 2); first review per town with county-factor residents and the odd fit's order (Columbia 3, Springfield 7, Cape Girardeau 3, Kirksville 3, Joplin 4, Kansas City 3, St. Joseph 3) | Columbia 2, Springfield 7, Cape Girardeau 3, Kirksville 2, Joplin 4, Kansas City 5, St. Joseph 5 | Splits drawn inside the K loop; a market share depends on which home counties form the market; ACS residents; independent halves |
-| Areas | Columbia's areas | Two: Columbia I and II (primary 42% on 2026-10-17, then 72% / 16%; 76,912 / 17,513 residents); first review one area, 91%, ~97,020 | One: "Columbia's civic interest area", 93%, 103,086 (ACS) | K rule; ACS residents |
-| Areas | Mexico, Linn share of residents | Mexico 79%, then 74% (5,241); Linn 93%, then 92% (1,641); first review Mexico 92% (~6,530), Linn 71% (~1,270) | Mexico 86% (5,685); Linn 85% (1,172) | As above |
-| Areas | Area size | Published outline Columbia I 1,158 km², II 4,165, Mexico 1,930, Linn 1,264; first review 1,363 / 1,691 / 1,176; second review core p ≥ 0.5 (432 members) 1,380 / 1,000 / 1,122 km²; adopted-setting outline 3,607 / 3,660 / 1,292 (hexagons × 5.85 km²); round 3 core p ≥ 0.5 (unconnected, all hexagons) 1,166 / 802 / 949 km² | Multi-part area (`flows/area_core.py`, unrounded p): 1,079 / 785 / 890 km²; all core hexagons (p ≥ 0.5): 1,166 / 802 / 949 km² | Home body + every p ≥ 0.5 piece of 3+ hexagons (authors, 2026-10-25); 1,728-version ensemble; latitude correction; outline is the area, not a closed drawing |
-| Areas | Mexico's Boone hexagons | 99; first review 95; second review 34 in the core, 1 at p ≥ 0.8, 114 in the adopted-setting outline; round 3: 29 in the adopted drawing | 51 at p ≥ 0.2, 23 at p ≥ 0.5, 1 at p ≥ 0.8 (`area_ensemble.py`); Mexico's area holds a Columbia part of 20 hexagons | Probability surface |
-| Areas | People inside the core; p ≥ 0.8 | —; round 3 all p ≥ 0.5: 212,133 / 124,002 / 133,522 | Multi-part area: 207,883 / 123,873 / 132,531 people (all core 212,133 / 124,002 / 133,522); by p band 38,714 / 173,419; 111,840 / 12,163; 93,965 / 39,557; p ≥ 0.8 583 / 308 / 346 km² | 1,728-member ensemble; towns spread |
-| Areas | Built areas outside the Columbia region | — | Springfield I–III: area 658 / 1,031 / 783 km² (all core 658 / 1,097 / 795), r(p) 0.987 / 0.964 / 0.899; Joplin I–II 454 / 892 (466 / 946), 0.995 / 0.984; Kirksville I–II 1,271 / 1,917 (1,345 / 1,997), 0.970 / 0.832 | As above |
-| Areas | Connected-body rule | —; round 3: reach factor 10 / 15 / 25 km / none, distant pieces outside the area as separate ties | Area multi-part (home body + every p ≥ 0.5 piece of 3+ hexagons, wherever it lies); the reach factor stays a drawing choice within each version | A connected-within-reach rule cut out Columbia, Mexico's dominant destination (~34 km from the home body; Audrain → Boone 39% of out-of-county visits, 43% of work-hours visits, 34% of out-commuters) |
-| Areas | p, wording | — | "Share of settings" that draw a hexagon, "not a probability" (round 3) → the probability, under equal weighting of the 1,728 versions, that the place is part of the area ("how likely the place is part of the area"), conditional on the range of the drawing choices; not a confidence | Authors, 2026-10-25 ("share of settings" obtuse); multiverse analysis, Steegen et al. 2016 |
-| Areas | Adopted-setting map (single version) | — | Published as `?prob=0` with its outline, certainty layer and orange news dots, reproduced by the adopted member (Jaccard 1.000); adopted drawing in the core 86% / 86% / 88%; exports carried its rows → not produced or exported; its settings are the middle values of the drawing choices | One version is a small core that does not depict the area |
-| Areas | News terms on the single drawing and the closed outlines | — | Adopted drawing: Columbia 245 / 15 / 17 hexagons (11% differ), Mexico 137 / 4 / 4 (6%), Linn 132 / 2 / 11 (10%); closed outlines Columbia 587 / 125 / 53 (23%), Mexico 444 / 16 / 175 (30%), Linn identical → ensemble core comparison only (Jaccard 0.91 / 0.88 / 0.95) | Single drawing and closed outline dropped |
+| Areas | Number of patterns K | K = 6, chosen on held-out months (2.87 points at K = 1, 2.30 at K = 6, 2.42 at K = 8); same day: paired one-SE rule (Columbia 11), per-market population and volume (Columbia 2); audit round 1 per town with county-factor residents and the odd fit's order: 3 | Columbia–Jefferson City market 2 | Splits drawn inside the K loop; a market share depends on which home counties form the market; ACS residents; independent halves |
+| Areas | Columbia's areas | Two: Columbia I and II (primary 42% on 2026-10-17, then 72% / 16%; 76,912 / 17,513 residents); audit round 1 one area, 91%, ~97,020 | One: "Columbia's civic interest area", 93%, 103,086 (ACS) | K rule; ACS residents |
+| Areas | Mexico, Linn share of residents | Mexico 79%, then 74% (5,241); Linn 93%, then 92% (1,641); audit round 1 Mexico 92% (~6,530), Linn 71% (~1,270) | Mexico 86% (5,685); Linn 85% (1,172) | As above |
+| Areas | Area size | Published outline Columbia I 1,158 km², II 4,165, Mexico 1,930, Linn 1,264; audit round 1 1,363 / 1,691 / 1,176; audit round 2 core p ≥ 0.5 (432 versions) 1,380 / 1,000 / 1,122 km²; single-drawing outline 3,607 / 3,660 / 1,292 (hexagons × 5.85 km²); round 3 core p ≥ 0.5 (unconnected, all hexagons) 1,166 / 802 / 949 km²; 1,728 versions, multi-part with no distance limit (2026-10-25 draft): 1,079 / 785 / 890 km²; 6,912 versions, regular travel 4+ of 7 months: Columbia 1,090 km² / 208,213 people (Jefferson City and Moberly kept), Mexico 802 / 123,946, Linn 896 / 139,001 | 6,912 versions, regular travel 7 of 7, D90 limit on parts: 979 / 802 / 896 km²; all core hexagons (p ≥ 0.5) 1,073 / 831 / 955 km² | Multi-part area (authors' decision, 2026-10-25); news weight as a choice; D90 limit; latitude correction; outline is the area, not a closed drawing |
+| Areas | Ensemble size | 432 versions (audit round 2); 1,728, seven drawing choices (round 3 and the 2026-10-25 draft) | 6,912: the seven drawing choices × the news weight ω ∈ {0, ½, 1, 2} | News weight as a choice (authors' decision, 2026-10-25) |
+| Areas | Regular travel and the distance limit | 4+ of 7 months (`analysis/activity_space.py`): D90 Columbia 103.0 km, Mexico 51.8, Linn 101.5 (D80 37.1 / 47.5 / 71.1; D95 165.1 / 71.2 / 122.6) | 7 of 7 months: D90 23.9 / 48.1 / 70.5 km (D80 7.4 / 45.6 / 64.7; D95 46.2 / 49.8 / 84.4) | Authors' decision, 2026-10-25: regular travel is travel seen every month |
+| Areas | Parts of each area | 1,728 versions, no limit: Columbia home body 165 hexagons, 962 km², 160,816; Jefferson City 13, 76 km², 7.8 km from the body, 35,606; Moberly 7, 41 km², 33.8 km, 11,460; 12 specks. Mexico home 92, 535 km², 15,507; rural Audrain 14 and 3; Centralia 18.2 km from the body; 2 specks. Linn's Columbia part 12 hexagons, 70 km², 75,883. 6,912 versions under 4+ of 7: Moberly a part of Columbia's area (50.2 km from the centre) | Columbia home body 168, 979 km², 161,321, no other part, Jefferson City a distant tie (10 hexagons, 41.2 km from the centre, 32,125), 5 specks; Mexico home 109, 634 km², 15,968, Centralia 7.8 km, 4 specks; Linn's Columbia part 13, 76 km², 82,353 | 6,912 versions; 7 of 7; D90 limit |
+| Areas | Mexico's Boone hexagons | 99; audit round 1 95; audit round 2 34 in the core, 1 at p ≥ 0.8, 114 in the single-drawing outline; round 3: 29 in the reference-level drawing; 1,728 versions: 51 / 23 / 1 at p ≥ 0.2 / 0.5 / 0.8 | 51 likely 20%+, 24 likely 50%+ (20 in the Columbia part), 1 likely 80%+ (`area_ensemble.py`) | Probability surface; 6,912 versions |
+| Areas | People inside the core; p ≥ 0.8 | —; round 3 all p ≥ 0.5: 212,133 / 124,002 / 133,522; 1,728 versions: multi-part area 207,883 / 123,873 / 132,531 (all core 212,133 / 124,002 / 133,522); by p band 38,714 / 173,419; 111,840 / 12,163; 93,965 / 39,557; p ≥ 0.8 583 / 308 / 346 km² | Multi-part area 161,321 / 123,946 / 139,001 people (all core 194,485 / 124,228 / 139,992); by p band 47,491 / 146,994; 111,976 / 12,252; 100,435 / 39,557; p ≥ 0.8 536 / 320 / 346 km² | 6,912 versions; 7 of 7; D90 limit |
+| Areas | Areas outside the Columbia–Jefferson City market | Six areas in three other TV markets built and reported (2026-10-25 draft) | Not drawn or reported | Scope: the Columbia–Jefferson City market only (authors' decision, 2026-10-25) |
+| Areas | Connected-body rule | —; round 3: reach factor 10 / 15 / 25 km / none, distant pieces outside the area as separate ties; 2026-10-25 draft: home body + every p ≥ 0.5 piece of 3+ hexagons, wherever it lies | Home body + every p ≥ 0.5 piece of 3+ hexagons whose nearest hexagon lies within D90 of the town's centre; the reach's level "none" replaced by D90 | A connected-within-reach rule cut out Columbia, Mexico's dominant destination (33.8 km from the home body; Audrain → Boone 39% of out-of-county visits, 43% of work-hours visits, 34% of out-commuters); no limit at all let pieces far beyond regular travel join (authors' decision, 2026-10-25) |
+| Areas | p, wording | "Share of settings" that draw a hexagon, "not a probability" (round 3); the probability under equal weighting of the 1,728 versions (2026-10-25 draft) | The probability, under equal weighting of the 6,912 versions, that the place is part of the area ("how likely the place is part of the area"), conditional on the range of the choices; not a confidence | Authors' decision, 2026-10-25 ("share of settings" obtuse); multiverse analysis, Steegen et al. 2016 |
+| Areas | Single-drawing map | Published as `?prob=0` with its outline, certainty layer and orange news dots, reproduced by the reference-level version (Jaccard 1.000); that drawing in the core 86% / 86% / 88%; exports carried its rows | Not produced or exported | One version is a small core that does not depict the area |
+| Areas | News terms on the single drawing and the closed outlines | Single drawing: Columbia 245 / 15 / 17 hexagons (11% differ), Mexico 137 / 4 / 4 (6%), Linn 132 / 2 / 11 (10%); closed outlines Columbia 587 / 125 / 53 (23%), Mexico 444 / 16 / 175 (30%), Linn identical; 1,728-version core comparison Jaccard 0.91 / 0.88 / 0.95 | Network-tie core against the travel-only core (6,912 versions): Jaccard 0.93 / 0.91 / 0.95; the news weight ω is a choice (Results, The news weight alone) | Single drawing and closed outline dropped; news weight in the ensemble |
 | Areas | Distant ties, Mexico | — | Columbia as a separate tie in 27% of settings (round 3) → Columbia is a part of Mexico's area (20 hexagons, 117 km², 102,884 people) | Multi-part area |
 | Areas | Multi-part figures from rounded p (draft, 2026-10-25) | — | Mexico area 791 km², 123,900 people, 136 hexagons; home body 107 hexagons, 622 km², 15,923; Centralia 7.8 km; rural Audrain 3 hexagons; specks rural Audrain 1, rural Callaway 2; all core 808 km², 124,030, 139 hexagons → 785 km², 123,873; home body 92, 535 km², 15,507; rural Audrain 14 and 3; Centralia 18.2 km; 2 specks (3 hexagons); all core 802 km², 124,002 | Unrounded p (single source `flows/reach/probability_columbia.json`) |
-| Areas | Distant ties | — | "Pieces drawn beyond the reach, share of settings" as the tie list → towns drawn in 50%+ of versions with no hexagon at p ≥ 0.5 (Columbia: Kansas City 0.93, Springfield 0.82, Fulton 0.76, …), beyond-reach shares kept as the other half of the same count | A town drawn in most versions can have every hexagon under 0.5 |
-| Areas | Map key and outline | — | "Share of settings that draw the place"; core outlined → "How likely the place is part of the area" (10–80%+); subtitle "Across 1,728 equally plausible ways of drawing the map; outlined: the area, places likely 50% or more"; outline grey #6f6d66 at 0.8 | Authors, 2026-10-25 |
+| Areas | Distant ties | "Pieces drawn beyond the reach, share of settings" as the tie list (round 3); 1,728 versions: towns drawn in 50%+ of versions with no hexagon at p ≥ 0.5, Columbia: Fulton 0.76 / 0.58 / 0.45 and four towns outside the TV market; Mexico: Moberly 0.74 / 0.35 / 0.23; Linn: Ashland 0.78 / 0.67 / 0.36 and one town outside the TV market | Towns drawn often but outside the area (Results); Jefferson City a distant tie of Columbia beyond D90 | A town drawn in most versions can have every hexagon under 0.5; D90 limit |
+| Areas | Map key and outline | "Share of settings that draw the place"; core outlined; 2026-10-25 draft subtitle "Across 1,728 equally plausible ways of drawing the map; …" | "How likely the place is part of the area" (10–80%+); subtitle "Across 6,912 equally plausible ways of drawing the map; outlined: the area, places likely 50% or more"; outline grey #6f6d66 at 0.8 | Authors' decision, 2026-10-25 |
 | Areas | "Replicability" of the areas | — | Term replaced by month-split stability (K was selected on the same split) | Not validity; not independent of K |
-| Areas | Market test | Mexico-Boone 893 crossing; Columbia-Cole 2,682 (11.6% / 16.3%); Linn-Cole 522; first review Mexico-Boone 1,037, Linn-Cole 319 | Mexico-Boone ~832 (10.0% / 0.5%); Columbia Boone-centred (Boone 45%); Linn-Cole ~289 (8.1% / 0.2%) | K rule; ACS residents |
-| Areas | Areas per town | 63; "hubs split (Columbia 42/36/12, Springfield 31/30/18, St. Joseph 26/22/20); isolated towns have one (Linn 93, Belle 95, Cassville 92, Sikeston 78, Neosho 79)"; first review 57, changed for 12 of 36 towns | 58; changed for 7 of 36 (Areas per town table, left of each arrow = K = 6) | K rule |
+| Areas | Market test | Mexico-Boone 893 crossing; Columbia-Cole 2,682 (11.6% / 16.3%); Linn-Cole 522; audit round 1 Mexico-Boone 1,037, Linn-Cole 319 | Mexico-Boone ~832 (10.0% / 0.5%); Columbia Boone-centred (Boone 45%); Linn-Cole ~289 (8.1% / 0.2%) | K rule; ACS residents |
+| Areas | Areas per town | K = 6: "hubs split (Columbia 42/36/12)", "isolated towns have one (Linn 93, Belle 95)"; 11 areas in the market's 8 towns | 9 in 8 towns (Areas per town table, left of each arrow = K = 6) | K rule |
 | Areas | Local index reach, Linn | Rural Osage 0.15 against the pattern's 0.31; Maries 0.02 against 0.11 | Not rerun | K = 6 pattern |
 | Areas | Network tie values | Columbia's strongest ties Ashland 0.38 / 0.61, Jefferson City 0.19 / 0.34, Mexico 0.16 / 0.26; weight sensitivity rank correlation 0.988–1.000, at most 25 of 608 hexagons change band; gate: Linn-Columbia shared places 0.32 (0.05 out, 0.02 in), kept Linn-Jefferson City 0.26, Mexico-Columbia 0.12, Columbia-Mexico 0.22; statewide shared coverage 244 of 267 lifted hexagons; Columbia "primary south, secondary north" | Not rerun | K = 6 areas |
-| Areas | Display selectivity floors; hexagons shown | Columbia primary 15.9 (239 hexagons), secondary 15.0 (398); first review hexagons beyond home 108 / 123 / 122, share holding 0.95 / 0.98 / 0.75; second review adopted drawing 1,146 / 807 / 754 km², 88–90% in the core; round 3: adopted drawing 86% / 86% / 88% in the core | No single-version drawing is produced; selectivity is a drawing choice in the ensemble (40 / 50 / 60%) | Probability surface |
-| Areas | Minimum size evidence | 75 markets; Spearman 0.37; median 0.84 under 500 … 0.95 above; Mexico's secondary 729 residents, 389 hexagons, 72% holding; 63 remain; Harrisonville 1 0.44, Grain Valley 1 0.53; Lee's Summit 2 36,956; first review 57 areas, median 0.93, 0.83 / 0.855 / 0.91 / 0.94, Spearman 0.31, Harrisonville 0.35, Grain Valley 0.61, Mexico 0.98; second review 0.76 / 0.835 / 0.89 / 0.92, Spearman 0.19, Columbia 0.95 | 58 areas; median 0.92; 0.76 / 0.84 / 0.89 / 0.93 by size; Spearman 0.39 | Independent halves; ACS residents; K rule |
-| Areas | Selection-rule sensitivity ("split-half agreement") | Home included, K = 6: 0.896 / 0.880 / 0.941 / 0.734, mean 0.863, "highest mean agreement"; area sensitivity Columbia I 0.77–1.0, Mexico 0.44 / 0.50; first review home excluded 0.76 / 0.75 / 0.58, mean 0.70, IoU 0.53–1.0 / 0.52–1.0 / 0.45–1.0; second review 432-member ensemble r(p) 0.99 / 0.96 / 0.86, core Jaccard 0.90 / 0.85 / 0.66 (p ≥ 0.8: 0.95 / 0.96 / 0.58), adopted outline 0.85 / 0.74 / 0.55 | Replaced by the 1,728-member ensemble: month-split stability r(p) 0.994 / 0.978 / 0.901 (contested 0.990 / 0.956 / 0.734); core Jaccard 0.85 / 0.88 / 0.72 | Settings enter the ensemble; "agreement" is replicability, not validity |
-| Supply | Coverage density | Columbia II place-specific 24 / 5 / 26 / 45%, with county-level stories 83 / 17 / 0 / 0%; square root for all: Columbia I 58 / 38 / 4 / 0, II 25 / 25 / 50 / 0, Mexico 32 / 15 / 53 / 0, Linn 25 / 54 / 21 / 0; revised: Columbia I 53 / 4 / 43 / 0, II 23 / 4 / 73 / 0, Mexico 30 / 3 / 67 / 0, Linn 22 / 5 / 73 / 0, newsrooms 1 / 1, 2 / 6, 2 / 2, 2 / 2; first review on the network-tie areas: 44 / 8 / 48 / 0 (newsrooms 2 / 1), 32 / 4 / 64 / 0 (2 / 3), 21 / 8 / 71 / 0 (2 / 2), 259 / 311 / 219 hexagons, alpha 1: 44 / 8 / 48, 29 / 7 / 64, 20 / 9 / 71; second review QA on the travel-only area: 34 / 9 / 57 / 0, 18 / 5 / 77 / 0, 22 / 9 / 69 / 0 (travel-only area 3,502 / 3,613 / 1,292 km²) | QA only, travel-only core under the multi-part rule: 52 / 5 / 43 / 0, 35 / 4 / 61 / 0, 34 / 6 / 60 / 0 (1,195 / 820 / 931 km²); round 3 unconnected travel-only core: 53 / 6 / 41 / 0, 35 / 4 / 61 / 0, 34 / 6 / 60 / 0 (1,264 / 849 / 990 km²) | Supply is the next paper's; travel-only core with the multi-part rule (2026-10-25) |
-| Supply | Balanced diet | Columbia I 51%, 5.0, 3 outlets; II 10%, 1.5, 4; Mexico 14%, 2.2, 3; Linn 14%, 1.7, 2; first review 44%, 4.4, 3; 15%, 2.4, 3; 16%, 1.8, 2; Economic Development 14% of Mexico's; second review QA on the travel-only area 22%, 9%, 17% | QA only, travel-only core under the multi-part rule: 49%, 12%, 28% (round 3 unconnected core 46%, 12%, 28%) | As above |
-| Tie markets | Replicability / accuracy by market | 2026-10-18: Kansas City 1.00 / 0.92, St. Joseph 0.96 / 0.84, Joplin 0.94 / 0.84, Springfield 0.90 / 0.80, Columbia 0.85 / 0.67, Kirksville 0.87 / 0.53, Cape Girardeau 0.86 / 0.36; all 0.91 / 0.70 (travel alone 0.67); same number of markets 53%, within one 97%; first review (before stage 3) 0.98 / 0.93, 0.88 / 0.62, 0.97 / 0.77, 0.935 / 0.575, 0.81 / 0.615 (travel alone 0.49), 0.74 / 0.59, 0.80 / 0.36; all 0.88 / 0.61; second review (stage 3) 0.99 / 0.965, 0.88 / 0.63, 0.97 / 0.79, 0.94 / 0.55, 0.82 / 0.625, 0.74 / 0.61, 0.78 / 0.37; all 0.89 / 0.62 (mean 0.614) | Round 3 accuracy: Kansas City 0.95, Joplin 0.75, Kirksville 0.60, St. Joseph 0.59, Springfield 0.56, Columbia 0.50, Cape Girardeau 0.38; all 36 towns 0.58 (mean 0.580), month-split stability 0.88, travel alone 0.59 (settings recorded by each run, identical in all seven) | Scoring change (home masked, beyond the home county); stage-3 and round-3 tie changes |
-| Tie markets | Columbia, Mexico, Linn (town) | 2026-10-18 accuracy 0.69, 0.46, 0.68; first review 0.13, 0.41, 0.82, replicability 0.88, 0.82, 0.88; second review accuracy 0.13, 0.41, 0.75; month-split stability 0.89, 0.84, 0.89 | Accuracy 0.14, 0.47, 0.69; month-split stability 0.92, 0.80, 0.79 | Old scoring (Columbia's 0.69 from unmasked home units); stage 3 |
-| Tie markets | Population in the within-county spread | Cape Girardeau 0.36 → 0.49, Kirksville 0.53 → 0.62, Columbia 0.67 → 0.69, Springfield 0.80 → 0.74; all 0.70 / 0.687 → 0.70 / 0.707; density thresholds 0.72 / 0.703, 0.71 / 0.706; nonmetro-only rule 0.697 | Adopted setting in the current run (Cape Girardeau 0.38); alternatives not rerun | Old scoring |
-| Tie markets | Columbia's eight towns, steps; Vandalia; Mexico with LODES within 45 miles; within-county spread | 0.655 → 0.665 → 0.67; 0.44 → 0.57 (first review 0.55); 0.65; jobs 0.49, OSM 0.50, half each 0.53, exponent 1 0.59, 3 0.37 | Not rerun (Columbia market 0.50; Mexico 0.47) | Old scoring |
+| Areas | Display selectivity floors; hexagons shown | Columbia primary 15.9 (239 hexagons), secondary 15.0 (398); audit round 1 hexagons beyond home 108 / 123 / 122, share holding 0.95 / 0.98 / 0.75; audit round 2 single drawing 1,146 / 807 / 754 km², 88–90% in the core; round 3: reference-level drawing 86% / 86% / 88% in the core | No single-version drawing is produced; selectivity is a drawing choice in the ensemble (40 / 50 / 60%) | Probability surface |
+| Areas | Minimum size evidence | All study towns: 75 markets; Spearman 0.37; median 0.84 under 500 … 0.95 above; Mexico's secondary 729 residents, 389 hexagons, 72% holding; 63 remain; audit round 1 57 areas, median 0.93, 0.83 / 0.855 / 0.91 / 0.94, Spearman 0.31, Mexico 0.98; audit round 2 0.76 / 0.835 / 0.89 / 0.92, Spearman 0.19, Columbia 0.95; round 3 58 areas, median 0.92, 0.76 / 0.84 / 0.89 / 0.93, Spearman 0.39 | The market's 9 areas in 8 towns: median 0.90; 0.87 / 0.78 / 0.90 / 0.93 by size (Linn 0.63); Spearman 0.66 | Independent halves; ACS residents; K rule; scope |
+| Areas | Selection-rule sensitivity ("split-half agreement") | Home included, K = 6: 0.896 / 0.880 / 0.941 / 0.734, mean 0.863, "highest mean agreement"; area sensitivity Columbia I 0.77–1.0, Mexico 0.44 / 0.50; audit round 1 home excluded 0.76 / 0.75 / 0.58, mean 0.70, IoU 0.53–1.0 / 0.52–1.0 / 0.45–1.0; audit round 2 432-version ensemble r(p) 0.99 / 0.96 / 0.86, core Jaccard 0.90 / 0.85 / 0.66 (p ≥ 0.8: 0.95 / 0.96 / 0.58), single-drawing outline 0.85 / 0.74 / 0.55; 1,728 versions r(p) 0.994 / 0.978 / 0.901 (contested 0.990 / 0.956 / 0.734), core Jaccard 0.85 / 0.88 / 0.72 | 6,912 versions, month-split stability: r(p) 0.995 / 0.978 / 0.895 (contested 0.990 / 0.955 / 0.732); core Jaccard 0.86 / 0.87 / 0.72 | Settings enter the ensemble; "agreement" is month-split stability, not validity |
+| Supply | Coverage density | Columbia II place-specific 24 / 5 / 26 / 45%, with county-level stories 83 / 17 / 0 / 0%; square root for all: Columbia I 58 / 38 / 4 / 0, II 25 / 25 / 50 / 0, Mexico 32 / 15 / 53 / 0, Linn 25 / 54 / 21 / 0; revised: Columbia I 53 / 4 / 43 / 0, II 23 / 4 / 73 / 0, Mexico 30 / 3 / 67 / 0, Linn 22 / 5 / 73 / 0, newsrooms 1 / 1, 2 / 6, 2 / 2, 2 / 2; audit round 1 on the network-tie areas: 44 / 8 / 48 / 0 (newsrooms 2 / 1), 32 / 4 / 64 / 0 (2 / 3), 21 / 8 / 71 / 0 (2 / 2), 259 / 311 / 219 hexagons, alpha 1: 44 / 8 / 48, 29 / 7 / 64, 20 / 9 / 71; audit round 2 QA on the travel-only area: 34 / 9 / 57 / 0, 18 / 5 / 77 / 0, 22 / 9 / 69 / 0 (travel-only area 3,502 / 3,613 / 1,292 km²) ; round 3 unconnected travel-only core: 53 / 6 / 41 / 0, 35 / 4 / 61 / 0, 34 / 6 / 60 / 0 (1,264 / 849 / 990 km²); 1,728-version travel-only core, multi-part, no distance limit: 52 / 5 / 43 / 0, 35 / 4 / 61 / 0, 34 / 6 / 60 / 0 (1,195 / 820 / 931 km²; Columbia 209,594 people) | QA only, travel-only core (ω = 0 of the 6,912 versions; multi-part, D90 limit): 49 / 6 / 45 / 0, 35 / 4 / 61 / 0, 34 / 6 / 60 / 0 (1,049 / 820 / 931 km²; Columbia 162,809 people) | Supply is the next paper's; travel-only core with the multi-part rule and D90 limit (2026-10-25) |
+| Supply | Balanced diet | Columbia I 51%, 5.0, 3 outlets; II 10%, 1.5, 4; Mexico 14%, 2.2, 3; Linn 14%, 1.7, 2; audit round 1 44%, 4.4, 3; 15%, 2.4, 3; 16%, 1.8, 2; Economic Development 14% of Mexico's; audit round 2 QA on the travel-only area 22%, 9%, 17% ; round 3 unconnected core 46%, 12%, 28% | QA only, travel-only core (ω = 0; multi-part, D90 limit): 49%, 12%, 28% | As above |
+| Tie markets | Month-split stability / accuracy, Columbia–Jefferson City market | 2026-10-18: 0.85 / 0.67; audit round 1 (before stage 3) 0.81 / 0.615 (travel alone 0.49); audit round 2 (stage 3) 0.82 / 0.625; round 3 accuracy 0.50 | Accuracy median 0.505 (printed 0.51; mean 0.526), month-split stability 0.79, travel alone 0.52 (8 study towns; settings recorded by each run) | Scoring change (home masked, beyond the home county); stage-3 and round-3 tie changes; scope |
+| Tie markets | Columbia, Mexico, Linn (town) | 2026-10-18 accuracy 0.69, 0.46, 0.68; audit round 1 0.13, 0.41, 0.82, month-split stability 0.88, 0.82, 0.88; audit round 2 accuracy 0.13, 0.41, 0.75; month-split stability 0.89, 0.84, 0.89 | Accuracy 0.14, 0.47, 0.69; month-split stability 0.92, 0.80, 0.79 | Old scoring (Columbia's 0.69 from unmasked home units); stage 3 |
+| Tie markets | Population in the within-county spread | Columbia market 0.67 → 0.69; all study towns 0.70 / 0.687 → 0.70 / 0.707; density thresholds 0.72 / 0.703, 0.71 / 0.706; nonmetro-only rule 0.697 | Kept in the current run; alternatives not rerun | Old scoring |
+| Tie markets | Columbia's eight towns, steps; Vandalia; Mexico with LODES within 45 miles; within-county spread | 0.655 → 0.665 → 0.67; 0.44 → 0.57 (audit round 1 0.55); 0.65; jobs 0.49, OSM 0.50, half each 0.53, exponent 1 0.59, 3 0.37 | Not rerun (Columbia market 0.505; Mexico 0.47) | Old scoring |
