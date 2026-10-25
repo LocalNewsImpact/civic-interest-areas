@@ -53,6 +53,8 @@ if stage coverage; then
   step coverage_model          analysis/coverage_model.py
   step coverage_saturation     analysis/coverage_saturation_test.py
   step coverage_border         analysis/border_coverage_test.py
+  step coverage_flag_compare   analysis/coverage_flag_compare.py
+  step coverage_newsroom_size  analysis/coverage_newsroom_size_test.py
   step coverage_marginal       analysis/combined_marginal_test.py coverage_all coverage_no_broadcast
 fi
 
