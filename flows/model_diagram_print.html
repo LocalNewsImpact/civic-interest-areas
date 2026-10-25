@@ -26,6 +26,11 @@
   table.key td.s { width: 62px; white-space: nowrap; }
   table.key td.v { width: 92px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .out { margin-top: 5px; }
+  /* print: each calculation stays on one page; US Letter with 0.5 in margins */
+  @page { size: letter; margin: 0.5in; }
+  .panel { break-inside: avoid; page-break-inside: avoid; }
+  .dd-title, .dd-subtitle { break-after: avoid; page-break-after: avoid; }
+  figcaption { break-inside: avoid; page-break-inside: avoid; }
 </style>
 </head>
 <body>
