@@ -34,19 +34,20 @@ analysis and every figure that a later version replaced (appendix "Superseded fi
 
 ## Inputs
 
-The scripts read each input from a fixed folder inside the repository. Only the story data for three counties is
-committed; every other input is obtained from its source.
+The repository does not contain these inputs, apart from the story data for three counties and the pinned outlet
+registry checksums. Each input is obtained from its source and placed in the folder the scripts read. `.gitignore`
+excludes every one of these folders' data files.
 
-| Input | Folder | Source |
+| Input | Place in folder (not committed) | Source |
 |---|---|---|
 | Advan Neighborhood Patterns Plus, Missouri and Kansas destinations, January–September 2026 | `neighborhood/raw/`, `neighborhood/raw_ks/` | Dewey Data, academic licence |
 | Advan Weekly Patterns Plus, Missouri, March 2026 | `weekly/raw/` | Dewey Data, academic licence |
 | Census boundary, population, American Community Survey (ACS), County Business Patterns, Business Dynamics Statistics and National Household Travel Survey (NHTS) files; state taxable sales | `census_dl/` | Public; cited in `CITATIONS.md` |
 | LEHD Origin-Destination Employment Statistics (LODES), 2023 | `free/` | Public; cited in `CITATIONS.md` |
 | OpenStreetMap extracts, Missouri and Kansas | `osm/` | Geofabrik |
-| Outlet registry and television market assignments | `data/registry/` | Pinned copies; checksums in `data/registry/README.md` |
+| Outlet registry and television market assignments | `data/registry/` | Missouri School of Journalism outlet registry; checksums committed in `data/registry/README.md` |
 | News stories and their places, March 2026 | `coverage/`, `flows/reach/` | Missouri School of Journalism local news database; exported by `coverage/storymap/export_statewide_2026_03.sh` and `coverage/export_source_quality.sh` (database credentials required) |
-| Story data, Audrain, Boone and Osage counties | `data/stories/` | Committed (CC BY 4.0); described in `data/stories/README.md` |
+| Story data, Audrain, Boone and Osage counties | `data/stories/` (committed) | Missouri School of Journalism (CC BY 4.0); described in `data/stories/README.md` |
 
 ## Reproducing the results
 
