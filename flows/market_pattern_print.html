@@ -267,7 +267,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
       `so the likelihood is conditional on that range of choices. The area: the home body and every other piece of three or ` +
       `more hexagons likely 50% or more${PARTN_ && PARTN_.length ? ` (${PARTN_.join(", ")})` : ""}, provided it starts within ` +
       `${LIM_} km of the town's centre \u2013 the distance within which 90% of its residents' regular travel (places visited ` +
-      `in four or more of the seven months) lies; pieces ` +
+      `in every one of the seven months) lies; pieces ` +
       `of one or two hexagons are left out of the outline (their shading stays).`;
     item(`<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="#6f6d66" stroke-width="1"/></svg>The area: likely 50% or more`);
   } else if (OUTM && !COVM) {
