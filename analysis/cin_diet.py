@@ -1,4 +1,5 @@
-"""A balanced diet of civic information in each civic interest area (user, 2026-10-20): the ten CIN categories of the
+"""QA DIAGNOSTIC (2026-10-24: supply figures belong to the next paper). A balanced diet of civic information in each
+civic interest area's travel-only footprint (user, 2026-10-20): the ten CIN categories of the
 codebook (the eight critical information needs of Friedland et al. 2012, plus Civic Life and Sports); a hexagon has a
 balanced diet when ANY 8 of the 10 reach the floor of 1 story a month each, by coverage density (scope areas, central 1,
 mention 0.5, Sports half, towns by the square root of size, counties and regions counted once by population; statewide

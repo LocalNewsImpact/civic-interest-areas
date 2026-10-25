@@ -59,8 +59,15 @@ STUDY = {t_: c_ for t_, (c_, _) in TOWNS.items()}
 HOME_PLACE = {t_: p_ for t_, (_, p_) in TOWNS.items()}
 import numpy as np
 hm_ = pd.read_csv(R / "homes.csv", dtype={"home_cbg": str, "place": str}).set_index("home_cbg")
-# a town's home block groups: those homes.csv assigns to it (centre in the town, or 10%+ of the town inside)
+# a town's home block groups: those homes.csv assigns to it (build_homes.py: the block group's centre in the town, OR
+# 10%+ of the town's area inside the block group). The 10% rule takes in fringe block groups whose residents mostly live
+# outside the town (Linn: its one block group covers the town and the land around it); they are the town's residents
+# here, and their units are home (100) on the map
 town_bgs = lambda town: [h for h in hm_.index if hm_.town.get(h) == town or hm_.place.get(h) == HOME_PLACE[town]]
+# the town's own units: its block groups' towns and rural block groups, and the town itself -- home on the map, so masked
+# from its travel before the busiest place is set to 50 and before county shares (as tie_footprint.py, 2026-10-24)
+own_units_of = lambda town: ({P["bg_unit"].get(h) for h in town_bgs(town)} | {"rural:" + h for h in town_bgs(town)}
+                             | {HOME_PLACE[town]})
 people_a, member_a = np.array(P["people"]), np.array(P["member"])
 Wa, Ha, Xa = np.array(P["W"]), np.array(P["H"]), np.array(P["X"])
 out = {}
@@ -71,11 +78,14 @@ for town, home in STUDY.items():
     # THE TOWN'S OWN TRAVEL IN EACH PATTERN: a pattern is fitted across all 158 block groups, so it carries other
     # places' trips (Osage's pattern takes southern Osage residents to Maries). Each of the town's block groups'
     # observed travel to a place is split across the patterns by the share each explains there (the mixture's
-    # responsibilities, W[h,k] H[k,u] / sum_j W[h,j] H[j,u]).
+    # responsibilities, W[h,k] H[k,u] / sum_j W[h,j] H[j,u]). WEIGHTED BY RESIDENTS (2026-10-24, peer review): a block
+    # group's reach counts by its residents, so the town's travel is people's visits, not reach summed over block groups.
     hb = hbi
     Wm, Xm = Wa[hb], Xa[hb]
+    pw = np.nan_to_num(people_a[hb])[:, None]
     den = np.maximum(Wm @ Ha, 1e-9)
-    own = {k: (Xm * (Wm[:, k:k + 1] * Ha[k][None, :] / den)).sum(0) for k in range(P["K"])}
+    own = {k: (pw * Xm * (Wm[:, k:k + 1] * Ha[k][None, :] / den)).sum(0) for k in range(P["K"])}
+    not_home = np.array([u not in own_units_of(town) for u in P["units"]], float)
     # each pattern is its own market: Columbia's three share the Boone core and part beyond it (outside Boone their
     # county shares agree at 0.67 or less) -- south toward Jefferson City, east-west along I-70, north toward Moberly
     groups = [[k] for k in sorted(range(P["K"]), key=lambda k: -t["people"][k])]
@@ -89,7 +99,7 @@ for town, home in STUDY.items():
     groups = [g_ for i_, g_ in enumerate(groups[:3]) if i_ == 0 or (sum(t["share"][k] for k in g_) >= MIN_SHARE
                                                                     and sum(t["people"][k] for k in g_) >= MIN_RESIDENTS)]
     for rank, g_ in enumerate(groups):
-        trav = sum(own[k] for k in g_)
+        trav = sum(own[k] for k in g_) * not_home         # home units out before scaling (they are home, 100)
         trav = trav / trav.max()
         H = {u: float(x) for u, x in zip(P["units"], trav) if x > 0}
         people = sum(t["people"][k] for k in g_)
@@ -135,12 +145,15 @@ bgs = read_shp(str(DL / "bg/cb_2020_29_bg_500k"), lambda r: r["GEOID"])
 DMA = sorted({b[:5] for b in bgs})       # ALL OF MISSOURI: the frame comes from each town's market, not a TV market
 ids = list(bgs)
 tree = STRtree([bgs[b][1] for b in ids])
-LAT0, SIZE = 38.7, 1.5                                   # circumradius in km: 3 km across
+import os as _os
+# circumradius in km: 3 km across (HEX_KM, for the sensitivity test only); a hexagon is 3 sqrt(3) / 2 x 1.5^2 = 5.85 km2
+LAT0, SIZE = 38.7, float(_os.environ.get("HEX_KM", 3)) / 2
+HEX_KM2 = 3 * math.sqrt(3) / 2 * SIZE ** 2
 kx, ky = 111.32 * math.cos(math.radians(LAT0)), 110.57
 xs = [bgs[b][1].bounds for b in ids]
 x0, y0 = min(v[0] for v in xs) * kx, min(v[1] for v in xs) * ky
 x1, y1 = max(v[2] for v in xs) * kx, max(v[3] for v in xs) * ky
-hexes, unit_at = {}, {}
+hexes, unit_at, hex_bg = {}, {}, {}
 for r in range(int(y0 / (1.5 * SIZE)) - 1, int(y1 / (1.5 * SIZE)) + 2):
     for q in range(int(x0 / (math.sqrt(3) * SIZE) - r / 2) - 1, int(x1 / (math.sqrt(3) * SIZE) - r / 2) + 2):
         cx, cy = SIZE * math.sqrt(3) * (q + r / 2), SIZE * 1.5 * r
@@ -150,6 +163,7 @@ for r in range(int(y0 / (1.5 * SIZE)) - 1, int(y1 / (1.5 * SIZE)) + 2):
             continue
         k = f"{q},{r}"
         unit_at[k] = P["bg_unit"].get(hit[0])
+        hex_bg[k] = hit[0]
         hexes[k] = [[round((cx + SIZE * math.cos(math.radians(60 * i - 30))) / kx, 5),
                      round((cy + SIZE * math.sin(math.radians(60 * i - 30))) / ky, 5)] for i in range(7)]
 # COVERAGE BY HEXAGON. A story's weight goes where it is located, spread evenly over the hexagons it is relevant to:
@@ -166,7 +180,10 @@ pts = pd.read_csv(here / "reach/march_story_points.csv", dtype={"point_geoid": s
 plc = pd.read_csv(here / "reach/march_story_places.csv", dtype={"geoid": str})
 pl_shapes = read_shp(str(DL / "place/cb_2020_29_place_500k"), lambda r: r["GEOID"])
 centre = {k: (sum(c[0] for c in v[:6]) / 6, sum(c[1] for c in v[:6]) / 6) for k, v in hexes.items()}
-hex_county = {k: (P["unit_county"].get(u) or "") for k, u in unit_at.items()}
+# a hexagon's county: the county of the block group holding its centre (2026-10-24, peer review; was its travel unit's
+# county -- a town unit takes the county most of its block groups lie in, so hexagons of a town spanning a county line
+# were assigned across it)
+hex_county = {k: b_[:5] for k, b_ in hex_bg.items()}
 
 
 def hex_of(lon, lat):
@@ -213,8 +230,14 @@ def spread(targets, w, acc):
             acc[k] = max(acc.get(k, 0), w / len(targets))
 
 
+# STATEWIDE, NATIONAL AND INTERNATIONAL STORIES locate nothing (2026-10-24, peer review): as in coverage density
+# (analysis/area_coverage_alignment.py), a story whose scope is wider than a region adds no tie to the places it names
+SCOPE = pd.read_csv(here.parent / "coverage/storymap/statewide_2026_03_scope.csv").set_index("article_id").scope.fillna("")
+WIDE = {"statewide", "national", "international", "other"}
+pts_l = pts[~pts.article_id.map(SCOPE).isin(WIDE)]          # the story layers below keep every story
+plc_l = plc[~plc.article_id.map(SCOPE).isin(WIDE)]
 credit = defaultdict(dict)                                  # article -> hexagon -> weight
-for r in pts.itertuples():
+for r in pts_l.itertuples():
     acc = credit[r.article_id]
     if r.point_geoid_level == "block" and r.point_lat == r.point_lat:
         spread([hex_of(r.point_lon, r.point_lat)] if hex_of(r.point_lon, r.point_lat) else [], 1.0, acc)
@@ -223,7 +246,7 @@ for r in pts.itertuples():
     elif r.point_geoid_level == "county":
         spread(county_hexes.get(r.point_geoid, []), 1.0, acc)
 central = {a_: dict(v_) for a_, v_ in credit.items()}      # central focus alone (before mentions): the story map's dots
-for r in plc.itertuples():
+for r in plc_l.itertuples():
     acc = credit[r.article_id]
     if r.geoid_level == "place":
         spread(place_hexes(r.geoid), 0.5, acc)
@@ -314,10 +337,8 @@ for town, home in STUDY.items():
                 in_h[k] = max(in_h.get(k, 0), min(1.0, in_num[o] / in_den[o] / self_share))
     for k in home_hexes:
         out_h[k] = in_h[k] = 1.0
-    # HOME COUNTY: home outlets' market is their county -- every hexagon of it carries their outgoing tie (2026-10-17)
-    for k, c_ in hex_county.items():
-        if c_ == home:
-            out_h[k] = 1.0
+    # (the blanket home-county out = 1 of 2026-10-17 is removed, 2026-10-24: out is the home outlets' located coverage
+    # everywhere, the home county included)
     COV[town] = {"out": out_h, "in": in_h}
     shown = lambda g_: (np.mean([out_h.get(k, 0) for k in place_hexes(g_)]), np.mean([in_h.get(k, 0) for k in place_hexes(g_)]))
     print(f"{town}: " + ", ".join(f"{n_} {shown(HOME_PLACE[n_])[0]:.2f}/{shown(HOME_PLACE[n_])[1]:.2f}" for n_ in TOWNS if n_ != town))
@@ -517,6 +538,14 @@ for town, pats in out.items():
             idx[name_] = {k: round(100 * x, 1) for k, x in raw.items() if 100 * x >= 1}
             for k in home_hexes_of[town]:
                 idx[name_][k] = 100.0
+        # THE TRAVEL-ONLY AREA (user, 2026-10-24): travel, rural spread by destinations, headroom, the spatial lag and
+        # direction, home 100 -- no news term. The footprint supply (coverage density, the balanced diet) is measured on
+        # (the next paper; QA here). The published map is the network tie ("net"); orange dots mark what news adds
+        raw_t = {k: tr_at(Hk, k, u) for k, u in unit_at.items() if tr_at(Hk, k, u) > 0}
+        raw_t = spatial(raw_t, home_hexes_of[town]) if raw_t else {}
+        idx["travel"] = {k: round(100 * x, 1) for k, x in raw_t.items() if 100 * x >= 1}
+        for k in home_hexes_of[town]:
+            idx["travel"][k] = 100.0
         if pt["rank"] == 1:
             nm_ = lambda X: P["unit_name"].get(X) or (pl_shapes[X][0]["NAME"] if X in pl_shapes else X)
             top_ov = sorted(((nm_(X), round(OV.get(X, 0), 2), round(SC.get(X, 0), 2)) for X in OV), key=lambda z: -(z[1] + z[2]))[:5]
@@ -532,9 +561,8 @@ for town, pats in out.items():
                 bands = sum(np.digitize(base[k], [5, 10, 20, 40, 80]) != np.digitize(alt.get(k, 0), [5, 10, 20, 40, 80]) for k in ks_)
                 sens.append(f"{name_} rho {rho:.3f} bands {bands}/{len(ks_)}")
             print(f"  NET {town}: (place, shared places, shared coverage) {top_ov}\n    " + "; ".join(sens))
-        # DIRECTION FROM THE FINAL TIES (2026-10-17): the towns of 2,500+ outside the home county with the strongest
-        # network tie (mean of their 3 strongest hexagons); the second named only if half the first. Travel alone named places the map
-        # does not show (Kansas City for Columbia).
+        # DIRECTION FROM THE PUBLISHED MAP'S TIES (2026-10-17): the towns of 2,500+ outside the home county with the
+        # strongest network tie (mean of their 3 strongest hexagons); the second named only if half the first
         tv = defaultdict(list)
         for k, v_ in idx["net"].items():
             pk = hex_place.get(k)
@@ -545,7 +573,7 @@ for town, pats in out.items():
         ranked = sorted(tsum.items(), key=lambda z: -z[1])
         pt["toward"] = [pl_shapes[pk][0]["NAME"] for pk, w in ranked[:2] if w >= 0.5 * ranked[0][1]] if ranked else []
         maps["towns"][town].append({**{k: pt[k] for k in ("rank", "label", "toward", "residents", "share", "counties")},
-                                    "value": v, "index": {k_: v_ for k_, v_ in idx.items() if k_ in ("0", "1", "net", "cov", "netcov")},
+                                    "value": v, "index": {k_: v_ for k_, v_ in idx.items() if k_ in ("0", "1", "travel", "net", "cov", "netcov")},
                                     "newsrooms": pt.get("newsrooms", {})})
 maps["home"] = {t_: {"county": c_, "lon": round(pl_shapes[p_][1].representative_point().x, 4),
                      "lat": round(pl_shapes[p_][1].representative_point().y, 4)} for t_, (c_, p_) in TOWNS.items()}
@@ -668,5 +696,6 @@ for k in used:
 maps["hexes"] = {k: v for k, v in maps["hexes"].items() if k in used | ring}
 maps["in_market"] = [k for k in maps["in_market"] if k in maps["hexes"]]
 maps["hex_county"] = {k: hex_county.get(k, "") for k in maps["hexes"]}
+maps["hex_km2"] = round(HEX_KM2, 3)
 json.dump(maps, open(R / "market_pattern_maps.json", "w"))
 print(f"{len(hexes):,} hexagons in the market")

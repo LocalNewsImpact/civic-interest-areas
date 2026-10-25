@@ -1,4 +1,4 @@
-"""How much evidence each hexagon on an information needs map rests on. For every market of a region: the hexagons
+"""How much evidence each hexagon on a civic interest area (the published, network-tie map) rests on. For every market of a region: the hexagons
 drawn (the approved selection, then the stability filter -- inside the connected area that holds in both halves of
 the year), and for each the residents' worth of travel behind it: the market's residents x the share of the market's
 travel going to the hexagon's unit (a town, or a rural block group), divided evenly over the unit's hexagons.
@@ -31,15 +31,12 @@ rows = []
 for town, ms in MAPS["towns"].items():
     for m in ms:
         pt = next(p for p in ns["out"][town] if p["rank"] == m["rank"])
-        hbi = [P["homes"].index(h) for h in ns["town_bgs"](town) if h in P["homes"]]
-        Wm, Xm = Wa[hbi], np.asarray(P["X"])[hbi]
-        den = np.maximum(Wm @ Ha, 1e-9)
-        trav = sum((Xm * (Wm[:, k:k + 1] * Ha[k][None, :] / den)).sum(0) for k in pt["patterns"])
+        # residents' visits attributed to the area's pattern, own units masked (confidence_layer.pattern_travel)
         drop = ns["own_units"](town)
-        tv = {u: x for u, x in zip(P["units"], trav) if x > 0 and u not in drop}
+        tv = {u: x for u, x in g["pattern_travel"](town, pt["patterns"], P["X"]).items() if u not in drop}
         tot = sum(tv.values())
         res_u = {u: m["residents"] * x / tot for u, x in tv.items()}
-        net = m["index"]["net"]
+        net = m["index"]["net"]                    # the published (network-tie) map
         on, basef = g["shown_set"](net, set(MAPS.get("in_market", [])))
         area = shape(C[town][str(m["rank"])]["outline"])
         drawn = [k for k in on if net[k] < 100 and k in centre and area.contains(Point(*centre[k]))]

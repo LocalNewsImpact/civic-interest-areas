@@ -10,10 +10,12 @@ hexagon of each area's drawn footprint (market_pattern_print.html?table=1):
                           x = lon * 111.32 * cos(38.7 deg), y = lat * 110.57 (km): centre x = 1.5 * sqrt(3) * (q + r/2),
                           y = 1.5 * 1.5 * r
   lon, lat                hexagon centre
-  travel                  how local the place is, home = 100 (0 where not shaded)
+  travel                  the network tie of the adopted-setting map, home = 100 (0 where not shaded)
   lift                    how much news ties add, 0.10 = 10% (0 below 10%)
   shown                   1 = drawn shaded by the map's selection rule; 0 = empty, inside the area's outline
   home                    1 = the home town's own hexagons
+  p                       share of the settings ensemble's members that draw the hexagon (flows/area_ensemble.py);
+                          rows are the adopted map's hexagons, its outline's, and every hexagon with p >= 0.1
 
 Writes flows/civic_interest_areas.csv. Needs the page served on 127.0.0.1:8765 (python3 -m http.server in flows/)."""
 import csv
@@ -30,7 +32,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def table(region, town, rank):
-    q = f"region={region}&town={quote(town)}&rank={rank}&table=1"
+    q = f"region={region}&town={quote(town)}&rank={rank}&table=1&prob=0"
     for attempt in range(3):
         dom = subprocess.run([CHROME, "--headless=new", "--disable-gpu", "--window-size=528,920",
                               f"--virtual-time-budget={30000 + 15000 * attempt}", "--dump-dom", f"{BASE}?{q}"],

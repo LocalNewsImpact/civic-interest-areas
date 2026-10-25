@@ -1,15 +1,20 @@
-"""How certain each approved revealed news market is, hexagon by hexagon: the same network tie as the approved maps
-(market_patterns.py idx["net"]), computed from odd months (January, March, May, July 2026) and from even months
-(February, April, June) separately, with the same pattern weights (pattern_halves.py). The map (?conf=1) draws a shown
-hexagon lighter when it clears the map's floor in only one half. Nothing else on the approved map changes.
-Holding in both halves is REPLICABILITY (the same area from either half of the year), not validity: it does not show
-the area is the right one. The same pattern weights serve both halves, so the halves test the travel, not the fit.
+"""How certain each civic interest area is, hexagon by hexagon. Two areas (user, 2026-10-24): the PUBLISHED map, the
+NETWORK-TIE area (market_patterns.py idx["net"]: travel strengthened by news ties) -- outline, ?conf=1 and replicability
+-- and the TRAVEL-ONLY area (idx["travel"]: no news term), the footprint the supply analysis (coverage density, the
+balanced diet; QA here, the next paper's figures) is measured on -- outline_travel, replicability_travel. Each computed from
+odd months (January, March, May, July 2026) and from even months (February, April, June) on INDEPENDENT HALVES: each
+half's own W and H, refitted on that half's months and matched to the kept patterns (travel_patterns.py,
+patterns_halves.json), and that half's travel. The map (?conf=1) draws a shown hexagon lighter when it clears the
+map's floor in only one half. Holding in both halves is REPLICABILITY (the same area from either half of the year), not
+validity: it does not show the area is the right one.
+An outline's area is stated one way: the hexagons whose centres lie inside it x 5.85 km2.
 Corridors (?corridors=1): the road from home to each place the approved map names as its direction, and the hexagons
 it crosses (part of the market: travel along it makes crashes, closures, construction, fuel and food there information
 residents need).
 Writes flows/reach/confidence_<region>.json: {town: {rank: {odd, even, corridors, corridor_hexes}}}.
 Usage: confidence_layer.py <region> [town ...]"""
 import json
+import math
 import os
 import runpy
 import sys
@@ -26,16 +31,25 @@ sys.argv = argv
 P = ns["P"]
 HALVES = json.load(open(ns["R"] / "patterns_halves.json"))
 Wa, Ha = np.array(P["W"]), np.array(P["H"])
+PPL = np.nan_to_num(np.array(P["people"], dtype=float))
 
 
-def pattern_travel(town, group, X):
-    """market_patterns.py's attribution of the town's travel to a pattern group, from travel matrix X"""
+def pattern_travel(town, group, X, W=None, H=None):
+    """market_patterns.py's attribution of the town's travel to a pattern group, from travel matrix X (and a half's own W
+    and H): residents' visits, the town's own units masked before the busiest is scaled to 1"""
+    W = Wa if W is None else np.asarray(W)
+    H = Ha if H is None else np.asarray(H)
     hbi = [P["homes"].index(h) for h in ns["town_bgs"](town) if h in P["homes"]]
-    Wm, Xm = Wa[hbi], np.asarray(X)[hbi]
-    den = np.maximum(Wm @ Ha, 1e-9)
-    trav = sum((Xm * (Wm[:, k:k + 1] * Ha[k][None, :] / den)).sum(0) for k in group)
+    Wm, Xm, pw = W[hbi], np.nan_to_num(np.asarray(X, dtype=float)[hbi]), PPL[hbi][:, None]
+    den = np.maximum(Wm @ H, 1e-9)
+    trav = sum((pw * Xm * (Wm[:, k:k + 1] * H[k][None, :] / den)).sum(0) for k in group)
+    own_u = ns["own_units_of"](town)
+    trav = trav * np.array([u not in own_u for u in P["units"]], float)
     trav = trav / trav.max()
     return {u: float(x) for u, x in zip(P["units"], trav) if x > 0}
+
+
+TRAVEL_W = (0, 0, 0, 0)                       # the travel-only tie: no news term
 
 
 # CORRIDORS (?corridors=1): the road between home and each place the approved map names as its direction (its "toward"
@@ -83,11 +97,11 @@ def shown_set(values, in_market, sel=0.5, floor=5, top_mult=2, reach_in=4, reach
     return on, basef
 
 
-def corridors_for(town, rank):
+def corridors_for(town, rank, index="net"):
     """road corridors joining every separate part of the shown market (3+ hexagons) to home: the hexagons the fastest
     route from home to the part's strongest hexagon crosses outside the shown market"""
     m = next(x for x in MAPS["towns"][town] if x["rank"] == rank)
-    net, home = m["index"]["net"], MAPS["home"][town]
+    net, home = m["index"][index], MAPS["home"][town]
     on, _ = shown_set(net, set(MAPS.get("in_market", [])))
     left, parts = set(on), []
     while left:
@@ -120,8 +134,11 @@ def corridors_for(town, rank):
 # OUTLINE (?outline=1): the market as one connected, confident shape -- the shown hexagons that hold in both halves of
 # the year (and home), joined across gaps by morphological closing at the smallest radius (2 to 8 hexagons) that makes
 # them one piece, holes filled; drawn as a line around it. Every confident cell is included.
-from shapely.geometry import Polygon, mapping
-from shapely.ops import unary_union
+from shapely.geometry import Point, Polygon, mapping
+from shapely.ops import transform as shp_transform, unary_union
+
+KXP, KYP = 111.32 * math.cos(math.radians(38.7)), 110.57      # the hexagon plane (market_patterns.py)
+HEX_KM2 = MAPS.get("hex_km2", 5.846)
 
 
 def close_fill(cells, r):
@@ -153,9 +170,9 @@ def pieces(cells):
     return out_
 
 
-def outline_for(town, rank, half, **sel_kw):
+def outline_for(town, rank, half, index="net", **sel_kw):
     m = next(x for x in MAPS["towns"][town] if x["rank"] == rank)
-    net = m["index"]["net"]
+    net = m["index"][index]
     on, basef = shown_set(net, set(MAPS.get("in_market", [])), **sel_kw)
     core = {qr(k) for k in on if net[k] >= 100 or (half["odd"].get(k, 0) >= basef and half["even"].get(k, 0) >= basef)}
     home_ = {qr(k) for k in on if net[k] >= 100}
@@ -195,33 +212,62 @@ def outline_for(town, rank, half, **sel_kw):
     if len(ps) > 1:
         main = max(ps, key=lambda p_: (bool(p_ & home_), len(p_ & core)))
         shape_ = set(main)
-    polys = [Polygon(MAPS["hexes"][f"{a},{b}"][:6]) for a, b in shape_ if f"{a},{b}" in MAPS["hexes"]]
-    # SMOOTHED (user, 2026-10-18: the hexagon-edge outline "looks dumb"): grown about 3 km and pulled back about 2 km --
-    # corners round off and one-hexagon arms become bands, so the line reads as a market area, not a network of threads
-    # smoothed further (user: "it does not need to trace the bump of every hexagon"): grown about 5 km, pulled back
-    # about 4.5 km, simplified at about 300 m -- the market's shape, not its cells
-    geom = unary_union([p_.buffer(1e-6) for p_ in polys]).buffer(0.05, quad_segs=24).buffer(-0.045, quad_segs=24).simplify(0.003)
-    return mapping(geom), r, round(len(shape_) * 5.85), len(pieces(shape_))
+    # SMOOTHED (user, 2026-10-18: the hexagon-edge outline "looks dumb"; "it does not need to trace the bump of every
+    # hexagon"): grown 5 km, pulled back 4.5 km, simplified at 300 m -- the market's shape, not its cells. ISOTROPIC
+    # (2026-10-24, peer review): done on the hexagon plane in km (x = lon x 111.32 cos 38.7, y = lat x 110.57), not in
+    # degrees, where 0.05 was 4.3 km east-west and 5.5 km north-south
+    to_km = lambda c: [(x_ * KXP, y_ * KYP) for x_, y_ in c]
+    polys = [Polygon(to_km(MAPS["hexes"][f"{a},{b}"][:6])) for a, b in shape_ if f"{a},{b}" in MAPS["hexes"]]
+    gk = unary_union([p_.buffer(1e-6) for p_ in polys]).buffer(5.0, quad_segs=24).buffer(-4.5, quad_segs=24).simplify(0.3)
+    geom = shp_transform(lambda x_, y_, z_=None: (np.asarray(x_) / KXP, np.asarray(y_) / KYP), gk)
+    # THE PUBLISHED AREA, one measure (2026-10-24): the hexagons whose centres lie inside the outline (the footprint
+    # coverage density is measured on) x the hexagon's 5.85 km2. (Before: the closed set before smoothing, x 5.85 --
+    # about 11% fewer hexagons.)
+    foot = sum(1 for k, v in MAPS["hexes"].items() if geom.contains(Point(*centre[k])))
+    return mapping(geom), r, round(foot * HEX_KM2), len(pieces(shape_))
 
 
+
+
+def half_ties(town, group, weights=None):
+    """the area's tie from each half: the half's own fit (W, H) and the half's travel; weights None = the network tie,
+    TRAVEL_W = travel only"""
+    w_ = ns["BASE_W"] if weights is None else weights
+    return {s: {k: round(v, 1) for k, v in ns["tie_map"](town, pattern_travel(town, group, HALVES[f"X_{s}"], HALVES[f"W_{s}"],
+                                                                                HALVES[f"H_{s}"]), w_).items() if v >= 1}
+            for s in ("odd", "even")}
+
+
+def replicability(half):
+    on_ = {s: shown_set(half[s], set(MAPS.get("in_market", [])))[0] for s in half}
+    on_ = {s: {k for k in v if half[s][k] < 100} for s, v in on_.items()}
+    return {"jaccard": round(len(on_["odd"] & on_["even"]) / max(1, len(on_["odd"] | on_["even"])), 3),
+            "shown_odd": len(on_["odd"]), "shown_even": len(on_["even"])}
 
 
 if __name__ == "__main__":   # imported by selection_sensitivity.py for its functions only
     out = {}
+    MAPS_T = {t_: {m_["rank"]: m_ for m_ in ms} for t_, ms in MAPS["towns"].items()}
     for town in (argv[2:] or list(ns["STUDY"])):
         out[town] = {}
         for pt in ns["out"][town]:
             g_ = pt["patterns"]
             check = pattern_travel(town, g_, P["X"])
             assert max(abs(check.get(u, 0) - v) for u, v in pt["travel"].items()) < 1e-6, "attribution differs from the map's"
-            half = {s: {k: round(v, 1) for k, v in ns["tie_map"](town, pattern_travel(town, g_, HALVES[f"X_{s}"])).items() if v >= 1}
-                    for s in ("odd", "even")}
+            half = half_ties(town, g_)
+            half_t = half_ties(town, g_, TRAVEL_W)
             lines, chex, n_on = corridors_for(town, pt["rank"])
             geom, r_used, km2, n_pieces = outline_for(town, pt["rank"], half)
+            geom_t, r_t, km2_t, np_t = outline_for(town, pt["rank"], half_t, index="travel")
             out[town][pt["rank"]] = {**half, "corridors": lines, "corridor_hexes": chex, "outline": geom,
-                                     "outline_stats": {"closing_hexagons": r_used, "km2": km2, "pieces": n_pieces}}
+                                     "outline_stats": {"closing_hexagons": r_used, "km2": km2, "pieces": n_pieces},
+                                     "odd_travel": half_t["odd"], "even_travel": half_t["even"], "outline_travel": geom_t,
+                                     "outline_travel_stats": {"closing_hexagons": r_t, "km2": km2_t, "pieces": np_t},
+                                     "replicability": replicability(half), "replicability_travel": replicability(half_t)}
             print(f"   outline: closed over {r_used} hexagons, {km2:,} km2, {n_pieces} piece(s)")
-            print(f"{town} market {pt['rank']} toward {' and '.join(pt['toward']) or '-'}: "
+            print(f"{town} market {pt['rank']} toward {' and '.join(pt['toward']) or '-'}: replicability (independent halves, "
+                  f"home excluded) network tie {out[town][pt['rank']]['replicability']}, travel only "
+                  f"{out[town][pt['rank']]['replicability_travel']}; travel-only outline {km2_t:,} km2; "
                   f"{sum(v >= 5 for v in half['odd'].values())} / {sum(v >= 5 for v in half['even'].values())} hexagons of 5+ (odd / even); "
                   f"shown {n_on} hexagons; corridors to {[c['toward'] for c in lines]}, {len(chex)} hexagons added")
     dest = ns["R"] / "confidence.json" if region != "columbia" else root / "flows/reach/confidence_columbia.json"

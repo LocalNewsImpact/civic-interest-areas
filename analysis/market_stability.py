@@ -1,4 +1,4 @@
-"""How stable each information needs market is, against how many residents follow it: for every study town and market
+"""How stable each civic interest area (the network-tie map; halves fitted independently, confidence_layer.py) is, against how many residents follow it: for every study town and market
 (market_patterns.py) in every region, the residents and share following the pattern, the hexagons the approved map
 shows, and the share of them whose tie clears the map's floor in both halves of the year (confidence_layer.py)."""
 import json
@@ -20,7 +20,7 @@ for region in ("columbia", "springfield", "cape", "kirksville", "joplin", "kansa
     C = json.load(open(root / ("flows/reach/confidence_columbia.json" if region == "columbia" else f"flows/reach/{region}/confidence.json")))
     for town, ms in g["MAPS"]["towns"].items():
         for m in ms:
-            net = m["index"]["net"]
+            net = m["index"]["net"]                    # the published (network-tie) map; halves fitted independently
             on, basef = g["shown_set"](net, set(g["MAPS"].get("in_market", [])))
             h = C.get(town, {}).get(str(m["rank"]))
             if not h:
