@@ -10,8 +10,8 @@ market_stability.py: home is in every draw and would inflate the overlap):
   shown                  hexagons drawn beyond home
   shown_odd, shown_even  the same from odd months and from even months, each half on its OWN fit (W and H refitted on
                          its months, matched to the kept patterns; travel_patterns.py)
-  replicability          Jaccard of those two sets: whether the rule draws the same area from either half of the year.
-                         REPLICABILITY, not validity: it says the area repeats, not that it is the right area
+  month_split_stability  Jaccard of those two sets: whether the rule draws the same area from either half of the year.
+                         MONTH-SPLIT STABILITY, not validity (and K was selected on the same split)
   stable                 share of shown hexagons whose tie clears the threshold in both halves
   jaccard_published      Jaccard of the shown hexagons beyond home with the published (adopted) ones
   km2, iou               the published area (stability filter, connected, smoothed; hexagons inside x 5.85 km2) and
@@ -55,7 +55,7 @@ VARIANTS = {
 }
 in_market = set(MAPS.get("in_market", []))
 jac = lambda a, b: len(a & b) / max(1, len(a | b))
-beyond = lambda on, v: {k for k in on if v[k] < 100}
+HOMES = C["HOMES"]                                 # home flagged explicitly (market_patterns.home_hexes_of)
 KXP, KYP = 111.32 * math.cos(math.radians(38.7)), 110.57
 
 
@@ -69,20 +69,22 @@ for town, rank in AREAS:
     g_ = pt["patterns"]
     half = C["half_ties"](town, g_, C["TRAVEL_W"])
     tv = next(x for x in MAPS["towns"][town] if x["rank"] == rank)["index"]["travel"]
-    base_on = beyond(C["shown_set"](tv, in_market)[0], tv)
+    home = HOMES[town]
+    beyond = lambda on, v: set(on) - home
+    base_on = beyond(C["shown_set"](tv, in_market, home)[0], tv)
     published[(town, rank)] = base_on
     base_geom = None
     for name, kw in VARIANTS.items():
-        on, basef = C["shown_set"](tv, in_market, **kw)
-        on_odd, _ = C["shown_set"](half["odd"], in_market, **kw)
-        on_even, _ = C["shown_set"](half["even"], in_market, **kw)
+        on, basef = C["shown_set"](tv, in_market, home, **kw)
+        on_odd, _ = C["shown_set"](half["odd"], in_market, home, **kw)
+        on_even, _ = C["shown_set"](half["even"], in_market, home, **kw)
         on, on_odd, on_even = beyond(on, tv), beyond(on_odd, half["odd"]), beyond(on_even, half["even"])
         stable = sum(1 for k in on if half["odd"].get(k, 0) >= basef and half["even"].get(k, 0) >= basef)
         geom, _, km2, _ = C["outline_for"](town, rank, half, index="travel", **kw)
         g = shape(geom)
         base_geom = base_geom or g
         rows.append({"area": f"{town} {'I' * rank}", "variant": name, "threshold": round(basef, 1), "shown": len(on),
-                     "shown_odd": len(on_odd), "shown_even": len(on_even), "replicability": round(jac(on_odd, on_even), 3),
+                     "shown_odd": len(on_odd), "shown_even": len(on_even), "month_split_stability": round(jac(on_odd, on_even), 3),
                      "stable": round(stable / max(1, len(on)), 3), "jaccard_published": round(jac(on, base_on), 3),
                      "km2": km2, "iou": round(g.intersection(base_geom).area / g.union(base_geom).area, 3)})
         print(rows[-1], flush=True)
@@ -110,7 +112,7 @@ for town, rank in AREAS:
         if "DW" in kw:
             G["DW"].clear(); G["DW"].update(kw["DW"])
         t = {k: round(v, 1) for k, v in G["tie_map"](town, Hk, C["TRAVEL_W"]).items() if v >= kw.get("cut", 1)}
-        on, bf = C["shown_set"](t, in_market, **({"floor": kw["floor"]} if "floor" in kw else {}))
+        on, bf = C["shown_set"](t, in_market, home, **({"floor": kw["floor"]} if "floor" in kw else {}))
         on = beyond(on, t)
         rows2.append({"area": f"{town} {'I' * rank}", "setting": name, "shown": len(on), "threshold": round(bf, 1),
                       "jaccard_published": round(jac(on, base_on), 3), "published_shown": len(base_on)})
@@ -127,7 +129,9 @@ if os.environ.get("HEXSIZE", "1") == "1":
         for town, rank in AREAS:
             pt = next(x for x in ns["out"][town] if x["rank"] == rank)
             t = {k: round(v, 1) for k, v in N["tie_map"](town, C["pattern_travel"](town, pt["patterns"], P["X"]), C["TRAVEL_W"]).items() if v >= 1}
-            on = beyond(C["shown_set"](t, im)[0], t)
+            hN = N["home_hexes_of"][town]
+            sc = 3 / float(hk)                         # the distance rule in km: 4 and 2 hexagons of the 3 km grid
+            on = C["shown_set"](t, im, hN, reach_in=4 * sc, reach_out=2 * sc)[0] - hN
             a, b = footprint(on, N["hexes"]), footprint(published[(town, rank)], MAPS["hexes"])
             rows2.append({"area": f"{town} {'I' * rank}", "setting": f"hexagon {hk} km (area IoU)", "shown": len(on), "threshold": "",
                           "jaccard_published": round(a.intersection(b).area / a.union(b).area, 3),

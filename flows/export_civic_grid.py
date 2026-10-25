@@ -14,7 +14,8 @@ Public Census geography only -- no Advan data -- so it ships inside datadesk bes
            neighbouring state's county borders for context (user, 2026-10-22)
   markets  region: [TV market name, outline] (flows/reach/**/market_pattern_maps.json)
   landmarks  [name, lon, lat] from flows/regions.json, for naming an unlabelled cluster
-  areas_p  "region|town|area": {hexagon: p}, the share of the settings ensemble's members drawing each hexagon
+  areas_p  "region|town|area": {"p": {hexagon: p}, "area": {hexagon: part}}: each hexagon's likelihood of being
+           part of the area (the ensemble's 1,728 versions weighted equally), and the multi-part area (flows/area_core.py)
            (flows/area_ensemble.py; derived from Advan travel at the hexagon level -- check the licence before shipping)
 
 Every number is the one today's coverage maps were computed from (analysis/area_coverage_alignment.py), so the
@@ -83,7 +84,7 @@ for reg, cfg in regions.items():
     if f.exists():
         for t_, ranks in json.load(open(f)).items():
             for r_, rec in ranks.items():
-                areas_p[f"{reg}|{t_}|{r_}"] = rec["p"]
+                areas_p[f"{reg}|{t_}|{r_}"] = {"p": rec["p"], "area": rec.get("core50_part_hexes", {})}
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text(json.dumps({"grid": grid, "hexes": hexes_out, "places": places_out, "counties": counties_out,
                                "markets": markets_out, "landmarks": landmarks_out, "areas_p": areas_p}, separators=(",", ":")))

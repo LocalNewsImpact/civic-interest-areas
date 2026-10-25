@@ -154,19 +154,22 @@ from scipy.optimize import linear_sum_assignment
 # pattern passes both:
 #   (a+b) a town  at least one of the market's towns (the towns the maps are drawn for, flows/regions.json) for which
 #                 the pattern holds 10%+ AND 1,000+ of the town's residents AND 10%+ of the town's travel -- the same
-#                 town for all three. Residents: devices at home / calibration factor, split by each block group's
-#                 membership (as the areas use). Travel: residents x reconstructed reach, sum over the town's block
-#                 groups h and destinations u (own town masked) of people(h) W[h,k] H[k,u].
+#                 town for all three. Residents: ACS population (the calibrated denominator), split by each block
+#                 group's membership (as the areas use). Travel: residents x reconstructed reach, sum over the town's
+#                 block groups h and destinations u -- the town's own units masked, as the maps mask them
+#                 (own_units_of) -- of people(h) W[h,k] H[k,u].
 #                 Why per town: the area rule already requires 10% and 1,000 of a town's residents; a share of the
 #                 MARKET depends on which home counties form the market (Kansas City's 4th pattern, 64,348 residents,
 #                 failed at 7.4% of 865,064, while Springfield's 5th, 39,488, passed at 10.4% of 378,908). A 5% level is
 #                 not considered.
-#   (c) replicability (i) across 10 random starts, the pattern's median matched cosine to the kept solution >= 0.9;
-#                 (ii) refitted on odd months (Jan, Mar, May, Jul) and on even months (Feb, Apr, Jun) separately (W and H
-#                 both; best of 5 starts each); each half's patterns matched to the KEPT patterns (Hungarian, cosine), and
+#   (c) stability (i) across 10 random starts, the pattern's median matched cosine to the kept solution >= 0.9;
+#                 (ii) MONTH-SPLIT STABILITY: refitted on odd months (Jan, Mar, May, Jul) and on even months (Feb, Apr,
+#                 Jun) separately (W and H both; best of 5 starts each, the two halves on DISJOINT seeds: odd 0-4, even
+#                 100-104); each half's patterns matched to the KEPT patterns (Hungarian, cosine), and
 #                 for every kept pattern the cosine between its odd and its even match >= 0.9 (2026-10-24: matched in
 #                 the kept order -- before, the odd fit's order was reported as if it were the kept one)
-# Grid 1-12, extended while its last K passes. Replaces the held-out-month one-SE rule (earlier the same day), which on
+# NOTE: K is selected on this same odd/even split, so the areas' month-split stability (confidence_layer.py,
+# area_ensemble.py) is not an independent test of K. Grid 1-12, extended while its last K passes. Replaces the held-out-month one-SE rule (earlier the same day), which on
 # paired splits kept adding patterns to the top of the grid; the held-out score is kept as a persistence diagnostic.
 KMAX0, KCAP = int(os.environ.get("KMAX", 12)), 20
 STARTS, HALF_STARTS, ITERS = 10, 5, 2000
@@ -206,6 +209,10 @@ odd = [i for i, m in enumerate(MONTHS) if int(m[-2:]) % 2 == 1]
 even = [i for i, m in enumerate(MONTHS) if int(m[-2:]) % 2 == 0]
 (Xo, Mo), (Xe, Me) = mean_mask(odd), mean_mask(even)
 TOWN_IDX = {t_: [hi[h] for h in hm[(hm.town == t_) | (hm.place == CFG["towns"][t_][1])].index if h in hi] for t_ in CFG["towns"]}
+# the town's own units (market_patterns.own_units_of): its block groups' towns and rural block groups and the town itself
+_bgu = lambda b: bg_place.get(b) or "rural:" + b
+OWN_MASK = {t_: np.array([u not in ({_bgu(homes[i]) for i in ix} | {"rural:" + homes[i] for i in ix} | {CFG["towns"][t_][1]})
+                          for u in units], float) for t_, ix in TOWN_IDX.items()}
 crit, fitk = {}, {}
 
 
@@ -213,11 +220,11 @@ def town_tests(W, H):
     """per town and pattern: share and count of the town's residents, share of the town's travel"""
     mass = W * H.sum(1)[None, :]
     member_ = mass / np.maximum(mass.sum(1, keepdims=True), 1e-12)
-    trav = np.stack([(ppl0[:, None] * MASK * (W[:, [j]] @ H[[j]])).sum(1) for j in range(W.shape[1])], 1)   # homes x K
     out_ = {}
     for t_, ix in TOWN_IDX.items():
         r_ = (ppl0[ix, None] * member_[ix]).sum(0)
-        v_ = trav[ix].sum(0)
+        Mt = MASK[ix] * OWN_MASK[t_][None, :]
+        v_ = np.array([(ppl0[ix, None] * Mt * (W[ix][:, [j]] @ H[[j]])).sum() for j in range(W.shape[1])])
         out_[t_] = {"res": r_, "res_share": r_ / max(r_.sum(), 1e-9), "travel_share": v_ / max(v_.sum(), 1e-9)}
     return out_
 
@@ -237,7 +244,7 @@ while True:
     m_ = np.array([matched(H, H_) for *_, H_ in fs[1:]])               # starts x patterns
     cos_starts = np.median(m_, 0) if len(m_) else np.ones(k)
     _, _, Wo, Ho = best_of(Xo, k, HALF_STARTS, M=Mo)[0]
-    _, _, We, He = best_of(Xe, k, HALF_STARTS, M=Me)[0]
+    _, _, We, He = best_of(Xe, k, HALF_STARTS, seed0=100, M=Me)[0]      # seeds disjoint from the odd half's
     po, pe = kept_order(H, Ho), kept_order(H, He)                      # half patterns in the kept order
     Ho, Wo, He, We = Ho[po], Wo[:, po], He[pe], We[:, pe]
     cos_oe = (unit_(Ho) * unit_(He)).sum(1)
@@ -266,12 +273,14 @@ def passes(k, tmin=TOWN_MIN, cos=COS_MIN):
                 and (c_["cos_halves"] >= cos).all())
 
 
-def pick(**kw):
+def pick(strict=False, **kw):
     ok = [k for k in crit if passes(k, **kw)]
-    return max(ok) if ok else 1
+    if not ok and strict:
+        raise SystemExit(f"{REGION}: no K passes the rule ({kw or 'adopted thresholds'})")
+    return max(ok) if ok else 0          # 0 in the sensitivity table: nothing passes
 
 
-K = pick()
+K = pick(strict=True)
 binding = {}
 for k in crit:
     c_ = crit[k]

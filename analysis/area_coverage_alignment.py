@@ -1,11 +1,13 @@
 """QA DIAGNOSTIC (2026-10-24: supply figures belong to the next paper, not this one). How well news coverage lines up
 with where residents travel, in each civic interest area's travel-only footprint
-(Columbia I and II, Mexico, Linn), and how many newsrooms it takes to supply that coverage.
+(Columbia, Mexico, Linn), and how many newsrooms it takes to supply that coverage.
 
-AREA: the published area -- the footprint: the hexagons whose centres lie inside its outline
+AREA (2026-10-25): the TRAVEL-ONLY CORE of the settings ensemble (hexagons drawn in half or more of its members,
+  flows/area_ensemble.py p_travel). Before: the hexagons whose centres lie inside the travel-only outline
   (flows/reach/confidence_columbia.json), drawn from the TRAVEL-ONLY civic interest area (user, 2026-10-24, option A:
   supply is measured on where residents go, not on an area news ties already enlarged). Every hexagon counts the same.
-  Area = hexagons x 5.85 km2. "people inside" = the 2020 population of those hexagons (block-group population over the
+  Area = the hexagons' area on the ground, 5.85 km2 x cos(latitude) / cos(38.7) each (the hexagon plane is scaled at
+  38.7 N). "people inside" = the 2020 population of those hexagons (block-group population over the
   hexagons whose centres lie in it), beside the residents allocated to the area's travel pattern.
 STORIES, March 2026, local outlets statewide (statewide and campus outlets excluded): each story's geolocated central
   point, standing for an area set by its geographic scope (the enrichment's scope classification,
@@ -218,22 +220,30 @@ print("stories with a local area:", len(story_area), "of", sum(1 for a in art_ou
 RDIR = flows / "reach" if REGION == "columbia" else flows / "reach" / REGION
 MAPS = json.load(open(RDIR / "market_pattern_maps.json"))
 CONF = json.load(open(RDIR / ("confidence_columbia.json" if REGION == "columbia" else "confidence.json")))
+# THE QA FOOTPRINT (2026-10-25, D2-A): the TRAVEL-ONLY core of the settings ensemble -- hexagons drawn in half or more of
+# its members with travel-only ties (flows/area_ensemble.py p_travel) -- the same kind of object as the published area
+PROB = json.load(open(RDIR / ("probability_columbia.json" if REGION == "columbia" else "probability.json")))
+# the multi-part rule applies (area_core.py: the home body and every piece of 3+ hexagons; specks out)
+travel_core = lambda town, rank: sorted(k for k in PROB[town][str(rank)].get("core50_travel_part_hexes",
+                                        [k for k, v in PROB[town][str(rank)]["p_travel"].items() if v >= 0.5]) if k in MAPS["hexes"])
+HOME_HEX = {t_: set(h_.get("hexes", [])) for t_, h_ in MAPS["home"].items()}
+# area on the ground (2026-10-25): a hexagon of the plane x = lon x 111.32 cos 38.7 is 5.85 x cos(lat) / cos(38.7) km2
+_hlat = lambda k: sum(c[1] for c in MAPS["hexes"][k][:6]) / 6
+km2_of = lambda hs: sum(ns["HEX_KM2"] * math.cos(math.radians(_hlat(k))) / math.cos(math.radians(38.7)) for k in hs)
 # the study's three towns in the Columbia region; every town's areas elsewhere
 AREAS = ([(t, m["rank"]) for t in ("Columbia", "Mexico", "Linn") for m in MAPS["towns"][t]] if REGION == "columbia"
-         else [(t, m["rank"]) for t, ms in MAPS["towns"].items() for m in ms if str(m["rank"]) in CONF.get(t, {})])
+         else [(t, m["rank"]) for t, ms in MAPS["towns"].items() for m in ms if str(m["rank"]) in PROB.get(t, {})])
 SUFFIX = "" if REGION == "columbia" else f"_{REGION}"
 rows = []
 for town, rank in ([] if os.environ.get("COV_LIB") == "1" else AREAS):
     m = next(x for x in MAPS["towns"][town] if x["rank"] == rank)
-    outline = shape(CONF[town][str(rank)]["outline_travel"])
-    area = [k for k, v in MAPS["hexes"].items()
-            if outline.contains(Point(sum(c[0] for c in v[:6]) / 6, sum(c[1] for c in v[:6]) / 6))]
-    home = {k for k in area if m["index"]["travel"].get(k, 0) >= 100}
+    area = travel_core(town, rank)
+    home = set(area) & HOME_HEX[town]                 # home flagged explicitly, never read from a tie of 100
     for scope in ("with home town", "outside home town"):
         hs = [k for k in area if scope == "with home town" or k not in home]
         mass = {k: 1.0 for k in hs}
         tot = len(hs)
-        row = {"area": f"{town} {'I' * rank}", "scope": scope, "hexagons": len(hs), "km2": round(len(hs) * ns["HEX_KM2"]),
+        row = {"area": f"{town} {'I' * rank}", "scope": scope, "hexagons": len(hs), "km2": round(km2_of(hs)),
                "people_inside": round(sum(hex_pop.get(k, 0) for k in hs)), "residents_allocated": m["residents"]}
         for kind in ("all", "local"):
             cv = {k: sum(cov[kind][o].get(k, 0) for o in cov[kind]) for k in hs}
@@ -312,9 +322,7 @@ for o_, g_ in ns["HOME_TOWN"].items():
         c_ = pl_shapes[g_][1].representative_point()
         REG_LL[o_] = (c_.x, c_.y)
 for town, rank in AREAS:
-    outline = shape(CONF[town][str(rank)]["outline_travel"])
-    area = [k for k, v in MAPS["hexes"].items()
-            if outline.contains(Point(sum(c[0] for c in v[:6]) / 6, sum(c[1] for c in v[:6]) / 6))]
+    area = travel_core(town, rank)
     layer.setdefault(town, {})[rank] = {kind: {k: round(sum(cov[kind][o].get(k, 0) for o in cov[kind]), 2) for k in area}
                                         for kind in ("all", "local")}
     layer[town][rank]["pop"] = {k: round(hex_pop.get(k, 0)) for k in area}
@@ -354,9 +362,7 @@ if os.environ.get("SYNDCHECK") == "1":
                "STL Public Radio", "The Kansas City Star", "KC Magazine", "KMBC News 9", "KHQA 7", "KTVO CBS", "North West Missourian"}
     allarea = set()
     for town, rank in AREAS:
-        outline = shape(CONF[town][str(rank)]["outline_travel"])
-        allarea |= {k for k, v in MAPS["hexes"].items()
-                    if outline.contains(Point(sum(c[0] for c in v[:6]) / 6, sum(c[1] for c in v[:6]) / 6))}
+        allarea |= set(travel_core(town, rank))
     out_rows = []
     for aid, hs in story_hexes.items():
         o = art_out[aid]

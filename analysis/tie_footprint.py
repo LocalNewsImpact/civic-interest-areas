@@ -51,7 +51,26 @@ import os as _os
 SETTINGS = {k_: _os.environ.get(k_, d_) for k_, d_ in (("PUBFILE", "public_adjusted_pairs_trnear.csv"), ("PUBCOL", "combined_share"),
             ("BETA_IN", "1"), ("REGRULE", "0"), ("ATTRPOP", "0"), ("OUTTAG", ""), ("OUTDIR", "analysis"), ("CAMPUS_IN", "0"),
             ("REHOME", "1"), ("SCORE", "current"), ("MASKHOME", "1"))}
-print("tie_footprint.py", REGION_, " ".join(f"{k_}={v_}" for k_, v_ in SETTINGS.items()), flush=True)
+if _os.environ.get("SUMMARY") != "1":
+    print("tie_footprint.py", REGION_, " ".join(f"{k_}={v_}" for k_, v_ in SETTINGS.items()), flush=True)
+if _os.environ.get("SUMMARY") == "1":       # the figures the log quotes, over every market's output (OUTTAG, OUTDIR)
+    import json as _json
+    _R = ("columbia", "springfield", "cape", "kirksville", "joplin", "kansascity", "stjoseph")
+    # the settings the summarised runs used, as each recorded them (not this call's defaults)
+    _st = {r_: _json.load(open(root / SETTINGS["OUTDIR"] / f"tie_footprint_{r_}{SETTINGS['OUTTAG']}.settings.json")) for r_ in _R}
+    _keys = ("PUBFILE", "PUBCOL", "BETA_IN", "REGRULE", "ATTRPOP", "CAMPUS_IN", "REHOME", "SCORE", "MASKHOME")
+    _set = {_json.dumps({k_: v_.get(k_) for k_ in _keys}, sort_keys=True) for v_ in _st.values()}
+    if len(_set) != 1:
+        raise SystemExit(f"the summarised runs used different settings: {_set}")
+    print("summary of tie_footprint.py runs with", " ".join(f"{k_}={v_}" for k_, v_ in _json.loads(_set.pop()).items()), flush=True)
+    _d = pd.concat([pd.read_csv(root / SETTINGS["OUTDIR"] / f"tie_footprint_{r_}{SETTINGS['OUTTAG']}.csv").assign(region=r_) for r_ in _R])
+    _n = _d[_d.measure == "network tie"]
+    _acc, _rep = "accuracy: public vs Advan overlap", "replicability: odd vs even overlap"
+    print(f"{len(_n)} towns: accuracy median {_n[_acc].median():.2f}, mean {_n[_acc].mean():.3f}; month-split stability median "
+          f"{_n[_rep].median():.2f}; travel alone accuracy median {_d[_d.measure == 'travel alone'][_acc].median():.2f}")
+    print("by market:", _n.groupby("region", sort=False)[_acc].median().round(2).to_dict())
+    print(_n[["region", "town", _rep, _acc]].to_string(index=False))
+    sys.exit(0)
 sys.path.insert(0, str(root / "analysis"))
 import excluded_outlets as _eo  # noqa: E402
 if SETTINGS["CAMPUS_IN"] == "1":
@@ -180,11 +199,12 @@ def to_units(bgv, town=None):
 
 # --- the tie map (the loop body of market_patterns.py, one travel input) ----------------------------------------------
 def tie_map(town, Hk, weights=BASE_W):
+    Hk_u, Hk = Hk, norm_hex(Hk)             # busiest hexagon = 1 (market_patterns.norm_hex); Hk_u: busiest place = 1
     cu = COV[town]
     own_u = {P["bg_unit"].get(h) for h in town_bgs(town)} | {HOME_PLACE[town]}
     OV = {X: overlap_of(Hk, own_u, X) for X in place_outlets if X not in own_u}
     h_cov = cov_dist([o for o, al in by_outlet.items() if home_of(al[0]) == STUDY[town] and o not in EXCLUDE])
-    mkt = {u_ for u_, w in Hk.items() if w >= 0.05}
+    mkt = {u_ for u_, w in Hk_u.items() if w >= 0.05}
     inm_ = lambda d_: {u_: w for u_, w in d_.items() if u_ in mkt}
     SC = {X: overlap_dists(inm_(h_cov), inm_(cov_dist(place_outlets[X])), own_u | {X}) for X in place_outlets if X not in own_u}
     wo, wi, wv, wc = weights
@@ -196,7 +216,7 @@ def tie_map(town, Hk, weights=BASE_W):
         xk = hex_place.get(k) or u
         o_, i_ = cu["out"].get(k, 0), cu["in"].get(k, 0)
         gate = 1.0 if (o_ + i_) >= 0.10 else 0.0
-        raw[k] = min(1.0, t_ * (1 + wo * o_ + wi * i_ + gate * (wv * OV.get(xk, 0) + wc * SC.get(xk, 0))))
+        raw[k] = min(DCAP, t_ * (1 + wo * o_ + wi * i_ + gate * (wv * OV.get(xk, 0) + wc * SC.get(xk, 0))))
     if raw:
         raw = spatial(raw, home_hexes_of[town])
     out_ = {k: 100 * x for k, x in raw.items()}
@@ -273,6 +293,8 @@ if not _os.environ.get("TIE_LIB"):          # TIE_LIB=1: load the functions only
     _od = root / SETTINGS["OUTDIR"]
     _od.mkdir(parents=True, exist_ok=True)
     R_.to_csv(_od / f"tie_footprint_{REGION_}{SETTINGS['OUTTAG']}.csv", index=False)
+    import json as _json
+    _json.dump(SETTINGS, open(_od / f"tie_footprint_{REGION_}{SETTINGS['OUTTAG']}.settings.json", "w"), indent=1)   # read by SUMMARY=1
 
 
     # DETAIL=town,town: each market (lobe) of the public and the Advan tie footprints, named, with what Advan observes in it

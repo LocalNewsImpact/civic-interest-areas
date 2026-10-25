@@ -1,13 +1,14 @@
-"""How certain each civic interest area is, hexagon by hexagon. Two areas (user, 2026-10-24): the PUBLISHED map, the
-NETWORK-TIE area (market_patterns.py idx["net"]: travel strengthened by news ties) -- outline, ?conf=1 and replicability
--- and the TRAVEL-ONLY area (idx["travel"]: no news term), the footprint the supply analysis (coverage density, the
-balanced diet; QA here, the next paper's figures) is measured on -- outline_travel, replicability_travel. Each computed from
-odd months (January, March, May, July 2026) and from even months (February, April, June) on INDEPENDENT HALVES: each
-half's own W and H, refitted on that half's months and matched to the kept patterns (travel_patterns.py,
-patterns_halves.json), and that half's travel. The map (?conf=1) draws a shown hexagon lighter when it clears the
-map's floor in only one half. Holding in both halves is REPLICABILITY (the same area from either half of the year), not
-validity: it does not show the area is the right one.
-An outline's area is stated one way: the hexagons whose centres lie inside it x 5.85 km2.
+"""The ADOPTED-SETTING drawing of each civic interest area, and its month-split stability. THE AREA ITSELF is the core of
+the settings ensemble (p >= 0.5, flows/area_ensemble.py; user 2026-10-25, D2-A); this script gives the single
+adopted-setting drawing (?prob=0) and its drawing aids. Two ties: the NETWORK TIE (market_patterns.py idx["net"]: travel
+strengthened by news ties; the paper's map) and TRAVEL ONLY (idx["travel"]: no news term; the supply QA footprint).
+Each computed from odd months (January, March, May, July 2026) and from even months (February, April, June) on
+INDEPENDENT HALVES: each half's own W and H, refitted on that half's months on disjoint seeds and matched to the kept
+patterns (travel_patterns.py, patterns_halves.json), and that half's travel. The map (?conf=1 with ?prob=0) draws a
+shown hexagon lighter when it clears the map's floor in only one half. Holding in both halves is MONTH-SPLIT STABILITY,
+not validity, and K was selected on the same split.
+The closed, smoothed OUTLINE is a drawing aid for the adopted-setting map only; its area is never quoted (the area is
+the ensemble core). Home is flagged explicitly (market_patterns.home_hexes_of), never read from a tie of 100.
 Corridors (?corridors=1): the road from home to each place the approved map names as its direction, and the hexagons
 it crosses (part of the market: travel along it makes crashes, closures, construction, fuel and food there information
 residents need).
@@ -50,6 +51,7 @@ def pattern_travel(town, group, X, W=None, H=None):
 
 
 TRAVEL_W = (0, 0, 0, 0)                       # the travel-only tie: no news term
+HOMES = ns["home_hexes_of"]                   # each town's home hexagons (market_patterns.py), flagged explicitly
 
 
 # CORRIDORS (?corridors=1): the road between home and each place the approved map names as its direction (its "toward"
@@ -69,11 +71,13 @@ qr = lambda k: tuple(map(int, k.split(",")))
 hexdist = lambda a, b: (abs(a[0] - b[0]) + abs(a[1] - b[1]) + abs(a[0] + a[1] - b[0] - b[1])) // 2
 
 
-def shown_set(values, in_market, sel=0.5, floor=5, top_mult=2, reach_in=4, reach_out=2):
+def shown_set(values, in_market, home, sel=0.5, floor=5, top_mult=2, reach_in=4, reach_out=2):
     """the hexagons the approved map draws (market_pattern_print.html): the 50% selectivity floor, then growth outward
     from home, each hexagon admitted at a floor that rises with its gap from the body (4 hexagons to the top inside the
-    TV market, 2 outside)"""
-    ext = sorted((v for v in values.values() if v < 100), reverse=True)
+    TV market, 2 outside; reach_in, reach_out in hexagons of the grid used). HOME is given explicitly (home_hexes_of),
+    never read from a tie of 100 (2026-10-25)"""
+    home = set(home)
+    ext = sorted((v for k, v in values.items() if k not in home), reverse=True)
     tot, acc, f80 = sum(ext), 0.0, floor
     for v in ext:
         acc += v; f80 = v
@@ -81,7 +85,7 @@ def shown_set(values, in_market, sel=0.5, floor=5, top_mult=2, reach_in=4, reach
             break
     basef = max(floor, f80); topf = max(10, top_mult * basef) if top_mult > 1 else basef   # top_mult=1: no distance rule
     vals = {k: v for k, v in values.items() if v >= basef}
-    on = {k for k, v in vals.items() if v >= 100} or {k for k, v in vals.items() if v >= 80}
+    on = {k for k in vals if k in home} or {k for k, v in vals.items() if v >= 80}
     grew = True
     while grew:
         grew = False
@@ -102,7 +106,7 @@ def corridors_for(town, rank, index="net"):
     route from home to the part's strongest hexagon crosses outside the shown market"""
     m = next(x for x in MAPS["towns"][town] if x["rank"] == rank)
     net, home = m["index"][index], MAPS["home"][town]
-    on, _ = shown_set(net, set(MAPS.get("in_market", [])))
+    on, _ = shown_set(net, set(MAPS.get("in_market", [])), HOMES[town])
     left, parts = set(on), []
     while left:
         stack = [left.pop()]; comp = {stack[0]}
@@ -113,7 +117,7 @@ def corridors_for(town, rank, index="net"):
                 if o in left:
                     left.discard(o); stack.append(o); comp.add(o)
         parts.append(comp)
-    homes_ = {k for k in on if net.get(k, 0) >= 100}
+    homes_ = on & HOMES[town]
     lines, hexes = [], set()
     for p_ in parts:
         if p_ & homes_ or len(p_) < 3:
@@ -134,7 +138,7 @@ def corridors_for(town, rank, index="net"):
 # OUTLINE (?outline=1): the market as one connected, confident shape -- the shown hexagons that hold in both halves of
 # the year (and home), joined across gaps by morphological closing at the smallest radius (2 to 8 hexagons) that makes
 # them one piece, holes filled; drawn as a line around it. Every confident cell is included.
-from shapely.geometry import Point, Polygon, mapping
+from shapely.geometry import Point, Polygon, mapping, shape
 from shapely.ops import transform as shp_transform, unary_union
 
 KXP, KYP = 111.32 * math.cos(math.radians(38.7)), 110.57      # the hexagon plane (market_patterns.py)
@@ -173,9 +177,9 @@ def pieces(cells):
 def outline_for(town, rank, half, index="net", **sel_kw):
     m = next(x for x in MAPS["towns"][town] if x["rank"] == rank)
     net = m["index"][index]
-    on, basef = shown_set(net, set(MAPS.get("in_market", [])), **sel_kw)
-    core = {qr(k) for k in on if net[k] >= 100 or (half["odd"].get(k, 0) >= basef and half["even"].get(k, 0) >= basef)}
-    home_ = {qr(k) for k in on if net[k] >= 100}
+    on, basef = shown_set(net, set(MAPS.get("in_market", [])), HOMES[town], **sel_kw)
+    core = {qr(k) for k in on if k in HOMES[town] or (half["odd"].get(k, 0) >= basef and half["even"].get(k, 0) >= basef)}
+    home_ = {qr(k) for k in on if k in HOMES[town]}
     # small clusters count when they lie near the market: rural travel spreads over the land where destinations are and
     # rarely forms solid clusters (Mexico's north-Callaway cells: 14 of 15 hold in both halves, in pieces of 1-6). A piece
     # under 3 hexagons more than 5 hexagons from the rest is a lone far cell and is left out (it drew spikes)
@@ -238,9 +242,10 @@ def half_ties(town, group, weights=None):
             for s in ("odd", "even")}
 
 
-def replicability(half):
-    on_ = {s: shown_set(half[s], set(MAPS.get("in_market", [])))[0] for s in half}
-    on_ = {s: {k for k in v if half[s][k] < 100} for s, v in on_.items()}
+def replicability(half, town):
+    """MONTH-SPLIT STABILITY (relabelled 2026-10-25; not validity, and K was selected on the same odd/even split): the
+    Jaccard of the adopted-setting drawings from each half, home left out"""
+    on_ = {s: shown_set(half[s], set(MAPS.get("in_market", [])), HOMES[town])[0] - HOMES[town] for s in half}
     return {"jaccard": round(len(on_["odd"] & on_["even"]) / max(1, len(on_["odd"] | on_["even"])), 3),
             "shown_odd": len(on_["odd"]), "shown_even": len(on_["even"])}
 
@@ -263,11 +268,21 @@ if __name__ == "__main__":   # imported by selection_sensitivity.py for its func
                                      "outline_stats": {"closing_hexagons": r_used, "km2": km2, "pieces": n_pieces},
                                      "odd_travel": half_t["odd"], "even_travel": half_t["even"], "outline_travel": geom_t,
                                      "outline_travel_stats": {"closing_hexagons": r_t, "km2": km2_t, "pieces": np_t},
-                                     "replicability": replicability(half), "replicability_travel": replicability(half_t)}
+                                     "month_split_stability": replicability(half, town), "month_split_stability_travel": replicability(half_t, town)}
             print(f"   outline: closed over {r_used} hexagons, {km2:,} km2, {n_pieces} piece(s)")
-            print(f"{town} market {pt['rank']} toward {' and '.join(pt['toward']) or '-'}: replicability (independent halves, "
-                  f"home excluded) network tie {out[town][pt['rank']]['replicability']}, travel only "
-                  f"{out[town][pt['rank']]['replicability_travel']}; travel-only outline {km2_t:,} km2; "
+            # WHAT NEWS TERMS CHANGE (disclosed 2026-10-25): the adopted drawings with and without news ties, cell by cell
+            on_n = shown_set(MAPS_T[town][pt["rank"]]["index"]["net"], set(MAPS.get("in_market", [])), HOMES[town])[0]
+            on_t = shown_set(MAPS_T[town][pt["rank"]]["index"]["travel"], set(MAPS.get("in_market", [])), HOMES[town])[0]
+            gN, gT = shape(geom), shape(geom_t)
+            inN = {k for k in MAPS["hexes"] if gN.contains(Point(*centre[k]))}
+            inT = {k for k in MAPS["hexes"] if gT.contains(Point(*centre[k]))}
+            out[town][pt["rank"]]["news_effect"] = {"drawn_net_only": len(on_n - on_t), "drawn_travel_only": len(on_t - on_n),
+                                                   "drawn_both": len(on_n & on_t), "outline_net_only": len(inN - inT),
+                                                   "outline_travel_only": len(inT - inN), "outline_both": len(inN & inT)}
+            print(f"   news terms: {out[town][pt['rank']]['news_effect']}")
+            print(f"{town} market {pt['rank']} toward {' and '.join(pt['toward']) or '-'}: month-split stability (independent "
+                  f"halves, home excluded) network tie {out[town][pt['rank']]['month_split_stability']}, travel only "
+                  f"{out[town][pt['rank']]['month_split_stability_travel']}; "
                   f"{sum(v >= 5 for v in half['odd'].values())} / {sum(v >= 5 for v in half['even'].values())} hexagons of 5+ (odd / even); "
                   f"shown {n_on} hexagons; corridors to {[c['toward'] for c in lines]}, {len(chex)} hexagons added")
     dest = ns["R"] / "confidence.json" if region != "columbia" else root / "flows/reach/confidence_columbia.json"

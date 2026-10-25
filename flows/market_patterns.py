@@ -272,7 +272,12 @@ cov_unit = lambda k: hex_place.get(k) or unit_at.get(k)
 # 30-60 hexagons. Its value is spread by where people go -- OpenStreetMap destinations (build_destinations.py): a
 # hexagon's weight is (destinations in it + 0.25) / the block group's mean of the same, so the block group's average is
 # kept, farmland falls toward 0.25 / (mean + 0.25) of it and a cluster of destinations rises (travel capped at 1).
-# Towns keep one value. A floor of 1 left sparse rural counties (Barton: ~0.2 destinations a hexagon) one flat band.
+# A floor of 1 left sparse rural counties (Barton: ~0.2 destinations a hexagon) one flat band.
+# TOWNS TOO (2026-10-25, peer review, user D3-A): a town is one travel unit, so a city's whole extent took one value --
+# Kansas City's every hexagon carried Columbia residents' reach to Kansas City as a whole. A town of 2+ hexagons is now
+# spread the same way, by half OpenStreetMap destinations ((destinations + DFLOOR) / the town's mean) and half 2020
+# population (each block group's population over the hexagons whose centres lie in it / the town's mean); the town's
+# average is kept. Counties outside the market stay one value.
 DFLOOR = 0.25
 dest = pd.read_csv(here / "reach/destinations_mo.csv", dtype={"block_group": str})
 dest = dest[dest.block_group.str[:5].isin(DMA)]
@@ -281,19 +286,68 @@ for x_, y_ in zip(dest.lon, dest.lat):
     k_ = hex_of(x_, y_)
     if k_:
         dcount[k_] += 1
-by_unit = defaultdict(list)
+by_unit, town_units = defaultdict(list), defaultdict(list)
 for k_, u_ in unit_at.items():
     if u_ and u_.startswith("rural:"):
         by_unit[u_].append(k_)
-DW = {}
-for u_, ks in by_unit.items():
-    m_ = np.mean([dcount.get(k_, 0) + DFLOOR for k_ in ks])
-    for k_ in ks:
-        DW[k_] = (dcount.get(k_, 0) + DFLOOR) / m_
+    elif u_ and len(u_) == 7:
+        town_units[u_].append(k_)
+_bgh = defaultdict(list)
+for k_, b_ in hex_bg.items():
+    _bgh[b_].append(k_)
+_cp = pd.read_csv(here.parent / "census_dl/ref/CenPop2020_Mean_BG29.txt", dtype=str, encoding="utf-8-sig")
+hex_pop = defaultdict(float)
+for r_ in _cp.itertuples():
+    for k_ in _bgh.get(r_.STATEFP + r_.COUNTYFP + r_.TRACTCE + r_.BLKGRPCE, []):
+        hex_pop[k_] += float(r_.POPULATION) / len(_bgh[r_.STATEFP + r_.COUNTYFP + r_.TRACTCE + r_.BLKGRPCE])
+
+
+def dasymetric(fl):
+    """the hexagon weights within each rural block group (destinations) and each town of 2+ hexagons (destinations and
+    population, half each); fl = the destination floor; None = no spread"""
+    if fl is None:
+        return {}
+    out_ = {}
+    for u_, ks in by_unit.items():
+        m_ = np.mean([dcount.get(k_, 0) + fl for k_ in ks])
+        for k_ in ks:
+            out_[k_] = (dcount.get(k_, 0) + fl) / m_
+    for u_, ks in town_units.items():
+        if len(ks) < 2:
+            continue
+        md = np.mean([dcount.get(k_, 0) + fl for k_ in ks])
+        mp_ = np.mean([hex_pop.get(k_, 0) for k_ in ks]) or 1.0
+        for k_ in ks:
+            out_[k_] = 0.5 * (dcount.get(k_, 0) + fl) / md + 0.5 * hex_pop.get(k_, 0) / mp_
+    return out_
+
+
+DW = dasymetric(DFLOOR)
 # HEADROOM (2026-10-17): the busiest destination is 50, not 100 -- home stays 100, above any place visited, and news ties
 # can lift the top destination toward home (Linn's news reaching Jefferson City) instead of finding it already capped
 TRAVEL_TOP = 0.5
-tr_at = lambda Hk, k, u: min(1.0, TRAVEL_TOP * Hk.get(u, 0) * DW.get(k, 1.0))
+# DESTINATIONS CAP BELOW HOME (2026-10-25, peer review): a place visited is at most 99; home alone is 100, and is flagged
+# explicitly (home_hexes_of), never read from a tie of 100
+DCAP = 0.99
+tr_at = lambda Hk, k, u: min(DCAP, TRAVEL_TOP * Hk.get(u, 0) * DW.get(k, 1.0))
+_unit_hexes = defaultdict(list)
+for k_, u_ in unit_at.items():
+    _unit_hexes[u_].append(k_)
+
+
+BUSIEST = _os.environ.get("BUSIEST", "place")
+
+
+def norm_hex(Hk):
+    """THE BUSIEST PLACE = 50 (the user's rule) is kept at the PLACE: the busiest town's mean is 50 and, with towns
+    spread by population and destinations, its dense hexagons rise above it, to the cap of 99. BUSIEST=hexagon (a
+    sensitivity, 2026-10-25) rescales travel so the busiest HEXAGON -- travel x its dasymetric weight -- is 50 instead:
+    every other hexagon falls by the busiest town's peak weight, and the floor of 5 then cuts most rural hexagons
+    (Columbia's area 1,166 -> 811 km2, Mexico's 802 -> 285, Linn's 949 -> 270)"""
+    if BUSIEST != "hexagon":
+        return dict(Hk)
+    s_ = max((v * max(DW.get(k_, 1.0) for k_ in _unit_hexes.get(u, [None])) for u, v in Hk.items() if v > 0 and u in _unit_hexes), default=0)
+    return {u: v / s_ for u, v in Hk.items()} if s_ > 0 else dict(Hk)
 COV = {}
 for town, home in STUDY.items():
     home_hexes = set(place_hexes(HOME_PLACE[town]))
@@ -412,7 +466,13 @@ WEIGHTS = {"net": BASE_W}
 #              rings normalised) -- a hexagon near a strong cluster rises; only where residents travel (tie > 0)
 #   direction  x (1 + 0.5 R cos(bearing from home - the market's mean bearing)), R the tie-weighted resultant length
 #              (0 = even all round, 1 = all one way): the market's direction strengthens, the opposite side weakens
-LAMBDA, GAMMA, RINGS = 0.25, 0.5, ((1, 0.5), (2, 0.25), (3, 0.125))
+# SPATIAL LAG IN KM (2026-10-25): bands at 1, 2 and 3 spacings of the adopted 3 km grid (2.6, 5.2, 7.8 km; weights 1/2,
+# 1/4, 1/8); on another grid, each ring of hexagons joins the band its distance rounds to -- the same lag in km
+LAMBDA, GAMMA = 0.25, 0.5
+SPACING_KM, SPACING_3KM = math.sqrt(3) * SIZE, math.sqrt(3) * 1.5
+BAND_W = {1: 0.5, 2: 0.25, 3: 0.125}
+RING_BANDS = [(n_, round(n_ * SPACING_KM / SPACING_3KM)) for n_ in range(1, int(3.5 * SPACING_3KM / SPACING_KM) + 1)]
+RING_BANDS = [(n_, b_) for n_, b_ in RING_BANDS if b_ in BAND_W]
 _DIRS = [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)]
 
 
@@ -429,7 +489,10 @@ def spatial(raw, home):
     boosted = {}
     for k, v in raw.items():
         q, r = qr_[k]
-        lag = sum(w * np.mean([raw.get(n_, 0) for n_ in ring(q, r, d)]) for d, w in RINGS) / sum(w for _, w in RINGS)
+        band = defaultdict(list)
+        for n_, b_ in RING_BANDS:
+            band[b_].extend(raw.get(c_, 0) for c_ in ring(q, r, n_))
+        lag = sum(BAND_W[b_] * np.mean(v_) for b_, v_ in band.items()) / sum(BAND_W[b_] for b_ in band)
         boosted[k] = v + LAMBDA * lag
     hc = [centre[k] for k in home if k in centre] or [centre[max(raw, key=raw.get)]]
     hx, hy = np.mean([c[0] for c in hc]), np.mean([c[1] for c in hc])
@@ -438,7 +501,7 @@ def spatial(raw, home):
     cx = sum(boosted[k] * math.cos(a) for k, a in ang.items() if k not in home) / (wsum or 1)
     cy = sum(boosted[k] * math.sin(a) for k, a in ang.items() if k not in home) / (wsum or 1)
     R_, mean_ = math.hypot(cx, cy), math.atan2(cy, cx)
-    return {k: min(1.0, v * (1 + GAMMA * R_ * math.cos(ang[k] - mean_)) if k in ang else v) for k, v in boosted.items()}
+    return {k: min(DCAP, v * (1 + GAMMA * R_ * math.cos(ang[k] - mean_)) if k in ang else min(DCAP, v)) for k, v in boosted.items()}
 for i_, nm in enumerate(("out", "in", "shared places", "shared coverage")):
     for f_ in (0.5, 2):
         w_ = list(BASE_W); w_[i_] *= f_
@@ -454,7 +517,7 @@ for town, pats in out.items():
     maps["towns"][town] = []
     cu = COV[town]
     for pt in pats:
-        Hk = pt["travel"]                                    # the town's own travel in this market
+        Hk = norm_hex(pt["travel"])                          # the town's own travel in this market, busiest hexagon = 1
         v = {k: round(100 * tr_at(Hk, k, u), 1) for k, u in unit_at.items() if 100 * tr_at(Hk, k, u) >= 1}
         # LOCAL INDEX: travel x [(1 + out + in) / 3] ^ s, by hexagon; s = 1 adopted 2026-10-17 (demand and supply equal)
         idx = {}
@@ -469,7 +532,7 @@ for town, pats in out.items():
         h_cov = cov_dist([o for o, al in by_outlet.items() if home_of(al[0]) == STUDY[town] and o not in EXCLUDE])
         # shared coverage counts only places in this town's own market (travel 0.05+ of the busiest): two newsrooms both
         # reporting statewide news (the capital, the university) is not a local tie
-        mkt = {u_ for u_, w in Hk.items() if w >= 0.05}
+        mkt = {u_ for u_, w in pt["travel"].items() if w >= 0.05}   # 0.05+ of the busiest place (before the hexagon scaling)
         inm_ = lambda d_: {u_: w for u_, w in d_.items() if u_ in mkt}
         SC = {X: overlap_dists(inm_(h_cov), inm_(cov_dist(place_outlets[X])), own_u | {X}) for X in place_outlets if X not in own_u}
         for name_, (wo, wi, wv, wc) in WEIGHTS.items():
@@ -484,7 +547,7 @@ for town, pats in out.items():
                 o_, i_ = cu["out"].get(k, 0), cu["in"].get(k, 0)
                 gate = 1.0 if (o_ + i_) >= 0.10 else 0.0
                 amp = 1 + wo * o_ + wi * i_ + gate * (wv * OV.get(xk, 0) + wc * SC.get(xk, 0))
-                raw[k] = min(1.0, t_ * amp)
+                raw[k] = min(DCAP, t_ * amp)
             if name_ == "net":
                 idx["cov"] = {k: round(100 * x, 1) for k, x in raw.items() if 100 * x >= 1}   # news ties only, for the dots
                 # PROTOTYPE "netcov" (2026-10-18, not adopted): the coverage areas of the market's OWN newsrooms create
@@ -528,7 +591,7 @@ for town, pats in out.items():
                         if raw.get(k_, 0) > 0 and cd_.get(u_, 0) > 0:
                             spill_in[k_] = max(spill_in[k_], cd_[u_] / mx_)
                 for k_, c_ in spill_in.items():
-                    rawc[k_] = min(1.0, rawc[k_] * (1 + 0.3 * c_))
+                    rawc[k_] = min(DCAP, rawc[k_] * (1 + 0.3 * c_))
                 rawc = spatial(rawc, home_hexes_of[town])
                 idx["netcov"] = {k_: round(100 * x_, 1) for k_, x_ in rawc.items() if 100 * x_ >= 1}
                 for k_ in home_hexes_of[town]:
@@ -576,7 +639,8 @@ for town, pats in out.items():
                                     "value": v, "index": {k_: v_ for k_, v_ in idx.items() if k_ in ("0", "1", "travel", "net", "cov", "netcov")},
                                     "newsrooms": pt.get("newsrooms", {})})
 maps["home"] = {t_: {"county": c_, "lon": round(pl_shapes[p_][1].representative_point().x, 4),
-                     "lat": round(pl_shapes[p_][1].representative_point().y, 4)} for t_, (c_, p_) in TOWNS.items()}
+                     "lat": round(pl_shapes[p_][1].representative_point().y, 4), "hexes": sorted(home_hexes_of[t_])}
+                for t_, (c_, p_) in TOWNS.items()}
 # FOR THE FIGURE (and the visual builder): the market, its counties and outline, town labels (2,500+ and the
 # configured towns), each town's block-group count
 from shapely.geometry import mapping

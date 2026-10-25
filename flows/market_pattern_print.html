@@ -13,6 +13,8 @@
   .dd-visual { padding: 0; }
   .dd-subtitle { margin-bottom: var(--s-2); }
   .dd-ramp-strip { width: 16rem; }
+  .dd-ramp { white-space: nowrap; flex-wrap: nowrap; }
+  .dd-note { margin: var(--s-2) 0 0; font-size: .8rem; color: var(--text-3); }
   .dd-legend { row-gap: var(--s-2); margin-bottom: var(--s-2); align-items: center; }
   .dd-legend .item { display: inline-flex; align-items: center; color: var(--text-3); }
   .dd-legend svg { margin-right: .35rem; }
@@ -32,6 +34,7 @@
   <p class="dd-subtitle" id="subtitle"></p>
   <div class="dd-legend" id="key"></div>
   <div class="dd-chart" id="map"></div>
+  <p class="dd-note" id="note"></p>
   <figcaption class="dd-footer">
     <span class="dd-source">Source: Missouri School of Journalism analysis of local news stories (March 2026) and Advan
       Research, Neighborhood Patterns Plus (Dewey Data), January–July 2026; U.S. Census Bureau 2020 block groups and places;
@@ -122,10 +125,10 @@ const CORRM = new URLSearchParams(location.search).get("corridors") === "1";
 // the ground between them filled (confidence_layer.py); ?outline=0 turns it off
 const OUTM = new URLSearchParams(location.search).get("outline") !== "0";
 const confUrl = (r) => r === "columbia" ? "reach/confidence_columbia.json" : `reach/${r}/confidence.json`;
-// PROBABILITY SURFACE (user, 2026-10-24; default; ?prob=0 = the single adopted-setting map): each 3 km hexagon shaded by
-// the share of plausible drawing settings that draw it (flows/area_ensemble.py: hexagon size, busiest-place scaling,
-// dasymetric spread, spatial lag, selectivity, distance rule)
-const PROBM = new URLSearchParams(location.search).get("prob") !== "0";
+// THE CIVIC INTEREST AREA (user, 2026-10-25): each 3 km hexagon shaded by its likelihood of being part of the area -- the
+// probability, under equal weighting of the ensemble's 1,728 versions, that a version draws it (flows/area_ensemble.py), the area's parts outlined (flows/area_core.py). No single-setting map is drawn
+// as a product: one setting is one arbitrary member of the ensemble (the ?prob=0 switch is gone)
+const PROBM = true;
 const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `reach/${r}/probability.json`;
 (q.get("region") ? Promise.resolve(REGION)
   : d3.json("regions.json").then((C) => Object.keys(C).find((k) => TOWN in (C[k].towns || {})) || "columbia").catch(() => "columbia"))
@@ -136,7 +139,9 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
   const data = { labels: mp.market.labels.slice(), block_groups: mp.market.block_groups };
   const P0 = mp.towns[TOWN].find((p) => p.rank === RANK);
   // the QA coverage maps are drawn on the travel-only footprint; the area map on the published (network-tie) outline
-  const OUTL = (c) => (COVM && c.outline_travel ? c.outline_travel : c.outline);
+  // the QA coverage maps are drawn on the TRAVEL-ONLY CORE of the settings ensemble (2026-10-25, D2-A); the
+  // area map, where no ensemble exists for the town, on its drawing outline
+  const OUTL = (c) => (COVM ? ((PR && PR.core50_travel_outline) || c.outline_travel || c.outline) : c.outline);
   const PR = PROB && PROB[TOWN] && PROB[TOWN][RANK] ? PROB[TOWN][RANK] : null;
   const PRB = PROBM && PR && !COVM && !STORY_LAYER && !LIFT_Q && (q.get("measure") || "index") === "index" && (q.get("s") || "net") === "net";
   if (PRB) { FLOOR = 10; CUTS = [20, 40, 60, 80]; }
@@ -202,13 +207,14 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
   const key = d3.select("#key");
   const ramp = key.append("span").attr("class", "dd-ramp");
   ramp.append("span").html(COVM ? `<span class="dd-swatch base"></span>under 2 a month &nbsp; Stories a month` : STORY_LAYER ? `Stories centred there` : LIFT ? `<span class="dd-swatch base"></span>under ${FLOOR}%`
-    : PRB ? `<span class="dd-swatch base"></span>drawn in under 10% of settings &nbsp; Drawn in this share of settings`
+    : PRB ? `How likely the place is part of the area&nbsp;&nbsp;<span class="dd-swatch base"></span>under 10%`
     : `<span class="dd-swatch base"></span>not shown: outside the ${Math.round(100 * (+(q.get("sel") || 0.5)))}% strongest ties`);
   if (STORY_LAYER) ramp.html(`Stories centred there<svg width="150" height="34" style="margin-left:.4rem;vertical-align:middle">` +
     `<circle cx="8" cy="17" r="2.6" fill="#0b0b0b" fill-opacity="0.55" stroke="#fff"/><text x="14" y="20.5" font-size="9" fill="currentColor">place</text>` +
     `<circle cx="58" cy="17" r="2.6" fill="#d9822b" fill-opacity="0.55" stroke="#fff"/><text x="64" y="20.5" font-size="9" fill="currentColor">neighbourhood</text>` +
     `</svg><span style="margin-left:4px">area by stories</span>`);
   const strip = STORY_LAYER ? d3.select(document.createElement("span")) : ramp.append("span").attr("class", "dd-ramp-strip");
+  if (PRB) strip.style("width", "11rem");     // the likelihood key fits one line within the figure's width
   const blocks = strip.append("span").attr("class", "dd-ramp-blocks");
   RAMP.slice(1).forEach((c) => blocks.append("span").attr("class", "dd-ramp-block").style("background", c));
   const marks = strip.append("span").attr("class", "dd-ramp-marks");
@@ -216,7 +222,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
   edges.forEach((v, i) => marks.append("span").attr("class", "dd-ramp-mark")
     .attr("data-align", i === 0 ? "start" : null)
     .style("left", `${(100 * i) / (CUTS.length + 1)}%`)
-    .text((i === edges.length - 1 ? `${v}+` : `${v}`) + (LIFT || PRB ? "%" : "")));
+    .text(LIFT || PRB ? (i === edges.length - 1 ? `${v}%+` : `${v}%`) : (i === edges.length - 1 ? `${v}+` : `${v}`)));
   const item = (html) => key.append("span").attr("class", "item").html(html);
   if (COVM) {
     ramp.remove();
@@ -243,9 +249,22 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     item(`News ties add<svg width="118" height="14" style="margin-left:.35rem">${cells}</svg>`);
   }
   if (PRB) {
-    document.getElementById("subtitle").textContent += `. Shaded by the share of ${PR.members} plausible drawing settings that draw ` +
-      `each place (hexagon 2\u20134 km, busiest place at 50 or 100, rural spread, spatial lag, selectivity, distance rule); ` +
-      `drawn in half or more: ${PR.core50_km2.toLocaleString()} km\u00b2`;
+    // SHORT SUBTITLE, METHODS IN THE NOTE (user, 2026-10-25): one or two lines above the map; the rest under it
+    const sub_ = document.getElementById("subtitle").textContent;
+    const PARTN_ = [...new Set((PR.core50_parts || []).filter((d) => !d.home).map((d) => d.name))];
+    const km_ = (PR.core50_kept || {}).km2 || PR.core50_km2;
+    // WORDING (user, 2026-10-25): p is a likelihood under equal weighting of the 1,728 versions -- never "share of settings"
+    document.getElementById("subtitle").textContent = `Across ${PR.members.toLocaleString()} equally plausible ways of drawing ` +
+      `the map; outlined: the area, places likely 50% or more (${km_.toLocaleString()} km\u00b2)`;
+    document.getElementById("note").textContent = `About ${P.residents.toLocaleString()} residents of ${who} ` +
+      `(${Math.round(100 * P.share)}%) travel in this pattern, January\u2013July 2026. A place's tie: their travel there, ` +
+      `strengthened by news ties \u2013 coverage each way, and places both visit and report on. Each of the ` +
+      `${PR.members.toLocaleString()} versions (seven drawing choices: hexagon 2\u20134 km across, busiest place at 50 or 100, ` +
+      `travel spread within towns and rural areas or not, spatial lag, selectivity, distance rule, reach) is weighted equally, ` +
+      `so the likelihood is conditional on that range of choices. The area: the home body and every other piece of three or ` +
+      `more hexagons likely 50% or more, wherever it lies${PARTN_ && PARTN_.length ? ` (${PARTN_.join(", ")})` : ""}; pieces ` +
+      `of one or two hexagons are left out of the outline (their shading stays).`;
+    item(`<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="#6f6d66" stroke-width="1"/></svg>The area: likely 50% or more`);
   } else if (OUTM && !COVM) {
     document.getElementById("subtitle").textContent += `. Shown as one connected area: the places whose ties hold in both halves of the year, and the ground between them`;
   }
@@ -514,6 +533,10 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
   }
   g.append("g").selectAll("path").data(counties).join("path").attr("d", path)
     .attr("fill", "none").attr("stroke", COVM ? COV_LINE : T.muted).attr("stroke-width", COVM ? 0.5 : 0.75);
+  // THE AREA'S PARTS (the core, p >= 0.5; home body and every piece of 3+ hexagons): an indicator, not a dominant line --
+  // mid-grey plain ink, about half the earlier weight, no casing (user, 2026-10-25), visible over the darkest hexagons
+  if (PRB && PR.core50_outline) g.append("path").datum(PR.core50_outline).attr("d", path).attr("fill", "none")
+    .attr("stroke", "#6f6d66").attr("stroke-width", 0.8).attr("stroke-linejoin", "round");
   g.append("path").datum(mp.market.outline).attr("d", path).attr("fill", "none").attr("stroke", COVM ? T.muted : T.ink)
     .attr("stroke-width", COVM ? 0.7 : 1.05).attr("stroke-dasharray", "3.4 2");
   // ?outline=1 draws no line (user, 2026-10-18): the area it encloses decides which hexagons are drawn, and fills the
@@ -575,7 +598,10 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
   const cand = data.labels.map((l) => { const [x, y] = proj([l.lon, l.lat]); return { ...l, x, y, v: localAt(x, y) }; })
     .filter((l) => inView(l.x, l.y));
   const home = cand.filter((l) => l.name === TOWN);
-  const market = cand.filter((l) => l.name !== TOWN && l.v >= FLOOR).sort((a, b) => b.v * Math.sqrt(b.pop || 1) - a.v * Math.sqrt(a.pop || 1)).slice(0, 8);
+  // every non-home part of the area is labelled by its largest town (area_core.py names it), ahead of the other towns
+  const PARTN = new Set(PRB ? (PR.core50_parts || []).filter((d) => !d.home).map((d) => d.name) : []);
+  const rankOf = (l) => (PARTN.has(l.name) ? 1e9 : 0) + l.v * Math.sqrt(l.pop || 1);
+  const market = cand.filter((l) => l.name !== TOWN && (l.v >= FLOOR || PARTN.has(l.name))).sort((a, b) => rankOf(b) - rankOf(a)).slice(0, 8);
   const context = cand.filter((l) => l.name !== TOWN && l.v < FLOOR && (l.pop || 0) >= 20000).sort((a, b) => b.pop - a.pop).slice(0, 4);
   // CLUSTER LABELS: a group of 5+ shaded hexagons with no label inside it is named -- a landmark from the market's config
   // if one lies in it, else its most populous town -- in ink, like the market towns
@@ -655,7 +681,16 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
   // here and uploaded as a table; the builder draws the map and computes coverage itself). One row per hexagon in the
   // drawn area: shaded ones (shown = 1) and the empty ones inside the area's outline (shown = 0). Geometry is the hexagon
   // id: a 3 km grid, 1.5 km circumradius, x = lon * 111.32 * cos(38.7), y = lat * 110.57 (km), pointy-top axial (q, r).
-  if (q.get("table") && !COVM) {
+  if (q.get("table") && !COVM && PR) {
+    // THE AREA AS A DATA TABLE (2026-10-25): every hexagon drawn in 10%+ of the ensemble's settings, with its share of
+    // settings p and whether it is in the area (a part of the multi-part core, named by area_core.py); home flagged
+    const centreLL = (id) => [+d3.mean(mp.hexes[id].slice(0, 6), (p) => p[0]).toFixed(5), +d3.mean(mp.hexes[id].slice(0, 6), (p) => p[1]).toFixed(5)];
+    const partOf = PR.core50_part_hexes || {}, homeSet = new Set(mp.home[TOWN].hexes || []);
+    const rows = Object.entries(PR.p).filter(([id, pv]) => pv >= 0.1 && mp.hexes[id]).map(([id, pv]) => { const [lon, lat] = centreLL(id);
+      return { region: REGION, town: TOWN, area: RANK, residents: P0.residents, share: +(+P0.share).toFixed(3), hex: id, lon, lat,
+        p: +pv.toFixed(3), in_area: partOf[id] ? 1 : 0, part: partOf[id] || "", home: homeSet.has(id) ? 1 : 0 }; });
+    const pre = document.createElement("pre"); pre.id = "table"; pre.textContent = JSON.stringify(rows); document.body.appendChild(pre);
+  } else if (q.get("table") && !COVM) {
     const centreLL = (id) => [+d3.mean(mp.hexes[id].slice(0, 6), (p) => p[0]).toFixed(5), +d3.mean(mp.hexes[id].slice(0, 6), (p) => p[1]).toFixed(5)];
     const row = (id, shown) => { const [lon, lat] = centreLL(id); const v = +(P.value[id] || 0);
       const l = shown && (SX === "net" || SX === "travel") && (mp.hex_county || {})[id] !== HOME ? liftAt(id) : 0;
@@ -687,7 +722,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
         const h = { id, d: r1(hexPath(id)), c: centreOf(id), v: +(+P.value[id]).toFixed(2) };
         if (PR) h.p = +((PR.p[id] || 0).toFixed(3));
         if (COVM) h.n = (((DIET[TOWN] || {})[RANK] || {})[id]) || 0;
-        else if ((SX === "net" || SX === "travel") && !LIFT && (mp.hex_county || {})[id] !== HOME) { const l = liftAt(id); if (l >= 0.10) h.lift = +l.toFixed(3); }
+        else if ((SX === "net" || SX === "travel") && !LIFT && !PRB && (mp.hex_county || {})[id] !== HOME) { const l = liftAt(id); if (l >= 0.10) h.lift = +l.toFixed(3); }
         return h; }),
       labels: [...g.selectAll("text").nodes()].map((t) => ({ text: t.textContent, x: +t.getAttribute("x"), y: +t.getAttribute("y"),
         anchor: t.getAttribute("text-anchor"), size: +t.getAttribute("font-size"), weight: +t.getAttribute("font-weight") || 400,
