@@ -46,12 +46,12 @@ for lab, d in sets.items():
         print(f"| {lab} | {len(d)} ({d.fips.nunique()}) | {f.split('~ ')[1]} | {loo(f, d):.1f} | {cf} |")
 
 # CROSSOVER (crossover_compare.csv): dedup_lower, the calibrated measure the model uses (spillover_outlets.csv
-# travel_out); sensitivity on the true bounds dedup_bound_low and dedup_bound_high.
+# travel_out); sensitivity at the band ends dedup_band_low and dedup_band_high.
 cc = pd.read_csv(root / "analysis/crossover_compare.csv", dtype={"Unnamed: 0": str}).rename(columns={"Unnamed: 0": "fips"}).set_index("fips")
 assert np.allclose(so.travel_out, so.fips.map(cc.dedup_lower)), "spillover_outlets.csv travel_out is not the current dedup_lower"
 print("\n## CORRELATION, crossover vs print and digital spillover across counties")
 print("| Crossover | Outlets | Counties | r, unweighted (p) | r, weighted by stories (p) |\n|---|---|---:|---:|---:|")
-for cl, col in (("calibrated (dedup_lower)", "dedup_lower"), ("low bound", "dedup_bound_low"), ("high bound", "dedup_bound_high")):
+for cl, col in (("adopted (dedup_lower)", "dedup_lower"), ("band low", "dedup_band_low"), ("band high", "dedup_band_high")):
     for lab, d in sets.items():
         x = d[d.broadcast == 0].groupby("fips").agg(p=("placed", "sum"), s=("spill", "sum"))
         x["c"] = x.index.map(cc[col])
