@@ -124,7 +124,7 @@ d["discount_old"] = np.where(big, np.maximum(0, d.road_stop_share - OLD_NORM), 0
 d["discount_codes"] = np.where(big, np.maximum(0, d.road_stop_share_codes - S["road_stop_visitors_codes"]), 0.0)
 d["discount_highway_statewide"] = np.where(big, np.maximum(0, d.highway_stop_share - S["highway_stop_visitors"]), 0.0)
 d["discount_unshrunk"] = np.where(big, np.maximum(0, d.highway_stop_share - d.expected_share_dest), 0.0)
-# Empirical-Bayes shrinkage of each out-of-county pair's highway-stop excess toward zero (user decision D1-A, 2026-10-25).
+# Empirical-Bayes shrinkage of each out-of-county pair's highway-stop excess toward zero (authors' decision, 2026-10-25).
 # excess e = highway share - expected share. Sampling variance of the share: a ratio over stores, so it is computed with
 # stores as clusters (a pair's visitors at one store are not independent draws; per-visitor binomial variance
 # understates it by an order of magnitude): sigma2 = K / (K - 1) x sum_k (y_k - s n_k)^2 / n^2 over the pair's K stores

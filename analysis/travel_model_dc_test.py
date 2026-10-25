@@ -69,7 +69,7 @@ models = [
     ("adopted + adjacent centre + nearest centre", FACTORS + ["adjacent_centre", "nearest_centre"], True),
 ]
 if __name__ == "__main__" and "selection" in sys.argv[1:]:
-    # SELECTION (user, final, 2026-10-24): the core gravity terms are tested as BLOCKS, each against the adopted model
+    # SELECTION (authors, final, 2026-10-24): the core gravity terms are tested as BLOCKS, each against the adopted model
     # without it -- distance (the five distance terms), border, commuting (out + in) -- held out (each home county left
     # out, 8 folds, seed 7), county-paired bootstrap, 1,000 draws; never one term at a time. Also the whole set against
     # fixed effects only. Coefficients with 2-way clustered intervals for reference. Exploratory additions are decided

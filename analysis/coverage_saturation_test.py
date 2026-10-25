@@ -1,7 +1,7 @@
 """Is coverage associated with travel LESS where the destination already has its own coverage?  EXPLORATORY additions
 to the adopted coverage model, admitted only through the nested procedure.
 
-Hypothesis (user): residents travel to population centres by gravity, but newsrooms -- especially rural ones -- do not
+Hypothesis (authors): residents travel to population centres by gravity, but newsrooms -- especially rural ones -- do not
 follow them there in proportion, because the centre is already covered by its own newsrooms and broadcasters.
 
 Pairs, stories and visits: coverage_predicted_<version>.csv, as coverage_model.py builds them (newsroom county =
