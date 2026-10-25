@@ -49,8 +49,10 @@ for h, n in own.items():
 d = pd.DataFrame(rows, columns=["home", "dest", "residents", "lower", "estimate", "upper", "block_groups", "expected", "lower_acs",
                                 "calibrated", "lower_cal"])
 res = {c: sum(n for h, n in own.items() if h.startswith(c) and n > 0) for c in HOME}
-res_e = {c: sum(e for h, e in E.items() if h.startswith(c)) for c in HOME}
-res_d = {c: sum(e for h, e in Dc.items() if h.startswith(c)) for c in HOME}
+# denominators over the same block groups the numerator loop uses (seen at home, own > 0)
+used = [h for h, n in own.items() if n > 0]
+res_e = {c: sum(E.get(h, 0.0) for h in used if h.startswith(c)) for c in HOME}
+res_d = {c: sum(Dc.get(h, 0.0) for h in used if h.startswith(c)) for c in HOME}
 out = []
 for (c, j), g in d.groupby(["home", "dest"]):
     w = lambda col: (g[col] * g.residents).sum() / res[c]

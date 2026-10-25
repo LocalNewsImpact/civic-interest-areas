@@ -15,7 +15,7 @@ Denominator per home block group (review 2026-10-24; see crossover_compare.py fo
   E_h         expected units = ACS 2020-2024 population of h x the statewide units per resident that month (option iii):
               no term taken from seen-at-home in the county
   D_h         ADOPTED (user decision 2026-10-24, option A): calibrated, E_h x (own_h / E_h)^(1 - b), b estimated here
-              from how leaving falls with home detection across months (see below); b = 1 gives E_h, b = 0 gives own_h
+              by 2SLS from how leaving falls with home detection (see below); b = 1 gives E_h, b = 0 gives own_h
 Each block group's leavers are capped at its denominator.
 
 od_unique_mo_2026.csv (unchanged definition): month, home_county, dest_county (as coded; Missouri destinations),
@@ -32,14 +32,13 @@ leaving_unique_mo_2026.csv: month, county (as coded; 29510 and 29189 separate ro
   left_lower_coded         as left_lower with the old coded-county test (city <-> county counted as leaving)
   max_seen_any, left_lower_maxany                          option i (Missouri + Kansas destinations)
   denominator_trimmed, left_lower_trimmed, phantom_bgs     option ii
-  expected_units, acs_population, left_lower_acs, share_left_acs   option iii (adopted)
+  expected_units, acs_population, left_lower_acs, share_left_acs   option iii (b = 1 sensitivity)
   left_lower_acs_mo        option iii, Missouri destinations only
   denominator_calibrated, left_lower_calibrated   D_h (adopted)
-  denominator_b0, left_lower_b0                    own_h (E_h where own_h = 0), Missouri + Kansas: the b = 0 bound
+  denominator_b0, left_lower_b0                    own_h (E_h where own_h = 0), Missouri + Kansas: b = 0 sensitivity
   denominator_linear, left_lower_linear            sensitivity: (1 - b) own_h + b E_h (the excess split linearly)
-  denominator_max, left_lower_dmax / denominator_min, left_lower_dmin
-                           max(own_h, E_h) / min(own_h, E_h) (E_h where own_h = 0), leavers capped at each: the
-                           county figure's true low and high bounds over every b in [0, 1]
+crossover_b_grid.csv: county (unit), b, crossover (county figure R(b), averaged over months), b_adopted, b_lo, b_hi --
+  the crossover bounds (crossover_compare.py) are the min / max of R over b in [0, 1] and over [b_lo, b_hi]
 crossover_bg_month_mo_2026.csv: month, home_bg, own, expected_units, denominator_calibrated (D_h), acs_population, b
   (read by residents_leaving.py, residents_leaving_tracts.py, unique_people_by_county.py)
   detection_slope_b, detection_slope_b_lo, detection_slope_b_hi   b and its 95% interval (same in every row)
@@ -152,14 +151,20 @@ lv = pd.DataFrame([(m, c, *[L[k] for k in cols]) for (m, c), L in sorted(leave.i
 lv["share_left_lower"] = (lv.left_lower / lv.residents_seen_at_home.where(lv.residents_seen_at_home > 0)).round(4)
 lv["share_left_acs"] = (lv.left_lower_acs / lv.expected_units.where(lv.expected_units > 0)).round(4)
 
-# ---- calibrated denominator (user decision 2026-10-24, option A) --------------------------------------------------------
+# ---- calibrated denominator (user decision 2026-10-24, option A; b by 2SLS, review round 3, 2026-10-25) ------------------
 # Within a county, block groups where Advan detects more phones at home than the ACS predicts (d_h = own_h / E_h > 1)
-# show a lower leaving rate (busiest outside block group / own_h). Regressing log leaving rate in month m2 on log
-# detection in month m1 (m1 != m2, same block-group vintage, so the noise in own_h is not shared), county x month-pair
-# fixed effects, ACS-population weights: slope = -b. b = 1: the extra phones never leave (phantoms; denominator E_h);
-# b = 0: they leave like residents (denominator own_h). Every ordered month pair is stacked (both directions, equal
-# weight); the interval is clustered by county. Denominator D_h = E_h x d_h^(1 - b) (= own_h^(1-b) E_h^b); D_h = E_h
-# where own_h = 0 (detection unknown); D_h = 0 where E_h = 0 (no ACS residents). Leavers capped at D_h.
+# show a lower leaving rate (busiest outside block group / own_h). Model: log leaving rate_m2 = -b x log d_m2 + county x
+# month-pair effect. d_m2 shares own_m2 with the leaving rate (noise in own_h biases a same-month slope toward -1), so
+# log d_m2 is instrumented by log d_m1 (another month, same block-group vintage): 2SLS, county x month-pair fixed
+# effects, ACS-population weights, every ordered month pair stacked (both directions), county-clustered (St. Louis city
+# and county one cluster). The reduced form (leaving_m2 on detection_m1, the 2026-10-24 estimate) is attenuated by the
+# month-to-month noise in detection (first stage < 1) and is printed as a diagnostic.
+# b = 1: the extra phones never leave (phantoms; D_h = E_h); b = 0: they leave like residents (D_h = own_h).
+# CAVEAT: b mixes two things that both raise detection and lower leaving -- phantom phones homed there, and residents
+# who stay home more (seen at home more often, out less). The second makes b too high as a phantom share (D_h too
+# small, crossover too high): the opposite direction to the attenuation that the instrument removes.
+# Denominator D_h = E_h x d_h^(1 - b) (= own_h^(1-b) E_h^b); D_h = E_h where own_h = 0 (detection unknown); D_h = 0
+# where E_h = 0 (no ACS residents). Leavers capped at D_h.
 B = pd.DataFrame(bgrows, columns=["month", "h", "own", "E", "out", "pop"])
 B["cu"] = B.h.str[:5].map(unit)
 B["vintage"] = np.where(B.month <= "2026-07", 2020, 2010)
@@ -168,62 +173,93 @@ B.loc[ok, "ld"] = np.log(B.own[ok] / B.E[ok])
 B.loc[ok & (B.out > 0), "lr"] = np.log(B.out[ok & (B.out > 0)] / B.own[ok & (B.out > 0)])
 
 
-def slope(st):
-    """weighted within (pair, county) slope of lr on ld; county-clustered s.e."""
-    g = st.groupby(["pair", "cu"])
+def within(st, col):
     w = st["pop"]
-    x = st.ld - (st.ld * w).groupby([st.pair, st.cu]).transform("sum") / g["pop"].transform("sum")
-    y = st.lr - (st.lr * w).groupby([st.pair, st.cu]).transform("sum") / g["pop"].transform("sum")
+    grp = [st.pair, st.cu]
+    return st[col] - (st[col] * w).groupby(grp).transform("sum") / w.groupby(grp).transform("sum")
+
+
+def ols(st, xc, yc):
+    """weighted within (pair, county) slope of yc on xc; county-clustered s.e."""
+    w, x, y = st["pop"], within(st, xc), within(st, yc)
     sxx = (w * x * x).sum()
     bta = (w * x * y).sum() / sxx
     sc = (w * x * (y - bta * x)).groupby(st.cu).sum()
     G = len(sc)
-    se = np.sqrt((sc ** 2).sum() * G / (G - 1)) / sxx
-    return bta, se
+    return bta, np.sqrt((sc ** 2).sum() * G / (G - 1)) / sxx
+
+
+def iv(st):
+    """2SLS slope of lr on ld2 (same month) instrumented by ld (other month); county-clustered s.e."""
+    w, z, x, y = st["pop"], within(st, "ld"), within(st, "ld2"), within(st, "lr")
+    szx = (w * z * x).sum()
+    bta = (w * z * y).sum() / szx
+    sc = (w * z * (y - bta * x)).groupby(st.cu).sum()
+    G = len(sc)
+    return bta, np.sqrt((sc ** 2).sum() * G / (G - 1)) / abs(szx)
 
 
 parts = []
 for v, x in B[ok].groupby("vintage"):
     months = sorted(x.month.unique())
     det = {m: x[x.month == m].set_index("h").ld for m in months}
-    lea = {m: x[(x.month == m) & x.lr.notna()].set_index("h")[["lr", "pop", "cu"]] for m in months}
+    lea = {m: x[(x.month == m) & x.lr.notna()].set_index("h")[["lr", "pop", "cu", "ld"]].rename(columns={"ld": "ld2"})
+           for m in months}
     for m1, m2 in itertools.permutations(months, 2):
         j = lea[m2].join(det[m1], how="inner")
-        parts.append(j.assign(pair=f"{m1}>{m2}"))
+        parts.append(j.assign(pair=f"{m1}>{m2}", lag=abs(int(m1[-2:]) - int(m2[-2:]))))
 st = pd.concat(parts).reset_index(drop=True)
 st = st[st["pop"] > 0]
-bta, se = slope(st)
+rf, rf_se = ols(st, "ld", "lr")
+fs, fs_se = ols(st, "ld", "ld2")
+bta, se = iv(st)
 b = -bta
-for pr in ("2026-03>2026-06", "2026-06>2026-03"):
-    bb, ss = slope(st[st.pair == pr])
-    print(f"cross-month slope, detection {pr[:7]} -> leaving {pr[-7:]}: {bb:+.3f} [{bb - 1.96 * ss:+.3f}, {bb + 1.96 * ss:+.3f}]")
-print(f"detection slope, all {st.pair.nunique()} ordered month pairs stacked (both directions): {bta:+.3f} "
-      f"[{bta - 1.96 * se:+.3f}, {bta + 1.96 * se:+.3f}] (county-clustered; {len(st):,} block-group pairs, "
-      f"{st.cu.nunique()} counties) -> b = {b:.3f}")
-B["D"] = np.where(ok, B.E * np.exp((1 - b) * B.ld.fillna(0)), np.where(B.own <= 0, B.E, 0.0))
+b_lo, b_hi = -(bta + 1.96 * se), -(bta - 1.96 * se)
+print(f"{st.pair.nunique()} ordered month pairs stacked, {len(st):,} block-group pairs, {st.cu.nunique()} counties (county-clustered)")
+print(f"  reduced form (leaving m2 on detection m1; diagnostic, the 2026-10-24 estimate): {rf:+.3f} [{rf - 1.96 * rf_se:+.3f}, {rf + 1.96 * rf_se:+.3f}]")
+print(f"  first stage (detection m2 on detection m1): {fs:+.3f} [{fs - 1.96 * fs_se:+.3f}, {fs + 1.96 * fs_se:+.3f}]")
+print(f"  2SLS (adopted): slope {bta:+.3f} -> b = {b:.3f} [{b_lo:.3f}, {b_hi:.3f}]")
+for L in sorted(st.lag.unique()):
+    sub = st[st.lag == L]
+    bl, sl = iv(sub)
+    print(f"    lag {L}: {sub.pair.nunique()} pairs, b = {-bl:.3f} [{-bl - 1.96 * sl:.3f}, {-bl + 1.96 * sl:.3f}]")
+print("  caveat: b mixes phantom phones with residents who stay home more (both raise detection and lower leaving); the "
+      "second biases b upward, opposite to the attenuation the instrument removes")
+B["county"] = B.h.str[:5]
+
+
+def Db(bb):
+    return np.where(ok, B.E * np.exp((1 - bb) * B.ld.fillna(0)), np.where(B.own <= 0, B.E, 0.0))
+
+
+B["D"] = Db(b)
 B["D0"] = np.where(B.own > 0, B.own, B.E)
 B["Dlin"] = np.where(B.own > 0, (1 - b) * B.own + b * B.E, B.E)    # sensitivity: the excess phones split linearly
-B["county"] = B.h.str[:5]
-# true bounds on the calibrated county figure: for every b in [0, 1], D_h lies between min(own_h, E_h) and
-# max(own_h, E_h) (own^(1-b) E^b is monotone in b, rising or falling with d_h); D_h = E_h where own_h = 0 in all three
-B["Dmax"] = np.where(B.own > 0, np.maximum(B.own, B.E), B.E)
-B["Dmin"] = np.where(B.own > 0, np.minimum(B.own, B.E), B.E)
 B["L_cal"] = np.minimum(B.out, B.D)
 B["L0"] = np.minimum(B.out, B.D0)
 B["Llin"] = np.minimum(B.out, B.Dlin)
-B["Lmax"] = np.minimum(B.out, B.Dmax)
-B["Lmin"] = np.minimum(B.out, B.Dmin)
 cal_lv = B.groupby(["month", "county"]).agg(denominator_calibrated=("D", "sum"), left_lower_calibrated=("L_cal", "sum"),
                                             denominator_b0=("D0", "sum"), left_lower_b0=("L0", "sum"),
-                                            denominator_linear=("Dlin", "sum"), left_lower_linear=("Llin", "sum"),
-                                            denominator_max=("Dmax", "sum"), left_lower_dmax=("Lmax", "sum"),
-                                            denominator_min=("Dmin", "sum"), left_lower_dmin=("Lmin", "sum")).reset_index()
+                                            denominator_linear=("Dlin", "sum"), left_lower_linear=("Llin", "sum")).reset_index()
 lv = lv.merge(cal_lv, on=["month", "county"], how="left")
-SLOPE = {"detection_slope_b": round(b, 4), "detection_slope_b_lo": round(-(bta + 1.96 * se), 4),
-         "detection_slope_b_hi": round(-(bta - 1.96 * se), 4)}
+SLOPE = {"detection_slope_b": round(b, 4), "detection_slope_b_lo": round(b_lo, 4), "detection_slope_b_hi": round(b_hi, 4)}
 lv = lv[["month", "county", "residents_seen_at_home", "left_lower", "share_left_lower"] + cols[2:] + ["share_left_acs",
         "denominator_calibrated", "left_lower_calibrated", "denominator_b0", "left_lower_b0", "denominator_linear",
-        "left_lower_linear", "denominator_max", "left_lower_dmax", "denominator_min", "left_lower_dmin"]].round(1).assign(**SLOPE)
+        "left_lower_linear"]].round(1).assign(**SLOPE)
+
+# county figure R(b) over a grid of b (0 to 1, step 0.01, plus b and its interval ends): the crossover's bounds are
+# the min and max of R over the grid, and over the b interval. (Sums at b = 0 and b = 1 are not bounds: D_h moves with b
+# in opposite directions for over- and under-detected block groups, and R(b) need not be monotone.)
+grid = sorted(set(np.round(np.arange(0, 1.0001, 0.01), 2)) | {round(b, 4), round(b_lo, 4), round(b_hi, 4)})
+U = B.county.map(unit)
+rows_g = []
+for bb in grid:
+    D = Db(bb)
+    g = pd.DataFrame({"u": U, "m": B.month, "L": np.minimum(B.out, D), "D": D}).groupby(["u", "m"]).sum()
+    r = (g.L / g.D).groupby("u").mean()
+    rows_g += [(u, bb, v) for u, v in r.items()]
+pd.DataFrame(rows_g, columns=["county", "b", "crossover"]).assign(b_adopted=round(b, 4), b_lo=round(b_lo, 4),
+                                                                  b_hi=round(b_hi, 4)).to_csv(A / "crossover_b_grid.csv", index=False)
 lv.to_csv(A / "leaving_unique_mo_2026.csv", index=False)
 B[["month", "h", "own", "E", "D", "pop"]].rename(columns={"h": "home_bg", "E": "expected_units", "D": "denominator_calibrated",
                                                           "pop": "acs_population"}).round(1).assign(**SLOPE).to_csv(

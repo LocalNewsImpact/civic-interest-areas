@@ -8,8 +8,8 @@ devices x one monthly scale (the smallest value in a capped row, 14-20 in 2026, 
 calibration_county_month.csv, one row per Missouri county x month:
   county, month, seen_at_home, population, factor
       factor = people from the county seen in their own home block group that month / ACS 2020-2024 population (the
-      2026-10-16 calibration). It ranges 0.24-10.8 across county-months: it measures home detection as much as panel
-      size (Scotland: 40-60k "seen at home" against 4,686 people; St. Louis city: residents seen in another block group
+      2026-10-16 calibration). It ranges 0.19-12.73 across county-months and 0.24-10.78 across county medians: it
+      measures home detection as much as panel size (Scotland: 40-60k "seen at home" against 4,686 people; St. Louis city: residents seen in another block group
       more often than at home in 82% of block groups).
   max_seen_any         sum over the county's home block groups of the largest count of the block group's residents in
                        any ONE block group (its own or another; Missouri and Kansas destinations): at least this many
@@ -147,6 +147,8 @@ print("units per resident, statewide (factor_statewide):", s.round(3).to_dict())
 for c in ("factor", "factor_trimmed"):
     print(f"{c} across counties and months: median {cal[c].median():.2f}, middle 80% {cal[c].quantile(.1):.2f}-"
           f"{cal[c].quantile(.9):.2f}, range {cal[c].min():.2f}-{cal[c].max():.2f}")
+cm = cal.groupby("county")[["factor", "factor_trimmed"]].median()
+print(f"county medians: factor {cm.factor.min():.2f}-{cm.factor.max():.2f}, factor_trimmed {cm.factor_trimmed.min():.2f}-{cm.factor_trimmed.max():.2f}")
 print(f"phantom home block group-months (own > {PHANTOM:g} x expected): {bg.phantom.sum()} of {len(bg)} "
       f"({bg.phantom.mean():.1%}), holding {bg.own[bg.phantom == 1].sum() / bg.own.sum():.1%} of devices seen at home")
 print(cal[cal.county.isin(["29007", "29019", "29151", "29199", "29510"])].pivot(index="month", columns="county", values="factor").round(2).to_string())

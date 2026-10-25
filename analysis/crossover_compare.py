@@ -5,14 +5,13 @@ dedup_lower  ADOPTED (user decision 2026-10-24, option A): distinct residents se
              the county in a month / calibrated residents, averaged over months (leaving_unique_mo_2026.csv). Per home
              block group: people in its busiest outside block group (Missouri or Kansas), capped at
              D_h = E_h x (own_h / E_h)^(1 - b), E_h = ACS population x the statewide units per resident, own_h =
-             residents seen at home, b = how far leaving falls with home detection across months (build_unique_od.py,
-             about 0.5: half the phones above E_h behave as phantoms, half as residents); summed over the county's block
-             groups and divided by the sum of D_h.
-bounds       dedup_bound_low = leavers / sum of max(own_h, E_h), dedup_bound_high = leavers / sum of min(own_h, E_h)
-             (each block group's leavers capped at the denominator used; E_h where own_h = 0): D_h lies between
-             min and max for every b in [0, 1], so these bound the calibrated figure whatever b is. dedup_bound_width =
-             high - low. The b = 0 and b = 1 sums are NOT bounds (D_h moves in opposite directions with b for over-
-             and under-detected block groups).
+             residents seen at home, b = how far leaving falls with home detection (build_unique_od.py, 2SLS, about
+             0.6); summed over the county's block groups and divided by the sum of D_h. b mixes phantom phones with
+             residents who stay home more (both raise detection and lower leaving); the second biases b upward.
+bounds       the county figure R(b) over a grid of b from 0 to 1 (step 0.01; crossover_b_grid.csv): dedup_bound_low /
+             dedup_bound_high = its min / max over [0, 1], dedup_bound_width = high - low; dedup_band_low /
+             dedup_band_high = its min / max over the 95% interval of b. Sums at b = 0 and b = 1, or over
+             max(own_h, E_h) and min(own_h, E_h), are not bounds: R(b) need not be monotone.
 sensitivity  dedup_b1 = option iii (D_h = E_h: every extra phone a phantom); dedup_b0 = own_h (every extra phone a
              resident; E_h where own_h = 0); dedup_linear = (1 - b) own_h + b E_h; all Missouri + Kansas destinations.
 alternatives dedup_seen_at_home   denominator = residents seen at home (2026-10-16 measure, unit test fixed;
@@ -22,7 +21,9 @@ alternatives dedup_seen_at_home   denominator = residents seen at home (2026-10-
              dedup_acs_mo         option iii, Missouri destinations only
 commute      LODES 2023 Missouri main file, primary jobs (JT01; free/mo_od_main_JT01_2023.csv.gz): employed residents
              working in another Missouri county / population (ACS 2020-2024) and / employed residents. The JT00
-             (all jobs) figures are kept as commute_pop_jt00, commute_emp_jt00.
+             (all jobs) figures are kept as commute_pop_jt00, commute_emp_jt00; commute_pop_all, commute_emp_all count
+             jobs in another county of Missouri or of KS, IL, IA, AR, OK, NE, TN, KY (free/mo_residents_od_JT01_2023.csv.gz,
+             built here from the main and aux JT01 files).
 conservative the higher of dedup_lower and commute_pop; set_by names which.
 Destinations observed: Missouri and Kansas block groups. Illinois, Iowa, Arkansas, Oklahoma and Nebraska are not in the
 data, so a resident seen only there is not counted as leaving (border counties' figures are low by that much).
@@ -62,8 +63,6 @@ OPTS = {"dedup_seen_at_home_coded": ("left_lower_coded", "residents_seen_at_home
         "dedup_b1": ("left_lower_acs", "expected_units"),
         "dedup_b0": ("left_lower_b0", "denominator_b0"),
         "dedup_linear": ("left_lower_linear", "denominator_linear"),
-        "dedup_bound_low": ("left_lower_dmax", "denominator_max"),
-        "dedup_bound_high": ("left_lower_dmin", "denominator_min"),
         "dedup_lower": ("left_lower_calibrated", "denominator_calibrated")}
 
 
@@ -78,7 +77,37 @@ def lodes(path):
     return pd.Series(out), pd.Series(emp)
 
 
+MO_RES = root / "free/mo_residents_od_JT01_2023.csv.gz"
+AUX = ("ks", "il", "ia", "ar", "ok", "ne", "tn", "ky")
+
+
+def build_mo_residents():
+    """Missouri residents' primary jobs anywhere observed: the Missouri main JT01 file (home and job in Missouri) plus
+    the rows of the KS, IL, IA, AR, OK, NE, TN and KY aux JT01 files whose home block is in Missouri (job in that
+    state). Same columns as LODES OD files. Missouri's own aux file (homes in other states) is not included."""
+    import io
+    n = Counter()
+    with gzip.open(MO_RES, "wt", newline="") as fo:
+        with gzip.open(root / "free/mo_od_main_JT01_2023.csv.gz", "rt") as fh:
+            head = fh.readline()
+            fo.write(head)
+            for line in fh:
+                fo.write(line)
+                n["mo"] += 1
+        for st_ in AUX:
+            with gzip.open(root / f"free/{st_}_od_aux_JT01_2023.csv.gz", "rt") as fh:
+                assert fh.readline() == head, st_
+                for line in fh:
+                    if line.split(",", 2)[1].startswith("29"):
+                        fo.write(line)
+                        n[st_] += 1
+    print(f"wrote {MO_RES.name}: rows by job state {dict(n)}")
+
+
+if not MO_RES.exists():
+    build_mo_residents()
 out1, emp1 = lodes(root / "free/mo_od_main_JT01_2023.csv.gz")
+outa, empa = lodes(MO_RES)            # job anywhere observed (Missouri + 8 neighbouring states)
 out0, emp0 = lodes(root / "free/od_2023.csv.gz")          # JT00, all jobs
 cal = pd.read_csv(A / "calibration_county_month.csv", dtype={"county": str})
 cal["u"] = cal.county.map(unit)
@@ -87,8 +116,16 @@ factor = (c.seen_at_home / c.population).groupby("u").median()
 t = pd.DataFrame({"name": name, "population": pop, "current": current,
                   **{k: mean(*v) for k, v in OPTS.items()},
                   "commute_pop": out1 / pop, "commute_emp": out1 / emp1,
+                  "commute_pop_all": outa / pop, "commute_emp_all": outa / empa,
                   "commute_pop_jt00": out0 / pop, "commute_emp_jt00": out0 / emp0, "factor_median": factor})
 t = t[t.name.notna() & t.dedup_lower.notna()]
+gr = pd.read_csv(A / "crossover_b_grid.csv", dtype={"county": str})
+assert abs(gr.b_adopted.iloc[0] - B_SLOPE[0]) < 1e-6, "crossover_b_grid.csv is from another run of build_unique_od.py"
+band = gr[(gr.b >= gr.b_lo) & (gr.b <= gr.b_hi)]
+t["dedup_bound_low"], t["dedup_bound_high"] = gr.groupby("county").crossover.min(), gr.groupby("county").crossover.max()
+t["dedup_band_low"], t["dedup_band_high"] = band.groupby("county").crossover.min(), band.groupby("county").crossover.max()
+at_b = gr[np.isclose(gr.b, gr.b_adopted)].set_index("county").crossover
+assert (at_b.reindex(t.index) - t.dedup_lower).abs().max() < 1e-4, "grid at the adopted b does not reproduce dedup_lower"
 t["dedup_bound_width"] = t.dedup_bound_high - t.dedup_bound_low
 t["conservative"] = t[["dedup_lower", "commute_pop"]].max(axis=1)
 t["set_by"] = np.where(t.dedup_lower >= t.commute_pop, "phone data", "commuting")
@@ -123,22 +160,22 @@ print(f"| LODES JT01 commuters / population | | | | {t.loc['29007', 'commute_pop
 print(f"| LODES JT00 commuters / population | | | | {t.loc['29007', 'commute_pop_jt00']:.0%} | {t.loc['29019', 'commute_pop_jt00']:.0%} | "
       f"{t.loc['29151', 'commute_pop_jt00']:.0%} | {t.commute_pop_jt00.median():.0%} | {t.loc['29189', 'commute_pop_jt00']:.0%} |")
 print(f"\nDetection slope b = {B_SLOPE[0]:.3f} [{B_SLOPE[1]:.3f}, {B_SLOPE[2]:.3f}]")
-print("| County | Calibrated (adopted) | Low bound, / max(own, E) | High bound, / min(own, E) | b = 1 (sensitivity) | b = 0 (sensitivity) | Linear split (sensitivity) |\n|---|---:|---:|---:|---:|---:|---:|")
+print("| County | Calibrated (adopted) | Range over b in [0, 1] | Range over the b interval | b = 1 (sensitivity) | b = 0 (sensitivity) | Linear split (sensitivity) |\n|---|---:|---:|---:|---:|---:|---:|")
 for f in ("29007", "29019", "29151", None, "29189"):
     r = t.median(numeric_only=True) if f is None else t.loc[f]
-    print(f"| {'Missouri median' if f is None else t.loc[f, 'name']} | {r.dedup_lower:.0%} | {r.dedup_bound_low:.0%} | {r.dedup_bound_high:.0%} | "
+    print(f"| {'Missouri median' if f is None else t.loc[f, 'name']} | {r.dedup_lower:.0%} | {r.dedup_bound_low:.0%}-{r.dedup_bound_high:.0%} | {r.dedup_band_low:.0%}-{r.dedup_band_high:.0%} | "
           f"{r.dedup_b1:.0%} | {r.dedup_b0:.0%} | {r.dedup_linear:.0%} |")
 for c_ in ("dedup_lower", "dedup_linear", "dedup_b0", "dedup_b1"):
     o = (t[c_] > t.dedup_bound_high + 1e-9) | (t[c_] < t.dedup_bound_low - 1e-9)
-    print(f"containment check, {c_}: inside [low, high] in {len(t) - o.sum()} of {len(t)} counties"
+    print(f"containment check, {c_}: inside the range over b in [0, 1] in {len(t) - o.sum()} of {len(t)} counties"
           + ("" if not o.any() else f"; outside: {t.name[o].tolist()}"))
-assert not ((t.dedup_lower > t.dedup_bound_high + 1e-9) | (t.dedup_lower < t.dedup_bound_low - 1e-9)).any(), "calibrated outside its bounds"
+assert not ((t.dedup_lower > t.dedup_bound_high + 1e-9) | (t.dedup_lower < t.dedup_bound_low - 1e-9)).any(), "calibrated outside its grid range"
 t["size"] = pd.cut(t.population, [0, 10_000, 20_000, 50_000, 1e8], labels=["<10k", "10-20k", "20-50k", "50k+"])
-print("\n| County population | Counties | Bounds width (high - low), median (middle 80%), points | Calibrated, median | Low, median | High, median |")
-print("|---|---:|---:|---:|---:|---:|")
+print("\n| County population | Counties | Range over b in [0, 1], width, median (middle 80%), points | Range over the b interval, width, median | Calibrated, median | Low, median | High, median |")
+print("|---|---:|---:|---:|---:|---:|---:|")
 for k, g_ in t.groupby("size", observed=True):
     print(f"| {k} | {len(g_)} | {100 * g_.dedup_bound_width.median():.1f} ({100 * g_.dedup_bound_width.quantile(.1):.1f}-"
-          f"{100 * g_.dedup_bound_width.quantile(.9):.1f}) | {g_.dedup_lower.median():.0%} | {g_.dedup_bound_low.median():.0%} | {g_.dedup_bound_high.median():.0%} |")
+          f"{100 * g_.dedup_bound_width.quantile(.9):.1f}) | {100 * (g_.dedup_band_high - g_.dedup_band_low).median():.1f} | {g_.dedup_lower.median():.0%} | {g_.dedup_bound_low.median():.0%} | {g_.dedup_bound_high.median():.0%} |")
 t = t.drop(columns="size")
 print("\n| County | Current crossover (summed counts) | Distinct people seen outside, monthly (lower bound) | "
       "Commuting out / population | Commuting out / employed | Conservative | Set by |")
@@ -151,6 +188,8 @@ print(f"\nall {len(t)} counties: correlation of current crossover with the conse
       f"by commuting in {(t.set_by == 'commuting').sum()}")
 print("medians:", {c: f"{t[c].median():.1%}" for c in ("current", "dedup_lower", "commute_pop", "commute_emp", "commute_pop_jt00",
                                                        "commute_emp_jt00", "conservative")})
+print("commuters / population including jobs in the 8 neighbouring states: median", f"{t.commute_pop_all.median():.1%}",
+      "; Audrain, Boone, Osage, St. Louis:", t.loc[["29007", "29019", "29151", "29189"], "commute_pop_all"].round(3).tolist())
 print("JT01 - JT00, commuters / employed: median", f"{(t.commute_emp - t.commute_emp_jt00).median():+.3f}",
       "range", f"{(t.commute_emp - t.commute_emp_jt00).min():+.3f} to {(t.commute_emp - t.commute_emp_jt00).max():+.3f}")
 print("Kansas destinations add (dedup_b1 - dedup_acs_mo), points: median", f"{100 * (t.dedup_b1 - t.dedup_acs_mo).median():.2f}",
