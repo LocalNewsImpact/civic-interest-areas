@@ -1,8 +1,10 @@
 # Model changes — travel, coverage and spillover
 
 Log of the modelling decisions from 2026-10-16: what was adopted, what was tested and rejected, and the evidence for
-each. Three peer reviews (2026-10-24 and 10-25) restate every model's figures: current figures are under **Current results**,
-replaced ones under **Superseded figures** (end). Scripts are in `analysis/` unless noted; `make_visuals.sh` rebuilds
+each. Three internal audit rounds by the authors (2026-10-24 and 10-25) restate every model's figures: current
+figures are under **Current results**, replaced ones under **Superseded figures** (end). The log reports the target
+counties, Audrain, Boone and Osage (and the Columbia–Jefferson City television market for the civic interest areas),
+and model-level statistics; figures for other counties and markets are kept outside the repository. Scripts are in `analysis/` unless noted; `make_visuals.sh` rebuilds
 every figure from the adopted models.
 
 ## Data and periods
@@ -12,11 +14,11 @@ every figure from the adopted models.
 | Travel | Advan Neighborhood Patterns Plus (Dewey), Missouri destinations, January–September 2026; summed to home county × destination county (`build_calibration.py`, then `build_statewide_od.py` → `od_mo_2026.csv`; nothing rewrites the file afterwards). Columns: `visits` (÷ county factor, 2026-10-16), `visits_recorded`, `visits_statewide` (÷ statewide units per resident; the adopted scale), `visits_trimmed` (÷ county factor without phantom home block groups); work-hours columns alike. Outcome in every travel script: `gravity_terms.travel_visits` (`visits_statewide` × (1 − shrunken highway-stop discount)) |
 | Travel, capped destinations | Advan keeps at most 2,000 home block groups per destination row. Capped destination block groups: 275–904 per month (5.5–18% of rows), holding 19.5% (January) to 43.3% (July) of Missouri out-of-county device-visits. Flag: `dest_bg_capped_mo_2026.csv`; pairs counted in uncapped destinations only: `od_mo_2026_uncapped.csv` |
 | Travel, distinct people | `od_people_mo_2026.csv` (`build_unique_od.py`): per home county × destination county × month, St. Louis city and county one unit, Missouri and Kansas destinations: people from each home block group in the destination's busiest block group, capped at the block group's calibrated denominator D and converted to people by its ACS population ÷ D, summed (`people_lower`; sensitivity columns `people_lower_recorded`, `people_lower_b1`, `people_lower_calibrated`) |
-| Travel, Kansas | Advan Neighborhood Patterns Plus, Kansas destination block groups, January–September 2026 (`neighborhood/raw_ks/`): Missouri residents' visits to Kansas, and the Kansas transfer test (`build_ks_od.py` → `od_ks_2026.csv`; `visits` recorded, `visits_calibrated` and `visits_statewide` added; factors in `calibration_county_month_ks.csv`) |
+| Travel, Kansas destinations | Advan Neighborhood Patterns Plus, Kansas destination block groups, January–September 2026 (`neighborhood/raw_ks/`): Missouri residents' visits to Kansas, used in crossover and in the Kansas share of travel |
 | Destinations not observed | Illinois, Iowa, Arkansas, Oklahoma and Nebraska block groups are not in the data. A Missouri resident seen only there is not counted as leaving; border counties' crossover is low by that much |
 | Tracts | Tract outputs use January–July only (2020 block groups), as `activity_space.py` does: August–September home codes are 2010 block groups, whose tract codes name different areas (`build_tract_od.py` → `od_tract_mo_2026.csv`) |
 | Population | ACS 2020–2024 B01003: counties (`free/mo_county_population.csv`), block groups (`census_dl/acs_tract/b01003.dat` → `bg_acs_population.csv`; 2010 block groups by area-weighted overlay of the 2020 block groups, Missouri total preserved to 1 person in 6.19 million) |
-| Commuting | LODES 2023, primary jobs (JT01). Missouri residents' jobs anywhere observed: `free/mo_residents_od_JT01_2023.csv.gz` = the Missouri main JT01 file + the Missouri-home rows of the KS, IL, IA, AR, OK, NE, TN and KY aux JT01 files (2,239,967 Missouri rows + 179,164 out-of-state rows, 115,463 of them Kansas; built by `crossover_compare.py`), read by the travel and coverage terms (`gravity_terms.py`), the public model and the crossover scripts. `free/od_2023.csv.gz` is JT00 (all jobs; byte-identical to LEHD's `mo_od_main_JT00_2023.csv.gz`), read by `build_county_covariates.py` and for the Kansas class centres |
+| Commuting | LODES 2023, primary jobs (JT01). Missouri residents' jobs anywhere observed: `free/mo_residents_od_JT01_2023.csv.gz` = the Missouri main JT01 file + the Missouri-home rows of the KS, IL, IA, AR, OK, NE, TN and KY aux JT01 files (built by `crossover_compare.py`), read by the travel and coverage terms (`gravity_terms.py`), the public model and the crossover scripts. `free/od_2023.csv.gz` is JT00 (all jobs; byte-identical to LEHD's `mo_od_main_JT00_2023.csv.gz`), read by `build_county_covariates.py` |
 | Coverage | Missouri School of Journalism analysis of local news stories, March 2026 (the only month enriched); a story is placed in every county it is centred in or mentions |
 | Store-level visits | Advan Weekly Patterns Plus, Missouri, weeks of 2026-03-02 to 03-23. Places keyed by `PERSISTENT_ID_STORE`; `PERSISTENT_ID` is shared by unrelated places (2,225 values for 100,596 places in a week). NAICS codes are the 2017 vintage (gas 447110 / 447190, convenience 445120; 4571xx and 445131 do not occur) |
 | Highways | OpenStreetMap `osm/missouri-latest.osm.pbf`: ways of any highway class (proposed, construction, abandoned excluded) whose ref is an Interstate or US route number; business routes, loops and spurs excluded (11,070 ways). TIGER primary roads are not on disk |
@@ -52,10 +54,11 @@ earlier specifications and their figures are in Superseded figures.
 | Measure | Value | Script |
 |---|---|---|
 | Device → person scale | statewide units per resident by month, 1.70–2.32 (`factor_statewide`); the county factor (county medians 0.24–10.78) is not used | `build_calibration.py` |
-| Detection slope b (2SLS: detection instrumented by another month's) | 0.621 [0.534, 0.708] (reduced form 0.510, first stage 0.822) | `build_unique_od.py` |
-| Crossover: distinct residents seen outside the county, calibrated denominator (b = 0.62): Audrain / Boone / Osage / Missouri median / St. Louis (city + county) | 44% / 26% / 59% / 59% / 31% | `crossover_compare.py` |
-| — bounds: range of the county figure over b in [0, 1] | 40–44%, 24–26%, 45–66%, 48–61%, 18–43% | `crossover_compare.py` |
-| — range over b's 95% interval | 43–44%, 26–26%, 57–61%, 58–60%, 28–34% | `crossover_compare.py` |
+| Detection slope b (2SLS: detection instrumented by another month's) | 0.621 [0.534, 0.708] (reduced form 0.510, first stage 0.822; county-clustered first-stage F 4,082, 1,391–9,131 by lag; just-identified) | `build_unique_od.py` |
+| Advan coverage by block-group composition (detection ratio): ×1.08 per +10 points aged 65+, ×1.28 per doubling of median income, ×0.87 per +10 points below poverty, ×0.87 per doubling of density; R² 0.21 (device rate 0.19) | 5,014 block groups, 114 county clusters | `advan_representativeness.py` |
+| Crossover: distinct residents seen outside the county, calibrated denominator (b = 0.62): Audrain / Boone / Osage | 44% / 26% / 59% | `crossover_compare.py` |
+| — bounds: range of the county figure over b in [0, 1] | 40–44%, 24–26%, 45–66% | `crossover_compare.py` |
+| — range over b's 95% interval | 43–44%, 26–26%, 57–61% | `crossover_compare.py` |
 | Pass-through (highway-stop) discount, empirical-Bayes shrunken excess | removes 1.81% of out-of-county visits (`visits_statewide`-weighted); signed mean excess −0.02% (+0.43% unshrunk) | `travel_model.py` (removed share); `build_road_stop_share.py` (excess) |
 | Device IDs | stability across weeks not established (claim withdrawn) | `device_id_test.py` |
 
@@ -78,7 +81,8 @@ removes.
 | Distance elasticity at 25 mi, mean-size home county: metro / nonmetro | −0.98 (s.e. 0.11) / −0.48 (0.17) | `travel_model.py` |
 | Commuting out / in | +0.284 [+0.197, +0.371] / +0.197 [+0.125, +0.269] | `travel_model.py` |
 | Stability, Jul–Sep from Jan–Jun: model / persistence error | 2.94 / 1.46 | `travel_model.py` |
-| Kansas share of observed out-of-county visits: all Missouri / 14 border counties / Jackson | 12.3% / 34.9% / 52.5% | `travel_model.py` |
+| Moran's I of held-out error by home county / signed residual by destination (115 counties, 999 permutations) | +0.057 (p 0.266) / +0.175 (p 0.005: under-predicted destinations cluster) | `residual_autocorrelation.py` |
+| Distance form: restricted cubic spline, change in held-out error (knots at pair / visit-weighted quantiles) | +0.175 [−0.007, +0.384] / +0.000 [−0.154, +0.209]: quadratic kept | `travel_distance_spline.py` |
 
 The border block's held-out gain interval includes zero; it is kept as a core term by theory (coefficient +0.464
 [+0.335, +0.592]).
@@ -99,6 +103,7 @@ effects, log visits (where > 0), zero-visit indicator; hypothesis term log visit
 | Held-out error, destinations with 1%+ of visits (primary; per-county mean, 8 folds) | 4.46 [4.02, 4.93] | 4.56 [4.11, 5.02] | `coverage_model.py` |
 | Held-out error, all destinations (beside) | 0.915 [0.846, 0.982] | 0.942 [0.875, 1.004] | `coverage_model.py` |
 | Saturation, nested guard | gain −0.010 [−0.024, +0.004]: not supported | +0.001 [−0.025, +0.030] | `coverage_saturation_test.py` |
+| Moran's I of in-sample error by newsroom county (88 counties) | −0.093 (p 0.265) | −0.116 (p 0.147; no broadcasters) | `residual_autocorrelation.py` |
 | Pooled elasticity, no hypothesis term (sensitivity) | 0.37 (s.e. 0.061) | 0.35 (0.066) | `coverage_model.py` |
 
 **Spillover** — outlet-level logistic: spillover ~ broadcaster + log(1 + print and digital outlets in the county),
@@ -113,30 +118,28 @@ both hypothesis terms (`spillover_common.FINAL`); mention 0.5 and Sports 0.5 are
 | Held-out error, mean / median (primary: mean), honest: nested search B | 6.57 / 5.50 | `spillover_nested_selection.py` |
 | — fitted model, not nested | 5.98 / 4.66 (intercept only 7.49 / 6.23); skill +0.202; out-of-sample R² +0.360 | `spillover_outlets.py` |
 | Nested guard from the hypothesis pair | 6.05 / 5.05; gain −0.07 [−0.60, +0.38]: none adopted | `spillover_rule_selection.py` |
-| Actual / held-out expected: Audrain, Boone, Osage, Cole, Jackson | 19.5 / 22.5%, 28.7 / 26.4%, 25.6 / 25.3%, 23.1 / 25.4%, 21.9 / 19.1% | `spillover_outlets.py` (`spillover_quoted_rows.csv`) |
+| Actual / held-out expected: Audrain, Boone, Osage | 19.5 / 22.5%, 28.7 / 26.4%, 25.6 / 25.3% | `spillover_outlets.py` (`spillover_quoted_rows.csv`) |
 | Leave one TV market out (7 markets with 3+ outlets) | in sample 5.9, held out 6.2, intercept only 7.4 | `spillover_dma_holdout.py` |
-| Springfield region (Greene, Webster, Barry) held out | 8.4 on its 8 well-collected outlets (primary), 8.0 on all 10; region 24% actual, 26% expected | `spillover_outlets.py` |
 | Mean spillover rate | 24.7% | `spillover_outlets.py` |
 
 **Public-data travel model** — the study's question is how close a model built from public data gets to the
 Advan-fitted model, and how much of the gap Advan-learned corrections close. The public model is not claimed to beat
 the Advan-fitted model, and does not in any class. Every score out of sample for the county scored:
 
-| Model | Missouri (115): all Advan destinations (primary) | common set | log-ratio | Kansas (105): all destinations | common set |
-|---|---:|---:|---:|---:|---:|
-| Advan-fitted (counties held out) | 3.28 | 3.36 | 0.35 | 3.06 | — |
-| Public (Missouri: Stage 1 nested; Kansas: Missouri settings, nothing tuned) | 4.60 | 4.70 | 0.58 | 3.78 | — |
-| Public, Stage 1 per outer fold (base of the corrections) | 4.63 | 4.73 | 0.58 | — | — |
-| + Advan-learned segment corrections (C, transferable; outer loop; Kansas: learned in Missouri) | 4.05 | 4.15 | 0.51 | 4.05 | — |
-| + one factor per destination county (A, Missouri only; outer loop) | 3.45 | 3.51 | 0.44 | — | — |
-| Public − Advan-fitted | +1.31 [+0.85, +1.79] | +1.35 [+0.88, +1.84] | +0.24 [+0.20, +0.28] | +0.72 [+0.30, +1.14] | +1.04 [+0.53, +1.54] |
-| Corrected (C) − fold base | −0.58 [−0.94, −0.23] | −0.58 [−0.96, −0.20] | −0.08 [−0.09, −0.05] | +0.27 [−0.03, +0.58] (vs public) | — |
-| Share of the gap closed by corrections | C 43% [21, 66]; A 88% [62, 116] | C 42% [18, 65] | C 33% [25, 40]; A 61% [52, 71] | none (−37% [−123, 4]) | — |
-| Advan share outside the common set, per county | 1.34% (max 8.2%) | | | 9.08% (max 40.7%, Thomas) | |
+| Model | Missouri (115): all Advan destinations (primary) | common set | log-ratio |
+|---|---:|---:|---:|
+| Advan-fitted (counties held out) | 3.28 | 3.36 | 0.35 |
+| Public (Stage 1 nested) | 4.60 | 4.70 | 0.58 |
+| Public, Stage 1 per outer fold (base of the corrections) | 4.63 | 4.73 | 0.58 |
+| + Advan-learned segment corrections (C, transferable; outer loop) | 4.05 | 4.15 | 0.51 |
+| + one factor per destination county (A; outer loop) | 3.45 | 3.51 | 0.44 |
+| Public − Advan-fitted | +1.31 [+0.85, +1.79] | +1.35 [+0.88, +1.84] | +0.24 [+0.20, +0.28] |
+| Corrected (C) − fold base | −0.58 [−0.94, −0.23] | −0.58 [−0.96, −0.20] | −0.08 [−0.09, −0.05] |
+| Share of the gap closed by corrections | C 43% [21, 66]; A 88% [62, 116] | C 42% [18, 65] | C 33% [25, 40]; A 61% [52, 71] |
+| Advan share outside the common set, per county | 1.34% (max 8.2%) | | |
 
-Scripts: `score_segments.py` (Missouri scores, gaps, shares closed), `public_stage1_nested.py`,
-`public_adjusted_nested.py`, `public_vs_advan_compare.py`; `score_ks.py` (Kansas), `ks_advan_fitted.py`,
-`transfer_adjustments.py`; metrics in `public_scoring.py`.
+Scripts: `score_segments.py` (scores, gaps, shares closed), `public_stage1_nested.py`, `public_adjusted_nested.py`,
+`public_vs_advan_compare.py`; metrics in `public_scoring.py`.
 
 **Civic interest areas** — travel patterns by non-negative matrix factorization per TV market
 (`flows/travel_patterns.py`). The network-tie map is drawn in 1,728 equally weighted versions, the full factorial of
@@ -202,10 +205,10 @@ all seven). Supply (coverage density, balanced diet) is not a result of this pap
 | **The Maneater and CoMoBuzz** excluded from Boone's coverage | Decision for these analyses |
 | **Statewide outlets are no county's local news** (2026-10-17): Missouri Business Alert (filed under Boone); The Missouri Independent, Missouri Net, Missouri Scout, The Missouri Times (filed under Cole) (`excluded_outlets.EXCLUDE`) | They cover the state, not a county |
 | **Campus newspapers are not local news anywhere** (2026-10-24): the 11 student newspapers owned by a college or university (`CAMPUS`, part of `EXCLUDE` in `excluded_outlets.py`) are out of coverage, the spillover outcome and fit, and every county outlet count | Same footing as The Maneater. University-licensed public broadcasters (KBIA, KCUR, KRCU, KSMU, KXCV, STL Public Radio) and the School of Journalism's community newsrooms (Columbia Missourian, Boone County Journal, KOMU) stay |
-| **Dos Mundos Bilingual Newspaper and KHQA 7 excluded** (authors, 2026-10-24; `EXCLUDE`): Dos Mundos (filed in Wyandotte County, Kansas; 4 March stories) is mostly Spanish-language, outside the English-language corpus the models describe; KHQA 7 (Quincy, Illinois; 45 stories; licensed to Hannibal) is an Illinois newsroom (51 of its 65 March county mentions are Illinois counties) | Both were already outside every fit as out-of-state filings; no figure moves |
-| **Mid Rivers Newsmagazine → St. Charles; Greene County Commonwealth → Greene** (2026-10-24; `excluded_outlets.HOME_COUNTY`, `home_fips`), in coverage, spillover and the area maps, both fitted | Each is published outside the county it covers (19 of 26 and 20 of 23 March stories centred in the covered county) |
-| **St. Louis city and county treated as one unit** for spillover and crossover (crossover: before the left-the-county test, 2026-10-24) | Every St. Louis outlet is registered in St. Louis County, so city stories counted as "another county" (St. Louis print spillover read 85%; merged, 25% — 2026-10-16 measure, not rerun) |
-| **Other-state counties within 60 miles count as spillover** | Kansas City print outlets read 18% on Missouri counties only and 44% with Kansas (2026-10-16 measure, not rerun); border regions cross the state line |
+| **Dos Mundos Bilingual Newspaper and KHQA 7 excluded** (authors, 2026-10-24; `EXCLUDE`): Dos Mundos (filed in Wyandotte County, Kansas) is mostly Spanish-language, outside the English-language corpus the models describe; KHQA 7 (Quincy, Illinois; licensed to Hannibal) is an Illinois newsroom | Both were already outside every fit as out-of-state filings |
+| **Mid Rivers Newsmagazine → St. Charles; Greene County Commonwealth → Greene** (2026-10-24; `excluded_outlets.HOME_COUNTY`, `home_fips`), in coverage, spillover and the area maps, both fitted | Each is published outside the county it covers |
+| **St. Louis city and county treated as one unit** for spillover and crossover (crossover: before the left-the-county test, 2026-10-24) | Every St. Louis outlet is registered in St. Louis County, so city stories counted as "another county" |
+| **Other-state counties within 60 miles count as spillover** | Border regions cross the state line |
 | **One home rule for every outlet** (spillover, 2026-10-24): the county filed under, every other county holding part of its registry city, and Kansas City, Kansas (Wyandotte) for Kansas City, Missouri outlets | A story about another part of the outlet's own city is not spillover |
 | **Home county excluded from every travel–coverage comparison** | Residents live in their home county all of the time; a share of visits says nothing about how much it matters to them. Home and away story counts are reported for reference only |
 | **Coverage counts a story's central place as well as the places it mentions** | The story map's county layer omits each story's central place; Osage had 13 placed stories on that layer against 40 with both |
@@ -221,22 +224,17 @@ measures home detection as well as panel size, and is replaced as the device →
 
 | Factor (`calibration_county_month.csv`) | Definition | County-months: median, middle 80%, range | County medians |
 |---|---|---|---|
-| `factor` (2026-10-16; kept, not adopted) | seen at home ÷ ACS county population | 1.94; 1.09–3.18; 0.19–12.73 | 0.24 (St. Louis city) – 10.78 (Scotland) |
+| `factor` (2026-10-16; kept, not adopted) | seen at home ÷ ACS county population | 1.94; 1.09–3.18; 0.19–12.73 | 0.24–10.78 |
 | `factor_trimmed` (sensitivity) | as `factor`, phantom home block groups left out | 1.82; 1.06–2.71; 0.19–6.86 | 0.24–3.85 |
 | **`factor_statewide` (adopted)** | Missouri sum over home block groups of the largest count of their residents in any one block group ÷ Missouri ACS population; one value per month | Jan 1.84, Feb 1.90, Mar 2.01, Apr 2.32, May 2.09, Jun 2.04, Jul 1.75, Aug 1.73, Sep 1.70 | one value per month |
 
 - **Phantom home block groups** (`home_bg_month_mo_2026.csv`, `phantom`): residents seen at home above 3× the block
   group's expected residents (ACS population × the month's statewide units per resident). 1,469 of 44,229 block
-  group-months (3.3%), holding 10.7% of all devices seen at home; 84 of them have no ACS population. Scotland: 4 of
-  its 6–7 block groups each month (291994801001 at 7.9×, 4802002 at 7.7×, 4801003 at 6.1×); its factor is 10.78 as
-  published, 3.39 trimmed. Phantom devices are seen at home and rarely elsewhere, so they enlarge any denominator
-  taken from seen-at-home.
-- **Under-detection at home:** St. Louis city's factor is 0.19–0.25; in 82–87% of its block groups more residents are
-  seen in one other block group than at home. St. Louis city and county together are seen at 0.33× the statewide rate
-  per ACS resident (0.44× counting the busiest block group anywhere).
+  group-months (3.3%), holding 10.7% of all devices seen at home; 84 of them have no ACS population. Phantom devices
+  are seen at home and rarely elsewhere, so they enlarge any denominator taken from seen-at-home.
+- **Under-detection at home:** in some block groups more residents are seen in one other block group than at home.
 - **Home block groups with no own key** (residents never reported at home), logged by `build_calibration.py`: Jan 15,
-  Feb 11, Mar 14, Apr 9, May 9, Jun 6, Jul 12, Aug 20, Sep 14; mostly St. Louis city (29510), with the same few
-  elsewhere every month (290370612003, 290950102033, 291650303064, 291892131022). Kept with `own` = 0 and `own_key` = 0.
+  Feb 11, Mar 14, Apr 9, May 9, Jun 6, Jul 12, Aug 20, Sep 14. Kept with `own` = 0 and `own_key` = 0.
 - **Adopted (2026-10-24):** counts ÷ `factor_statewide` (`visits_statewide`; `people_lower` converts at the calibrated
   denominator, see Crossover) and, where a resident count is needed, the ACS population of the block groups. No county
   term is taken from residents seen at home. Within-month shares of a home county are unchanged by any of the three
@@ -248,14 +246,9 @@ measures home detection as well as panel size, and is replaced as the device →
 | Columbia | 82 | 106,922 | 110,416 | 102,803 | 111,055 |
 | Mexico | 7 | 7,126 | 7,242 | 6,742 | 6,619 |
 | Linn | 1 | 1,793 | 1,906 | 2,802 | 1,381 |
-| Lancaster | 1 | 1,079 | 1,079 | 509 | 716 |
-| Webb City | 8 | 12,402 | 13,442 | 16,613 | 12,388 |
 
-  Linn's block group is seen at home at 2.0× the statewide rate and Lancaster's at 0.7×, so Advan-based counts of
-  single-block-group towns stay unreliable under any factor. Lancaster has 716 residents by ACS and cannot hold a
-  1,000-resident pattern.
-- **Kansas** (`calibration_county_month_ks.csv`, same definitions): `factor` median 2.29, middle 80% 1.29–4.60, county
-  medians 0.53–8.12; units per resident 1.92–2.73 by month. The Kansas transfer test uses `visits_statewide`.
+  Linn's block group is seen at home at 2.0× the statewide rate, so Advan-based counts of single-block-group towns stay
+  unreliable under any factor.
 - Effect on the travel model: Travel model, Sensitivities (the elasticity moves by less than one standard error).
 
 ## Device IDs (not established)
@@ -268,6 +261,45 @@ Automobile dealers 38% below 1, printing plants 29%. The two products are normal
 count does not show that IDs persist. A within-product test is not possible: no Advan product on disk reports distinct
 devices over more than one week for one place. **The claim that IDs are stable week to week is withdrawn.** Daily
 resets cannot be tested either.
+
+## Limitation test: Advan coverage by age, income and rurality (2026-10-25)
+
+`advan_representativeness.py` → `advan_representativeness.csv`. Across 5,014 Missouri home block groups (January–July, 2020 block groups; 114 county
+clusters), the log2 detection ratio (residents seen at home ÷ expected units, 1 = the statewide rate) and the log2
+device rate (residents in the busiest single block group ÷ expected units, which does not depend on home detection)
+are regressed on ACS 2020–2024 block-group shares aged 65+ (B01001), log2 median household income (B19013) or the
+share below the poverty line (C17002), log2 population density, and a nonmetro-county indicator (RUCC 4–9);
+ACS-population weights, county-clustered 95% intervals. B01001 and C17002 come from the Census table-based summary files
+(`census_dl/acs_tract/`).
+
+| Term | Detection ratio, × on the ratio [95% interval of the log2 coefficient] | Device rate |
+|---|---|---|
+| +10 points aged 65+ | 1.08 [+0.035, +0.190] | 1.06 [+0.006, +0.149] |
+| ×2 median household income | 1.28 [+0.076, +0.630] | 1.07 [−0.057, +0.252] |
+| +10 points below poverty (model with poverty in place of income) | 0.87 [−0.348, −0.055] | 0.94 [−0.157, −0.007] |
+| ×2 population density | 0.87 [−0.337, −0.051] | 0.91 [−0.243, −0.036] |
+| Nonmetro county | 1.21 [−0.098, +0.655] | 1.07 [−0.179, +0.379] |
+
+R² 0.21 (detection) and 0.19 (device rate). Advan sees residents of sparser, older, better-off block groups at higher
+rates, and poorer block groups at lower rates; the density gradient holds for the device rate as well, so it is panel
+coverage, not only home detection. Within-county shares are unaffected by a county-wide rate, but block groups of
+different kinds within one county are not weighted equally: the crossover and the travel shares lean toward older,
+higher-income, lower-density block groups, by up to about a quarter per doubling of income in the detection ratio.
+
+Target counties, population-weighted mean ratios (detection / device rate; block groups) by statewide tercile:
+
+| County | Tercile of | Low | Middle | High |
+|---|---|---|---|---|
+| Audrain | aged 65+ (cuts 13.8%, 21.5%) | 0.61 / 0.71 (7) | 0.76 / 0.96 (7) | 1.46 / 1.54 (10) |
+| Audrain | median income (cuts $57,083, $82,500) | 1.20 / 1.32 (12) | 0.60 / 0.76 (8) | 1.24 / 1.31 (4) |
+| Boone | aged 65+ | 0.86 / 0.94 (62) | 1.06 / 1.09 (35) | 1.10 / 1.13 (26) |
+| Boone | median income | 0.92 / 1.02 (33) | 0.94 / 1.00 (37) | 1.01 / 1.03 (43) |
+| Osage | aged 65+ | 1.41 / 1.41 (3) | 1.80 / 1.80 (4) | 1.54 / 1.56 (4) |
+| Osage | median income | 2.13 / 2.15 (3) | 1.77 / 1.78 (5) | 1.09 / 1.09 (3) |
+
+Boone's block groups are seen within about 15% of the statewide rate in every tercile; Audrain's oldest block groups
+are seen at more than twice the rate of its youngest; Osage is seen above the statewide rate throughout, most in its
+lower-income block groups. Cells hold 3–62 block groups.
 
 ## Pass-through discount
 
@@ -407,16 +439,49 @@ nested guard like every other candidate.
   3.30 (removes 3.04%); codes fixed 3.38 (4.38%); highway at the statewide norm 3.38 (3.86%); unshrunk 3.31 (2.23%);
   adopted, shrunken 3.28 (1.81%). The discount is a measurement correction, not a fit choice.
 
+Distance form against a restricted cubic spline in log distance, 4 knots, the rest of the model unchanged
+(`travel_distance_spline.py`; held out, county-paired; knots in miles: pair quantiles 38.8, 112.5, 175.5, 279.4;
+visit-weighted quantiles 7.5, 21.5, 37.4, 152.6):
+
+| Distance form | Held-out error [95%] | Change vs adopted [95%] | R² | Elasticity at 25 mi, metro / nonmetro (s.e.) | At 50 mi, metro / nonmetro | In-sample deviance |
+|---|---:|---:|---:|---:|---:|---:|
+| **Adopted: quadratic in log distance** | 3.283 [2.94, 3.61] | | 93.7% | −0.98 (0.110) / −0.48 (0.166) | −1.35 / −1.21 | 62.0M |
+| Spline, knots at pair quantiles | 3.458 [3.09, 3.83] | +0.175 [−0.007, +0.384] | 92.8% | −0.83 (0.151) / −0.66 (0.179) | −0.90 / −0.75 | 65.5M |
+| Spline, knots at visit-weighted quantiles | 3.283 [2.93, 3.65] | +0.000 [−0.154, +0.209] | 93.7% | −0.77 (0.127) / −0.24 (0.160) | −1.37 / −1.38 | 60.4M |
+
+Neither spline lowers held-out error; the quadratic is kept. The elasticity at 25 miles depends on the form (metro
+−0.98 / −0.83 / −0.77, nonmetro −0.48 / −0.66 / −0.24), so the 25-mile elasticity is quoted with its form; the
+held-out shares, the primary metric, do not depend on it.
+
+### Residual spatial autocorrelation
+
+`residual_autocorrelation.py`: Moran's I on Missouri counties, queen contiguity (gravity_terms adjacency), row-
+standardised; p from 999 permutations, two-sided. With both sets of fixed effects raw residuals sum to zero for every
+home and destination county, so the measures are the held-out error per home county, the held-out signed residual per
+destination (observed minus forecast share summed over held-out home counties) and coverage's in-sample error per
+newsroom county on destinations with 1%+ of visits (`coverage_model.py` writes no held-out predictions):
+
+| Residual | Counties | Moran's I | E[I] | p | Audrain | Boone | Osage |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Travel, held-out error by home county | 115 | +0.057 | −0.009 | 0.266 | 1.14 | 1.45 | 2.52 |
+| Travel, held-out signed residual by destination | 115 | +0.175 | −0.009 | 0.005 | 6.72 | 6.35 | 1.58 |
+| Coverage (all outlets), in-sample error by newsroom county | 88 | −0.093 | −0.011 | 0.265 | 1.67 | 0.96 | 5.23 |
+| Coverage (no broadcasters), in-sample error by newsroom county | 88 | −0.116 | −0.011 | 0.147 | 1.75 | 1.42 | 5.40 |
+
+Home-county errors and coverage errors show no spatial clustering. **Limitation:** the destination residuals cluster
+(I +0.175, p 0.005): neighbouring destinations are under- or over-predicted together, so the destination effects do
+not absorb a regional component of destination draw. Audrain and Boone are under-predicted as destinations (+6.72 and
++6.35 points summed over home counties). Intervals that treat destinations as independent would be too narrow; the
+travel intervals cluster by home and by destination county but not by region.
+
 ### Out-of-state travel: Kansas
 
-Missouri residents' visits to Kansas block groups (`neighborhood/raw_ks/`), statewide scale, undiscounted, Jan–Sep
-(`travel_model.py`), share of observed out-of-county visits (Missouri + Kansas): Jackson 52.5%, Platte 30.3%, Cass
-28.7%, Clay 26.9%, Buchanan 24.9%, Bates 22.6%, Vernon 22.3%, Jasper 20.1%, Barton 19.8%, Andrew 9.5%, Holt 8.8%,
-Newton 8.0%, Atchison 7.2%, McDonald 7.0%; the 14 border counties 34.9%; all Missouri 12.3%.
+Missouri residents' visits to Kansas block groups (`neighborhood/raw_ks/`) enter crossover. The share of Audrain,
+Boone and Osage residents' out-of-county visits that go to Kansas is not printed by `travel_model.py`, which lists
+border counties only.
 
-- Every travel share in this log is a share of out-of-county visits to **Missouri** counties. For Jackson that is under
-  half of its observed out-of-county travel. Illinois, Iowa, Arkansas, Oklahoma and Nebraska are not in the data, so
-  the eastern and southern border counties are understated by an unmeasured amount.
+- Every travel share in this log is a share of out-of-county visits to **Missouri** counties. Illinois, Iowa,
+  Arkansas, Oklahoma and Nebraska are not in the data.
 - The outcome is not renormalised: with home-county fixed effects renormalising only rescales each county's shares by a
   constant. Comparisons of a share's size across counties use the Kansas-inclusive denominator or say they exclude
   Kansas.
@@ -439,8 +504,8 @@ The singly-constrained model was abandoned on held-out error (6.40 against 3.28;
 under-prediction once given as the reason is superseded (appendix). The "Osage residents go to Jefferson City twice as
 often as expected" figure came from that model and stays withdrawn: under the adopted model Osage → Cole is 1.05
 in-sample, 1.13 held out. In the singly-constrained model, metro destination and jobs per resident add nothing and
-stores per resident is significant (2026-10-24 second review: −0.08, p = 0.57; p = 0.71; +0.73, p = 0.002; not
-restated in round 3); the doubly-constrained model absorbs all destination attributes.
+stores per resident is significant (audit round 2: −0.08, p = 0.57; p = 0.71; +0.73, p = 0.002; not restated in
+round 3); the doubly-constrained model absorbs all destination attributes.
 
 ### Rejected
 
@@ -522,13 +587,13 @@ discount, 1.81%), each home county's out-of-county Missouri destination shares, 
 is out of sample for the county scored:
 
 | Element | Rule (2026-10-25) |
-|—-|—-|
+|---|---|
 | Primary metric (declared) | Share-weighted error, 100 × Σ a\|p - a\| (points), over ALL Advan destinations in Missouri: a pair outside a model's support counts with model share 0 |
 | Beside it | The same on the common destination set (the public model's destinations, counties within 200 miles of the tract; Advan and the Advan-fitted model renormalised over it; outside it 2,968 pairs, 1.34% of Advan share per county, max 8.2%); log-ratio error, mean \|ln(p/a)\| over pairs with Advan share ≥ 1% (p floored at 0.01%; scale-free, where the share-weighted error scales with concentration, r × HHI for a uniform relative miss r). `public_scoring.py` |
 | Averaging | County mean (each home county weighs the same); St. Louis city and county scored apart (115 homes) |
 | Intervals | County-paired bootstrap, 2,000 draws, 95% percentile; the all-county interval resamples within each class. * = interval excludes zero |
 | Benchmark | Advan-fitted: the adopted model (`gravity_terms.FACTORS`, 8 terms centred at 25 miles), each county held out, 8 folds, seed 7 (`gravity_terms.loco`; `public_vs_advan_compare.py` → `compare_shares.csv`): 3.28 on all destinations |
-| Commuting | LODES 2023 primary jobs (JT01) of residents, in and out of state, in every public-model script. Missouri: `free/mo_residents_od_JT01_2023.csv.gz` (Missouri main + the Missouri-home rows of the IL, KS, IA, AR, OK, NE, TN, KY aux files), read by the work model (out-of-state jobs are destinations), the corrections (`public_adjusted_model.py`: pairs and commuting ranks are Missouri pairs; out-of-state jobs enter only the denominator, all workers living in i) and the Kansas scripts for Missouri homes. Kansas: Kansas main + the Kansas-home rows of the MO, NE, OK, CO aux files (work model, `transfer_adjustments.py`, `ks_advan_fitted.py`; out-of-state jobs enter the denominators) |
+| Commuting | LODES 2023 primary jobs (JT01) of residents, in and out of state, in every public-model script. Missouri: `free/mo_residents_od_JT01_2023.csv.gz` (Missouri main + the Missouri-home rows of the IL, KS, IA, AR, OK, NE, TN, KY aux files), read by the work model (out-of-state jobs are destinations) and the corrections (`public_adjusted_model.py`: pairs and commuting ranks are Missouri pairs; out-of-state jobs enter only the denominator, all workers living in i) |
 | Stage 1 | Each class's public setting chosen by Advan error (primary metric) with the scored county left out (nested). No Advan in any parameter; Advan chose among settings (nested) |
 | Stage 2 | Corrections learned on other counties (8 folds); their structure chosen inside an outer loop; compared with the Stage 1 base of the same outer fold |
 
@@ -539,7 +604,7 @@ of the Kansas City and St. Louis metros (9) and rings of regional hubs or outsid
 (CenPop2020 tract centres), destinations every county within 200 miles in Missouri and the eight neighbouring states:
 
 | Part | Public data and calculation |
-|—-|—-|
+|---|---|
 | Work | LODES 2023 primary jobs (JT01) tract → county, `mo_residents_od_JT01_2023.csv.gz` (the same rows as the Missouri main file plus the eight neighbouring states' auxiliary files, 2,621,217 jobs); observed flows within 90 miles, a gravity fit (conditional Poisson on distance, CBP employment, population, state line) beyond, where LODES carries employers' imputed establishment assignments |
 | Retail | Trade area analysis: 2025 Missouri DOR taxable sales by county; pull factor; income-adjusted trade area capture (ACS per-capita income); leakage = 1 − capture; Huff allocation on taxable sales (hubs: on sales beyond the county's own expected, Reilly's exponent 2) |
 | Chained errands | Errand trips starting at work (2022 NHTS, WHYFROM 3–5): 1.3 (urban) and 2.0 (rural) a month per worker, sent to the work counties |
@@ -559,8 +624,8 @@ survey's thin subgroups), metro-size survey classes (+0.52).
 `public_travel_tiers.py`, all rebuilt 2026-10-24 on the JT01 work model (recipes in `public_commands.sh`). Rule:
 lowest mean share-weighted error (all destinations) over the class's other counties.
 
-| Class | Setting chosen on all counties (used in Kansas) | Leave-one-out picks |
-|—-|—-|—-|
+| Class | Setting chosen on all counties | Leave-one-out picks |
+|---|---|---|
 | Small rural (56) | observed LODES within 90 mi, 40 work days per out-of-county commuter, chained errands, Huff on sales (`_g_40_sales`) | 56 of 56 |
 | Independent towns (32) | the same with decay 6 for retail, medical, specialty (`_c_40_l6all`) | 23; `_g_40_surplus` 8; `_c_hyb40_40` 1 |
 | Commuter: major metro (9) | reference build, gross leakage (Huff home share), recreation and visiting x0.5 (`_s_hr`) | 5 settings: `_s_hr` 3, `_s_ruralset` 2, `_s_circ14` 2, `_s_commset` 1, `_s_recvis05` 1 |
@@ -569,10 +634,9 @@ lowest mean share-weighted error (all destinations) over the class's other count
 
 **Where the gap is** (2026-10-18, in-sample, old outcome, against the 5.35 reference; `public_gap_diagnosis.py`,
 `public_gap_corrections.py`; not rerun): one Advan correction at a time, destination pull closes 46% of the gap, the
-shape of distance decay 21%, adjacency 12%, together 68%. The public model overstates the metro cores (St. Louis City
-0.23×, St. Louis County 0.50×, Jackson 0.65×) and understates regional centres and small rural destinations (Greene
-1.42×; Knox, Scotland, Schuyler, Shannon 2.2–3.0×); its single power law sends twice too much to the nearest counties
-and, for hubs, half the travel beyond 120 miles.
+shape of distance decay 21%, adjacency 12%, together 68%. The public model overstates the metro cores and
+understates regional centres and small rural destinations; its single power law sends twice too much to the nearest
+counties and, for hubs, half the travel beyond 120 miles.
 
 **Stage 2, Advan-learned corrections** (`public_adjusted_model.py`, applied to tract shares and rolled up):
 multiplicative factors, fitted in turn and iterated, for distance band by class (learned apart for each home county's
@@ -607,7 +671,7 @@ all-county one in folds 0-2, the independent-town setting in 1-2 and 5-7, the hu
 Share-weighted error, points, all Advan destinations (primary):
 
 | Model | Small rural (56) | Indep. towns (32) | Commuter: major metro (9) | Commuter: regional hub (9) | Hubs (9) | All (115) |
-|—-|—-:|—-:|—-:|—-:|—-:|—-:|
+|---|---:|---:|---:|---:|---:|---:|
 | Advan-fitted (counties held out) | 3.54 | 2.86 | 4.14 | 3.25 | 2.39 | **3.28** |
 | **Public, Stage 1 nested (leave one county out)** | 4.10 | 4.41 | 6.05 | 6.26 | 5.24 | **4.60** |
 | Public, Stage 1 per outer fold (base of the outer loop) | 4.10 | 4.34 | 5.82 | 6.25 | 6.09 | 4.63 |
@@ -620,7 +684,7 @@ Share-weighted error, points, all Advan destinations (primary):
 Gap to the Advan-fitted model, all destinations, share-weighted error [95%]:
 
 | Model − Advan-fitted | Small rural | Indep. towns | Commuter: major metro | Commuter: regional hub | Hubs | All |
-|—-|—-|—-|—-|—-|—-|—-|
+|---|---|---|---|---|---|---|
 | Public nested | +0.56 [−0.01, +1.16] | +1.56 [+1.01, +2.15]* | +1.91 [+0.08, +3.72]* | +3.01 [+0.07, +6.20]* | +2.85 [+1.06, +4.97]* | +1.31 [+0.85, +1.79]* |
 | Public fold base | +0.56 [−0.01, +1.16] | +1.48 [+0.94, +2.06]* | +1.68 [+0.01, +3.35]* | +3.01 [+0.07, +6.20]* | +3.70 [+1.45, +6.58]* | +1.34 [+0.87, +1.83]* |
 | C outer | +0.07 [−0.46, +0.58] | +1.00 [+0.46, +1.56]* | +0.39 [−1.35, +2.48] | +2.51 [+0.15, +5.10]* | +2.84 [+1.55, +4.22]* | +0.76 [+0.34, +1.16]* |
@@ -631,7 +695,7 @@ Corrections against their own fold base, all destinations, share-weighted error 
 to the Advan-fitted model they close:
 
 | Corrections − fold base | Small rural | Indep. towns | Commuter: major metro | Commuter: regional hub | Hubs | All |
-|—-|—-|—-|—-|—-|—-|—-|
+|---|---|---|---|---|---|---|
 | C, change | −0.49 [−0.87, −0.09]* | −0.48 [−1.12, +0.13] | −1.29 [−3.22, +0.26] | −0.50 [−2.20, +1.49] | −0.86 [−2.77, +0.95] | **−0.58 [−0.94, −0.23]*** |
 | C, share of the gap closed | 87% [−72, 414] | 33% [−12, 67] | 77% [−54, 352] | 17% [−158, 89] | 23% [−56, 48] | **43% [21, 66]** |
 | B, change | −0.60 [−0.99, −0.19]* | −0.49 [−1.08, +0.12] | −1.89 [−4.44, +0.13] | −0.47 [−2.35, +1.28] | −1.37 [−3.35, +0.50] | −0.72 [−1.10, −0.36]* |
@@ -644,7 +708,7 @@ Shares of the gap are unstable where the gap itself is small (small rural +0.56)
 Beside the primary metric (all classes, all counties):
 
 | | Common set, share-weighted | All destinations, log-ratio |
-|—-|—-|—-|
+|---|---|---|
 | Advan-fitted | 3.36 | 0.35 |
 | Public nested | 4.70; gap +1.35 [+0.88, +1.84]* | 0.58; gap +0.24 [+0.20, +0.28]* |
 | Public fold base | 4.73; gap +1.37 [+0.90, +1.87]* | 0.58; gap +0.23 [+0.19, +0.27]* |
@@ -667,18 +731,18 @@ Beside the primary metric (all classes, all counties):
   size and too flat in the hierarchy.
 
 **Commuter counties.** One class held two behaviours. Major-metro rings spread travel over several metro counties and
-commute to the core while visiting the nearest large county (St. Charles → St. Louis County: LODES 75%, Advan 57%;
-Warren → St. Charles 34% vs 47%). Regional-hub rings send 65-73% to one hub (Polk, Newton, Christian). Split, the
+commute to the core while visiting the nearest large county; regional-hub rings send most of their travel to one hub.
+Split, the
 metro-ring corrections bring the error within the interval of the Advan-fitted model's (C +0.39 [−1.35, +2.48], B
 −0.21 [−2.45, +2.12]); the regional-hub rings are not improved by any correction out of sample, because the near-hub
-relation (Jasper is 14 miles from Newton) is learned elsewhere as an overstated small neighbour.
+relation is learned elsewhere as an overstated small neighbour.
 
 **Refinements, 2026-10-18** (`public_adjusted_model.py`, `score_segments.py`; in-sample structure selection, outcome and
 commuting of 2026-10-18, full destination set — superseded by the outer loop above, kept as the record of what was
 tried):
 
 | Change | Small rural | Indep. towns | Commuter: major metro | Commuter: regional hub | Hubs | All |
-|—-|—-:|—-:|—-:|—-:|—-:|—-:|
+|---|---:|---:|---:|---:|---:|---:|
 | Segment corrections | 3.43 | 3.52 | 3.93 | 6.40 | 3.48 | 3.73 |
 | Regional centre at pull factor ≥ 1.0 (was 1.1) | 3.41 | 3.51 | 3.94 | 6.12 | 3.48 | 3.69 |
 | + a metro core within 50 miles of home is its own order | 3.35 | 3.43 | 3.88 | 5.81 | 3.68 | 3.63 |
@@ -693,91 +757,28 @@ base (`public_adjusted_pairs_trnear.csv`, rebuilt on the current outcome and JT0
 factor 3.70, + per-destination 3.53 (in-sample choices). Fitting the mixture weights of the
 public parts to Advan by class (`public_segment_weights.py`) remains parked.
 
-Regional-hub rings, county by county (2026-10-18): Newton (Jasper labelled sub-regional), Johnson (the core factor
-learned from distant homes cut Jackson from 37% to 26%; the near-core order), Polk (Greene 52% vs 68%), Lawrence
-(Barry 20% vs 9%), Stone (Taney 25% vs 19%); Webster and Callaway right on the public base.
-
-#### Transfer test: Kansas (2026-10-18; revised 2026-10-24)
-
-Advan Neighborhood Patterns Plus, Kansas destination block groups, January–September 2026 (`neighborhood/raw_ks/`),
-plus Kansans' visits to Missouri from the Missouri files (`build_ks_od.py` → `od_ks_2026.csv`). Outcome:
-`visits_statewide` — calibrated with the Kansas factors (`calibration_county_month_ks.csv`, `factor_statewide`) on the
-same statewide device->person basis as Missouri; not pass-through discounted (no Kansas road-stop shares). Kansas
-public inputs: LODES 2023 primary jobs (JT01) of Kansas residents, Kansas main OD and the Kansas-home rows of the MO,
-NE, OK, CO auxiliary files (out-of-state jobs enter the commuting denominators); CenPop2020 Kansas
-tracts; ACS 2020–2024 tract and county (B19301) tables; Kansas Department of Revenue County Trade Pull Factors FY2025
-(`build_ks_pull_factors.py`). County classes by nearest Missouri class centre on log population and commuting outflow
-(`build_ks_county_classes.py`): population ACS 2020–2024 B01003 in both states (Kansas was 2020 Census; no county
-changed class); outflow on all jobs (JT00), as the Missouri class centres were built: 30 small rural, 63 independent
-towns, 4 commuter, 8 hubs.
-
-Applied unchanged from Missouri: each class's Stage 1 setting chosen on all Missouri counties, built for Kansas
-(`public_travel_tiers.py STATE=20`, `assemble_public_by_class.py STATE=20 OUTTAG=_nested`), and the transferable
-structure with the lowest 8-fold score on all Missouri counties — the adopted structure with destination class x
-distance band (3.59) — learned on all Missouri counties (`public_adjusted_nested.py` → `segment_corrections_mo.pkl`;
-`transfer_adjustments.py`). Kansas is held out entirely, so both choices are out of sample for it. Benchmark:
-`ks_advan_fitted.py`, the adopted model's eight terms fitted to Kansas Advan, counties held out (8 folds),
-destinations within 250 miles, every fold converged. Scored by `score_ks.py`. Advan share outside the common
-destination set (public: within 200 miles of a tract; benchmark: 250 miles): 9.08% per county on average, max 40.7%
-(Thomas) — western Kansas travel to Wichita, Topeka and Kansas City beyond the public model's 200 miles.
-
-Classes with fewer than 5 counties are not reported as classes: the four commuter counties are listed one by one and
-pooled only for the intervals.
-
-| Kansas, share-weighted error, all destinations (primary) | Small rural (30) | Indep. towns (63) | Hubs (8) | All (105) | Butler (Wichita ring) | Leavenworth (KC metro) | Miami (KC metro) | Wyandotte (KC metro) |
-|—-|—-:|—-:|—-:|—-:|—-:|—-:|—-:|—-:|
-| Advan-fitted in Kansas | 4.12 | 2.76 | 1.56 | **3.06** | 3.14 | 1.69 | 6.28 | 0.43 |
-| **Public model, Missouri settings, nothing tuned in Kansas** | 3.86 | 3.85 | 2.64 | **3.78** | 6.72 | 4.14 | 5.91 | 0.79 |
-| + corrections learned in Missouri | 3.65 | 4.03 | 3.65 | 4.05 | 8.05 | 7.29 | 12.65 | 4.43 |
-
-| Kansas [95%] | Small rural | Indep. towns | Hubs | All | Commuter (4, pooled) |
-|—-|—-|—-|—-|—-|—-|
-| Public − Advan-fitted, all destinations | −0.26 [−1.15, +0.55] | +1.09 [+0.54, +1.64]* | +1.08 [+0.16, +2.19]* | **+0.72 [+0.30, +1.14]*** | +1.50 [−0.01, +3.01] |
-| Corrected − Advan-fitted | −0.47 [−1.51, +0.58] | +1.26 [+0.75, +1.77]* | +2.10 [−0.14, +4.95] | +0.98 [+0.49, +1.46]* | +5.22 [+4.40, +6.01]* |
-| Corrected − public | −0.20 [−0.80, +0.46] | +0.18 [−0.14, +0.47] | +1.02 [−0.66, +3.17] | +0.27 [−0.03, +0.58] | +3.72 [+1.91, +5.85]* |
-| Share of the public model's gap the corrections close | −78% [−855, 974] | −16% [−64, 10] | −94% [−418, 143] | **−37% [−123, 4]** | n < 5 |
-| Public − Advan-fitted, common set | −0.05 [−1.09, +0.91] | +1.51 [+0.84, +2.18]* | +1.18 [+0.30, +2.14]* | +1.04 [+0.53, +1.54]* | +1.59 [+0.30, +2.89]* |
-| Public − Advan-fitted, log-ratio, all destinations | +0.21 [+0.14, +0.29]* | +0.37 [+0.30, +0.45]* | +0.28 [+0.15, +0.41]* | +0.31 [+0.26, +0.37]* | +0.11 [+0.09, +0.13]* |
-| Corrected − public, log-ratio | +0.03 [+0.01, +0.07]* | +0.03 [+0.02, +0.05]* | +0.03 [−0.05, +0.09] | +0.04 [+0.02, +0.06]* | +0.17 [+0.08, +0.26]* |
-
-- The public model's gap to the Advan-fitted model in Kansas is +0.72 [+0.30, +1.14] on all destinations (+1.04
-  [+0.53, +1.54] on the common set; Missouri, nested: +1.31 [+0.85, +1.79]); in small
-  rural counties the interval includes zero on both destination sets, and the log-ratio gap does not (+0.21).
-- The Missouri corrections close none of the gap in Kansas (−37% [−123, 4]; error +0.27 [−0.03, +0.58]; log-ratio
-  +0.04, worse). They help counties tied to a regional centre (Cowley 10.01 → 5.23, Kearny 8.07 → 4.75, Kingman
-  7.19 → 4.64, Lincoln 4.21 → 1.97, Greenwood 3.83 → 1.51: ties to Wichita, Garden City and Salina) and hurt the
-  commuter counties (+3.72 [+1.91, +5.85]), the Kansas City-side hubs (Johnson 4.55 → 9.16, Douglas 1.95 → 8.27),
-  Doniphan (1.28 → 7.97) and Morton (2.98 → 6.52): the core and near-dominant-county factors were learned from St.
-  Louis and Kansas City as seen from Missouri, and in Kansas the 1M+ metro-core definition takes in Johnson County and
-  Wyandotte.
-
-#### Changes, 2026-10-24/25 (peer review, three rounds): public model
+#### Changes, 2026-10-24/25 (internal audit, three rounds): public model
 
 | Defect | Fix | Files |
-|—-|—-|—-|
+|---|---|---|
 | Stage 1 setting per class chosen and scored on the same counties (4.30-4.34) | Leave-one-county-out choice within the class; nested figure reported, in-sample stated as such | `public_stage1_nested.py`, `assemble_public_by_class.py` (reads the choice) |
 | Stage 2 structure chosen on the score it reported | Outer loop, 8 folds; Stage 1 and the structure chosen on the other 7 folds; full factorial of 240 + 5 rejected variants | `public_adjusted_nested.py`; `public_adjusted_model.py` split into `keys/learn/apply/cv` (identical output to 1e-15 on the old inputs) |
 | Corrections compared with a base they were not learned on | Compared with the fold base (`public_foldbase`) they act on | `score_segments.py` |
-| No uncertainty | County-paired bootstrap, 2,000 draws, per class and all; gap and share of the gap closed with intervals | `public_scoring.py`, `score_segments.py`, `score_ks.py` |
-| Class cells of 3 and 1 counties (Kansas) | Not reported as classes; listed county by county, pooled for intervals | `score_ks.py` |
+| No uncertainty | County-paired bootstrap, 2,000 draws, per class and all; gap and share of the gap closed with intervals | `public_scoring.py`, `score_segments.py` |
 | Share-weighted error scales with concentration | Log-ratio error beside it everywhere | `public_scoring.py` and every scorer |
-| Destination sets differ; pairs outside a model's support dropped or renormalised away | Primary: all Advan destinations, model share 0 outside its support; the common set beside it; Advan share outside reported | `score_segments.py`, `score_ks.py`, `public_stage1_nested.py`, `public_adjusted_nested.py` (selection on the primary metric), `public_vs_advan_compare.py` |
-| LODES all jobs (JT00) | Primary jobs (JT01) in the work model (both states; all 53 Missouri builds and the Kansas builds rebuilt), the corrections, the Kansas transfer and benchmark | `public_work_model.py` (`JT`), `public_adjusted_model.py`, `transfer_adjustments.py`, `ks_advan_fitted.py` |
-| Outcome | Missouri: the travel model's (`gravity_terms.travel_visits`); Kansas: `visits_statewide` (Kansas factors) | `public_vs_advan_compare.py`, `ks_advan_fitted.py`, `score_ks.py` |
-| `ks_advan_fitted.py`: shares from exp(lin − global max) | Each origin's own maximum; every fold's convergence asserted | `ks_advan_fitted.py` |
+| Destination sets differ; pairs outside a model's support dropped or renormalised away | Primary: all Advan destinations, model share 0 outside its support; the common set beside it; Advan share outside reported | `score_segments.py`, `public_stage1_nested.py`, `public_adjusted_nested.py` (selection on the primary metric), `public_vs_advan_compare.py` |
+| LODES all jobs (JT00) | Primary jobs (JT01) in the work model (all 53 Missouri builds rebuilt) and the corrections | `public_work_model.py` (`JT`), `public_adjusted_model.py` |
+| Outcome | The travel model's (`gravity_terms.travel_visits`) | `public_vs_advan_compare.py` |
 | `travel_tier_pull_cv.py`: standardisation on held-out counties; 6-term pre-commuting baseline; top-3 by observed share; tier ratios collinear with the destination effects | Training-fold standardisation; the adopted 8 FACTORS; top-3 by forecast; ratios dropped, hubs the reference tier; nested guard; convergence checked from full-data start values | `travel_tier_pull_cv.py` |
-| Kansas classes on 2020 Census population | ACS 2020–2024 B01003 (`census_dl/acs_tract/b01003.dat`); no county moved | `build_ks_county_classes.py` |
-| Commuting denominators counted Missouri (Kansas) jobs only (round 3) | Residents' primary jobs in and out of state: `free/mo_residents_od_JT01_2023.csv.gz`; Kansas main + Kansas-home rows of the MO, NE, OK, CO aux files (no row read twice). The work model's Missouri input is unchanged row for row, so the 53 builds stand | `public_work_model.py`, `public_adjusted_model.py`, `transfer_adjustments.py`, `ks_advan_fitted.py` |
+| Commuting denominators counted Missouri jobs only (round 3) | Residents' primary jobs in and out of state: `free/mo_residents_od_JT01_2023.csv.gz` (no row read twice). The work model's Missouri input is unchanged row for row, so the 53 builds stand | `public_work_model.py`, `public_adjusted_model.py` |
 | `public_adjusted_pairs_trnear.csv` quoted on all destinations from an ad hoc run (round 3) | `public_adjusted_model.py` prints the all-destination table by segment (`logs/adj_trnear.log`) | `public_adjusted_model.py` |
-| Runs not reproducible from the scripts | Every environment setting in the docstrings and printed at start; commands in `public_commands.sh` | `public_adjusted_model.py`, `assemble_public_by_class.py`, `transfer_adjustments.py`, `public_work_model.py` |
+| Runs not reproducible from the scripts | Every environment setting in the docstrings and printed at start; commands in `public_commands.sh` | `public_adjusted_model.py`, `assemble_public_by_class.py`, `public_work_model.py` |
 
-Also: `public_travel_tiers.py` reads the home state's classes for `URBAN_CLASSES` (was Missouri's in every state);
-`transfer_adjustments.py` applies whatever structure the pickle carries; `compare_shares.csv` loses the parked
+Also: `compare_shares.csv` loses the parked
 `public_segment` column; the Audrain tract print in `public_adjusted_model.py` reads `od_tract_mo_2026.csv`, now
 January–July. Outputs: `public_stage1_choice.csv`, `public_stage1_nested_pairs.csv`, `public_adjusted_nested_pairs.csv`,
-`public_adjusted_nested_choices.csv`, `public_adjusted_nested_configs.csv`, `public_transfer_choice.csv`,
-`mo_scores_nested.csv`, `ks_scores.csv`, `ks_predictions.csv`, `ks_advan_fitted.csv`, `segment_corrections_mo.pkl`,
-`public_model_pairs_tiers[_20]_byclass_nested.csv`, `public_adjusted_pairs_trnear.csv`; logs in `logs/`.
+`public_adjusted_nested_choices.csv`, `public_adjusted_nested_configs.csv`, `mo_scores_nested.csv`,
+`segment_corrections_mo.pkl`, `public_model_pairs_tiers_byclass_nested.csv`, `public_adjusted_pairs_trnear.csv`; logs in `logs/`.
 
 **Audrain's north/south split** is one tract (950100, Vandalia-Laddonia): 16.9% of its out-of-county visits go to
 Marion against 1.4–5.0% from the other tracts; under 1% of its workers work there (2026-10-18 figures, not rerun on
@@ -791,7 +792,7 @@ against the 2026-10-18 Advan-fitted model, in-sample; not rerun). Conferences ar
 and produce recurring travel and sports coverage: a central place channel between places of the same order. Statewide
 test pending (school-level: MSHSAA conference and class, NCES locations, TIGER school districts).
 
-### Changes, 2026-10-24/25 (peer review, three rounds): travel model
+### Changes, 2026-10-24/25 (internal audit, three rounds): travel model
 
 | Change | Why |
 |---|---|
@@ -917,40 +918,18 @@ spread over rural block groups that jobs and listed destinations miss. **ADOPTED
 destinations (`ATTRPOP=1`), for every tract (a nonmetro-only rule missed Cape Girardeau and Bollinger, metro counties
 whose residents travel like rural ones). Thresholds by density (< 50/km2, < 200/km2) were not adopted.
 
-**Transfer test of the markets: Kansas, travel only** (2026-10-18; `activity_market_score.py 29|20`; not rerun
-2026-10-24, so the scoring change above has not been applied to it). Kansas has no outlets in the story collection,
-so no news terms. Same settings in both states: regular-travel public model by class without corrections; LODES
-home-county share; within-county spread of jobs, OpenStreetMap destinations and population at distance^-0.5; the
-Missouri-fitted regularity rule; every tract's 80% market, closed. Kansas inputs: `build_ks_tract_bg.py` (Advan
-Kansas destinations + Kansans' Missouri visits), `flows/build_destinations.py STATE=20` (65,171 OSM destinations),
-Kansas WAC, block-group boundaries and population centres.
+Against the conventional definitions of a local market (Missouri tracts, 2026-10-18; overlap = median Jaccard with
+Advan's market; recall = share of Advan's market covered; precision = share of the definition that is Advan's market):
 
-| Travel markets, every tract | Missouri month-split stability | Missouri accuracy | Kansas month-split stability | Kansas accuracy |
-|---|---:|---:|---:|---:|
-| Small rural | 0.71 | 0.49 | 0.70 | 0.49 |
-| Independent towns | 0.73 | 0.50 | 0.67 | 0.42 |
-| Commuter | 0.81 | 0.57 | 0.80 | 0.61 |
-| Hubs | 0.79 | 0.53 | 0.78 | 0.59 |
-| **All** (1,647 / 816 tracts) | **0.78** | **0.53** | **0.74** | **0.56** |
-| Same number of markets / within one | | 56% / 90% | | 61% / 84% |
+| Market definition | Overlap / recall / precision |
+|---|---|
+| Advan, odd vs even months (ceiling) | 0.78 |
+| Public model | 0.53 / 83% / 66% |
+| Commuting shed (LODES alone, spread by jobs) | 0.45 / 77% / 57% |
+| Circle of the class's median observed area | 0.34 / 45% / 55% |
+| Home county | 0.25 / 29% / 76% |
 
-The method transfers: with nothing tuned in Kansas the public model reaches 0.56, about three-quarters of the data's
-own month-split stability (Missouri about two-thirds). Weakest: Kansas independent towns (0.42; predicted markets 58% of the
-observed area) -- mostly western frontier counties, small and self-contained yet travelling far, which Missouri barely
-has.
-
-Against the conventional definitions of a local market (same tracts, 2026-10-18; overlap = median Jaccard with Advan's
-market; recall = share of Advan's market covered; precision = share of the definition that is Advan's market):
-
-| Market definition | Missouri overlap / recall / precision | Kansas overlap / recall / precision |
-|---|---|---|
-| Advan, odd vs even months (ceiling) | 0.78 | 0.74 |
-| Public model | 0.53 / 83% / 66% | 0.56 / 78% / 77% |
-| Commuting shed (LODES alone, spread by jobs) | 0.45 / 77% / 57% | 0.45 / 76% / 57% |
-| Circle of the class's median observed area | 0.34 / 45% / 55% | 0.28 / 46% / 45% |
-| Home county | 0.25 / 29% / 76% | 0.28 / 31% / 80% |
-
-The home county -- the usual unit of a local market -- holds under a third of residents' regular market; the public
+The home county — the usual unit of a local market — holds under a third of residents' regular market; the public
 model holds about four-fifths of it, twice the county's overlap.
 
 Related: Bisiani, Gulyas & Heravi (2025) derive outlets' coverage footprints from place mentions (convex hull and
@@ -992,10 +971,10 @@ commuting from residents' JT01 jobs in and out of state, 8 terms centred at 25 m
 | Exploratory | saturation terms (`coverage_saturation_test.py`) | Adopted only if the nested guard's gain has an interval excluding zero: none adopted |
 
 - Newsroom county: `excluded_outlets.home_fips`. Mid Rivers Newsmagazine counts with St. Charles and Greene County
-  Commonwealth with Greene (29 stories each).
+  Commonwealth with Greene.
 - `excluded_outlets.EXCLUDE` is left out (547 stories), including the 11 campus student newspapers (`CAMPUS`) and
-  the two outlets filed outside Missouri (Dos Mundos Bilingual Newspaper, Kansas City, KS, 4 stories; KHQA 7, Quincy,
-  IL, 45). No story is dropped silently: the output lists any outlet filed outside Missouri (none remain).
+  the two outlets filed outside Missouri (Dos Mundos Bilingual Newspaper, Kansas City, KS; KHQA 7, Quincy, IL). No
+  story is dropped silently: the output lists any outlet filed outside Missouri (none remain).
 - The elasticity is the percentage difference in stories associated with 1% more visits, holding the core terms and
   both sets of fixed effects fixed. It is an association, not an effect of travel on coverage.
 - A story counts once for each county it names, so the pairs from one newsroom county are not independent. Errors are
@@ -1019,8 +998,8 @@ commuting from residents' JT01 jobs in and out of state, 8 terms centred at 25 m
 | s.e., clustered by county pair, metro / nonmetro (sensitivity) | 0.049 / 0.049 | 0.054 / 0.050 |
 | s.e., two-way newsroom county × county covered (sensitivity) | 0.079 / 0.069 | 0.095 / 0.068 |
 | s.e., HC1, pairs independent (reference only) | 0.048 / 0.047 | 0.053 / 0.048 |
-| Leave one newsroom county out, metro (88 fits) | 0.47 (without St. Louis County, 1,812 pairs) to 0.54 (without Jackson, 677) | 0.47 (without St. Louis County, 846) to 0.57 (without Franklin, 379) |
-| Leave one newsroom county out, nonmetro | 0.23 (without St. Louis County) to 0.29 (without Jackson) | 0.21 (without St. Louis County) to 0.29 (without Taney, 43) |
+| Leave one newsroom county out, metro (88 fits) | 0.47 to 0.54 | 0.47 to 0.57 |
+| Leave one newsroom county out, nonmetro | 0.23 to 0.29 | 0.21 to 0.29 |
 | Pooled elasticity, no hypothesis term (sensitivity) | 0.37 (s.e. 0.061) | 0.35 (0.066) |
 | Commuting in / out | +0.41 (s.e. 0.072) / −0.04 (s.e. 0.085, n.s.) | +0.36 (0.070) / −0.05 (0.081, n.s.) |
 | Held-out error, primary (1%+ of visits) | 4.46 [4.02, 4.93] | 4.56 [4.11, 5.02] |
@@ -1088,7 +1067,7 @@ own stories −0.011 (p 0.20). Neither nested interval excludes zero: saturation
 | Non-bordering destinations get less coverage than travel predicts | Raw comparison, at 10%+ of visits: ring 2 and ring 3+ get 6.8% and 7.7% of story share, against 16.0% for bordering counties. Border-test specification (no distance terms, not the adopted model; clustered by newsroom county): slope difference beyond the border +0.04 (95% CI −0.04 to +0.13; print +0.07, −0.04 to +0.18), not detectable; ring 3+ level −1.23 (s.e. 0.55) | `border_coverage_test.py` |
 | Saturation (above) | Nested gain intervals include zero | `coverage_saturation_test.py` |
 
-### Changes, 2026-10-24/25 (peer review, three rounds): coverage
+### Changes, 2026-10-24/25 (internal audit, three rounds): coverage
 
 | Change | Before | After |
 |---|---|---|
@@ -1100,7 +1079,7 @@ own stories −0.011 (p 0.20). Neither nested interval excludes zero: saturation
 | Zero-visit pairs (137 fitted) | log(1e-3) = −6.9, high leverage | indicator + log visits where > 0; elasticities move ≤ 0.006 |
 | Standard errors | HC1 | clustered by newsroom county; pair and two-way as sensitivity |
 | HOME_COUNTY, CAMPUS | counted under the county filed; campus papers in | `home_fips`; `CAMPUS` excluded; out-of-county pairs 10,406 → 10,282 |
-| Out-of-state outlets | dropped silently (49 stories) | Dos Mundos and KHQA 7 in `EXCLUDE` (2026-10-25); any outlet filed outside Missouri is listed in the output |
+| Out-of-state outlets | dropped silently | Dos Mundos and KHQA 7 in `EXCLUDE` (2026-10-25); any outlet filed outside Missouri is listed in the output |
 | `home_county_decay.py` | county-wide variant took `publisher_county` | `home_fips` (`market_patterns.home_of`). Default result 1.68 → 1.64 (s.e. 0.02), from upstream changes |
 
 ## Spillover model, 2026-10-16 (replaced)
@@ -1140,7 +1119,7 @@ Leave-one-county-out error (predicting a county's outlets from all others):
 | Withdrawn | Why |
 |---|---|
 | "Newsrooms over-cover their home county relative to where residents spend their time" | Invalid: residents live in their home county; visit share is not a measure of its importance |
-| Article text comparing residents' share of visits outside the county (~76% rural) with stories reaching beyond it (~42%) | Same error |
+| Article text comparing residents' share of visits outside the county with stories reaching beyond it | Same error |
 | "Visits × expected" figures from the singly-constrained model (e.g. 2.2×) | That model's held-out error is 6.40 against the adopted 3.28; the 1.6× under-prediction once given as the reason is superseded (appendix) |
 | "Beyond gravity" maps | Category colours carried four model-based outcomes; unreadable as maps. The model comparison is a table (`three_counties_table.csv`) |
 | Alignment maps with the home county compared | Replaced by out-of-county comparison with home and away story counts for reference |
@@ -1178,7 +1157,7 @@ block group by home block group; people from different home block groups are dis
 the people seen in its single most-visited block group outside the county (Missouri or Kansas) are all distinct.
 St. Louis city and county are one unit before the left-the-county test.
 
-**Detection test (b by 2SLS, review round 3, 2026-10-25).** Within a county, block groups where Advan sees more
+**Detection test (b by 2SLS, audit round 3, 2026-10-25).** Within a county, block groups where Advan sees more
 phones at home than the ACS predicts (d = own ÷ E, E = ACS population × the month's statewide units per resident) show
 lower leaving rates (busiest outside block group ÷ own). Model: log leaving rate in month m2 = −b × log d in m2 +
 county × month-pair effect. Same-month d shares own with the leaving rate, so log d in m2 is instrumented by log d in
@@ -1189,8 +1168,13 @@ pairs), ACS-population weights, county-clustered (St. Louis city and county one 
 |---|---|
 | **2SLS b (adopted)** | **0.621 [0.534, 0.708]** |
 | Reduced form (leaving m2 on detection m1; the 2026-10-24 estimate, attenuated) | −0.510 [−0.588, −0.433] |
-| First stage (detection m2 on detection m1) | +0.822 [+0.797, +0.847] |
+| First stage (detection m2 on detection m1) | +0.822 [+0.797, +0.847]; county-clustered first-stage F 4,082 |
 | 2SLS by lag 1 / 2 / 3 / 4 / 5 / 6 months | 0.631 / 0.620 / 0.616 / 0.613 / 0.612 / 0.617 |
+| First-stage F by lag 1 / 2 / 3 / 4 / 5 / 6 months | 9,131 / 5,489 / 3,352 / 2,689 / 1,391 / 1,575 |
+
+The first-stage F is the county-clustered Wald F on the excluded instrument; with one endogenous regressor and one
+excluded instrument it equals the Kleibergen-Paap rk Wald F, far above any weak-instrument threshold. The model is
+just-identified (one excluded instrument), so no overidentification test applies.
 
 **Homebody caveat.** b mixes two things that both raise detection and lower leaving: phantom phones homed in the
 block group, and residents who stay home more (seen at home more, out less). The second biases b upward as a phantom
@@ -1205,7 +1189,7 @@ group's leavers capped at D, summed over the county, divided by the sum of D, av
 `dedup_band_high` = over the 95% interval of b. Sums at b = 0 and b = 1, or over Σ max(own, E) and Σ min(own, E), are
 not bounds: R(b) need not be monotone in b, and capping leavers at D breaks the box argument. `crossover_compare.py`
 asserts that the adopted value lies inside the grid range (114 of 114 counties) and that the grid at b reproduces it.
-b = 1 and b = 0 are named sensitivity columns (b = 0 lies outside the grid range in Clay and Greene, because it keeps
+b = 1 and b = 0 are named sensitivity columns (b = 0 lies outside the grid range in two counties, because it keeps
 block groups with no ACS residents).
 
 | County | Calibrated, b = 0.62 (adopted) | Range over b in [0, 1] | Range over the b interval | b = 1 (sensitivity) | b = 0 (sensitivity) | Linear split, (1 − b) own + b E (sensitivity) |
@@ -1213,17 +1197,6 @@ block groups with no ACS residents).
 | Audrain | 44% | 40–44% | 43–44% | 40% | 41% | 42% |
 | Boone | 26% | 24–26% | 26–26% | 24% | 25% | 25% |
 | Osage | 59% | 45–66% | 57–61% | 66% | 45% | 57% |
-| Missouri median | 59% | 48–61% | 58–60% | 56% | 53% | 56% |
-| St. Louis (city + county) | 31% | 18–43% | 28–34% | 18% | 43% | 25% |
-
-(Missouri median row: the median of each column.)
-
-| County population | Counties | Range over b in [0, 1], width, median (middle 80%), points | Range over the b interval, width, median, points | Calibrated, median | Low, median | High, median |
-|---|---:|---:|---:|---:|---:|---:|
-| Under 10,000 | 30 | 11.5 (5.1–28.9) | 2.0 | 66% | 57% | 68% |
-| 10,000–20,000 | 30 | 12.6 (4.0–25.5) | 2.7 | 60% | 48% | 65% |
-| 20,000–50,000 | 33 | 6.9 (4.0–16.9) | 1.3 | 55% | 47% | 58% |
-| 50,000+ | 21 | 6.8 (3.7–15.3) | 0.8 | 44% | 36% | 45% |
 
 Denominators compared (Spearman across 114 counties):
 
@@ -1240,10 +1213,9 @@ Denominators compared (Spearman across 114 counties):
 | Summed block-group share (replaced 2026-10-16) | −0.46 | +0.69 | +0.53 |
 
 The adopted lower bound is above the commuting floor (employed residents working in another Missouri county ÷
-population, LODES JT01: Audrain 21%, Boone 11%, Osage 31%, median 21%, St. Louis 6%) in 113 of 114 counties (St.
-Charles is set by commuting). Counting jobs in the eight neighbouring states as well (`commute_pop_all`,
-`free/mo_residents_od_JT01_2023.csv.gz`): Audrain 22%, Boone 11%, Osage 32%, median 24%, St. Louis 7%. Kansas destinations add 0.0 points at the median under the b = 1 denominator (Jackson
-+6.7, Clay +3.2, Platte +2.7, Vernon +2.6). The three-county and tract scripts use the calibrated denominator (old forms kept as
+population, LODES JT01: Audrain 21%, Boone 11%, Osage 31%) in 113 of 114 counties. Counting jobs in the eight
+neighbouring states as well (`commute_pop_all`, `free/mo_residents_od_JT01_2023.csv.gz`): Audrain 22%, Boone 11%,
+Osage 32%. The three-county and tract scripts use the calibrated denominator (old forms kept as
 sensitivity columns; D per block group-month in `crossover_bg_month_mo_2026.csv`): `residents_leaving.py` Audrain 44%,
 Boone 25%, Osage 59% (seen at home 41 / 24 / 45%, b = 1 40 / 24 / 66%); `residents_leaving_tracts.py`, January–July,
 population-weighted conservative floor 44 / 26 / 59%; `unique_people_by_county.py`, March, Audrain → Boone 35.5%
@@ -1327,9 +1299,6 @@ county; one computation feeds the county table, the sensitivity table, the chart
 | Boone | 28.7% | 26.4% | 1,152 |
 | Boone, print and digital | 18.3% | 19.3% | 476 |
 | Osage | 25.6% | 25.3% | 40 |
-| Cole | 23.1% | 25.4% | 325 |
-| Jackson | 21.9% | 19.1% | 2,316 |
-| Jackson, print and digital | 22.8% | 11.7% | 657 |
 
 Quality selection: 95 of 128 outlets are well collected; their mean spillover is 24.5% against 17.5% for the others
 (point-biserial r +0.26, p 0.003; print and digital 22.2% against 15.5%). The fit, its coefficients and its errors
@@ -1410,15 +1379,7 @@ comparison (lower mean and median), and was then replaced by the hypothesis pair
 ### Robustness
 
 Leave one TV market out (`spillover_dma_holdout.py` → `spillover_dma_holdout.csv`), adopted model, markets with 3+
-fitted outlets: in sample 5.9, held out 6.2, intercept only held out 7.4. Columbia–Jefferson City 3.2 in sample, 3.3
-held out (intercept only 5.5). St. Joseph (13.5 against 8.7, 5 outlets) and Quincy–Hannibal (11.9 against 9.5, 2
-outlets) do worse than intercept only.
-
-Springfield region (Greene, Webster, Barry) held out — out of sample for the coefficients only; the terms were chosen
-with the region's outlets in the data: 78 outlets fitted outside it predict its 10: mean error 8.4 points on its 8
-well-collected outlets (primary), 8.0 on all 10; well collected / all: broadcaster + crowded weekly 9.7 / 9.0,
-broadcaster + town population 9.4 / 8.8. Region 24% actual, 26% expected.
-Webster is the largest miss (36% actual, 23% expected).
+fitted outlets: in sample 5.9, held out 6.2, intercept only held out 7.4; two markets do worse than intercept only.
 
 Market position (`spillover_market_test.py`, on the border form): other outlets nearer the county line, or nearer the
 neighbour the outlet is closest to, add nothing (CRV3 p 0.34–0.75) and replace the border term worse (mean 6.03–6.07
@@ -1432,13 +1393,7 @@ against 5.90).
 | Centralia Fireside Guard | 5.0% | 19.3% | 20 |
 | Columbia Daily Tribune | 16.6% | 19.3% | 86 |
 | Columbia Missourian | 22.3% | 19.3% | 232 |
-| Greene County Commonwealth | 18.5% | 17.4% | 27 |
-| KC Beacon | 17.3% | 11.7% | 39 |
-| Mid Rivers Newsmagazine | 17.3% | 22.6% | 26 |
-| The Cash-Book Journal | 22.5% | 22.3% | 20 |
-| The Kansas City Star | 26.4% | 11.7% | 427 |
 | The Mexico Ledger | 22.1% | 22.5% | 105 |
-| The Pitch/Kansas City Pitch | 24.1% | 11.7% | 53 |
 | Vandalia Leader | 4.2% | 22.5% | 18 |
 
 Vandalia Leader and Centralia Fireside Guard are not well collected (5% and 0% of stories full length): actual a lower
@@ -1449,11 +1404,11 @@ bound.
 | Change | Effect |
 |---|---|
 | Mid Rivers Newsmagazine → St. Charles, Greene County Commonwealth → Greene; both fitted | +2 fitted outlets; the Commonwealth becomes a crowded weekly (Greene) |
-| Campus newspapers out (11 outlets; 5 had 10+ stories: Griffon News, The Arrow, North West Missourian, Student Life, The Standard) | −5 outlets; three of them (The Arrow 7%, The Standard 5%, Griffon News 15%) were crowded weeklies |
-| Print-outlet count: `EXCLUDE` (incl. `CAMPUS`) out; one market rule (active, or closed but publishing in March) in every script | Counts change in Boone, Cole, Buchanan, Cape Girardeau, Greene, Jackson, Jasper, Nodaway, St. Louis; Mid Rivers counted in St. Charles |
+| Campus newspapers out (11 outlets; 5 had 10+ stories: Griffon News, The Arrow, North West Missourian, Student Life, The Standard) | −5 outlets; three of them were crowded weeklies |
+| Print-outlet count: `EXCLUDE` (incl. `CAMPUS`) out; one market rule (active, or closed but publishing in March) in every script | Counts change in nine counties; Mid Rivers counted in St. Charles |
 | Crowded weekly requires a print outlet | KC Beacon (digital native) out of the term |
 | Frequency codes filled from the Missouri Official Manual 2025–2026 where blank (14 outlets; `coverage/source_frequency.csv`) | The Cash-Book Journal (Cape Girardeau) becomes a crowded weekly |
-| One home rule (city counties + Kansas City, Kansas) for every outlet | 31 outlets gain home counties; 330 centred stories move to home (213 beyond the 2026-10-17 Kansas City rule: Kansas City outlets' Clay, Platte and Cass stories; Joplin's Newton; Sikeston's New Madrid; Springfield's Christian), 434 mention-only stories lose their mention credit |
+| One home rule (city counties + Kansas City, Kansas) for every outlet | 31 outlets gain home counties; 330 centred stories move to home (213 beyond the 2026-10-17 Kansas City rule); 434 mention-only stories lose their mention credit |
 | Selection procedure: hypothesis terms broadcaster + print outlets; exploratory additions through the nested guard | Crowded weekly and border distance not adopted (the border form was adopted 2026-10-24 under a rule fixed beforehand, then replaced) |
 | Inference: CRV3 standard errors with t(47); county-cluster bootstrap | Replaces clustered z |
 | County and outlet expectations held out (fit without the county) | One computation feeds the county table, the sensitivity table, the chart and `spillover_quoted_rows.csv` |
@@ -1505,22 +1460,11 @@ moved away → home and 4 home → away; the away share of placed Sports stories
 before) and 34.3% for broadcast (35.7%). In a sample of 45 away-centred re-run stories about 13 were the outlet's own
 team centred on the game site or the opponent (Mizzou softball → Champaign, the SEC tournament → Nashville, Bunker's
 archer → Dent), about 28 correct, 4 unclear (`sports_home_away_audit.py`;
-`coverage/rerun_2026_10_17/sports_still_away.csv`). Undiscounted, about 40% of print outlets' Sports stories count as
-spillover, against 23–29% for every other category; broadcast Sports (about 34%) is not inflated.
-
-Share of spillover by CIN category, well-collected outlets, mention 0.5 and Sports 0.5 (2026-10-17 outlets, before
-`CAMPUS` and the one home rule; not rerun):
-
-| | Print/digital | Broadcast |
-|---|---:|---:|
-| Spillover | 23.8% | 33.8% |
-| Sports share of stories / of spillover | 29% / 25% | 14% / 7% |
-| Emergencies and Public Safety share of spillover | 11% | 43% |
-| Spillover with Sports stories removed | 25.2% | 36.4% |
+`coverage/rerun_2026_10_17/sports_still_away.csv`).
 
 **Measure history.** The 2026-10-16 measure counted any story that touched another county, so a passing mention
-counted the same as a story about that county. Under it a small-town weekly and a regional TV station looked alike
-(print median 40%, broadcast 45%); by central county they differ (6% and 25%). The Mexico Ledger had 8 of 90 stories
+counted the same as a story about that county, so a small-town weekly and a regional TV station looked alike. The
+Mexico Ledger had 8 of 90 stories
 centred in another county and 43 that only mention one; KOMU had 83 of 263 and 36 (2026-10-16 data).
 
 ### 2026-10-17 model (replaced 2026-10-24)
@@ -1543,7 +1487,7 @@ concentration (outlet level, `spillover_outlets.py`):
 |---|---:|---:|---|
 | Broadcaster | +0.65 | < 0.001 | TV and radio cover beyond their county more |
 | Urban share | −0.81 | < 0.001 | Share of the county's population in Census 2020 urban areas; outlets in urban counties stay local |
-| Concentration | +1.17 | 0.12 | Sum of squared shares of residents' out-of-county visits by destination county; high where one hub takes most travel (Webster 69% to Greene). Adopted at the authors' direction; small and not significant on its own |
+| Concentration | +1.17 | 0.12 | Sum of squared shares of residents' out-of-county visits by destination county; high where one hub takes most travel. Adopted at the authors' direction; small and not significant on its own |
 
 Held-out error (leave one county out): broadcaster + crossover 15.6 points; + urban share 15.3; broadcaster + urban
 share 15.0; + concentration 15.0 (all outlets), 14.3 → 14.1 (well-collected outlets). Crossover was dropped: with urban
@@ -1594,21 +1538,11 @@ Outlets in well-collected counties (40) are too few to estimate the model. Cover
 beyond gravity; not the adopted metro / nonmetro form), all newsroom counties → well-collected counties: 0.36 → 0.25
 (all outlets), 0.35 → 0.26 (print and digital).
 
-## Springfield comparison
-
-Greene (hub), Webster (Springfield metro) and Barry (rural) against Boone, Osage and Audrain
-(`springfield_vs_columbia.py`; 2026-10-16 measure and models, not rerun). The hubs match each other: crossover 24% and
-34%. Spillover on the 2026-10-16 measure: 41% and 40% (print 26% and 25%), both below the Missouri medians (44%, print
-43%); Webster the largest miss (actual 68%, predicted 46%, 31 stories). (Superseded 2026-10-24: Springfield region
-held out, 24% actual, 26% expected; Webster 36% / 23%; Spillover model, current, Robustness.) Webster → Greene travel
-was predicted almost exactly by the 2026-10-16 travel model (0.96×; not rerun): Greene has the strongest overall draw
-in Missouri, is 23 miles away, shares a border, and half of Webster's employed residents work there.
-
 ## County characteristics tested
 
 Crossover and spillover columns: leave one county out, 2026-10-16 measure and models (spillover figures not comparable
 with the current 5.98). Coverage column: 2026-10-16 specification, outcome-selected destination set (not rerun).
-Travel: table below (2026-10-25, third review).
+Travel: table below (2026-10-25, audit round 3).
 
 | Source | Crossover (12.9 points baseline) | Spillover (15.6) | Coverage (4.00) |
 |---|---|---|---|
@@ -1657,8 +1591,7 @@ Hospitals: CMS Hospital General Information, general acute, critical access, chi
 psychiatric hospitals, no clinics), with Capital Region Medical Center added (it reports under MU Health Care's CMS
 number since 2024): 107 hospitals in 67 counties (`build_hospitals.py`). Counties without a hospital have more
 residents leaving; hospital terms do not improve held-out travel once each county's overall draw is measured
-(coverage: `hospital_test.py` 4.46 → 4.45). To confirm: Cooper County Memorial Hospital (Boonville) and Southeast
-Health Center of Ripley County (Doniphan) appear in OpenStreetMap but not in CMS.
+(coverage: `hospital_test.py` 4.46 → 4.45).
 
 ## Revealed media market by travel pattern (2026-10-17; K rule 2026-10-24; multi-part ensemble core 2026-10-25)
 
@@ -2129,31 +2062,35 @@ size.
 - One month of coverage limits every story-count comparison; counts per county pair are small.
 - Coverage, not rerun: County characteristics, coverage column (4.00 baseline, outcome-selected destinations); the
   level version of saturation alone (tested only within the all-factors model).
-- Out-of-state travel: Kansas is measured (12.3% of Missouri residents' observed out-of-county visits; 34.9% for the
-  14 border counties). Illinois, Iowa, Arkansas, Oklahoma and Nebraska destinations are not in the data; eastern and
-  southern border counties' travel and crossover are understated by an unmeasured amount.
+- Out-of-state travel: Kansas destinations are observed and enter crossover; the Kansas share of Audrain, Boone and
+  Osage residents' travel is not yet printed. Illinois, Iowa, Arkansas, Oklahoma and Nebraska destinations are not in
+  the data, so crossover is understated by an unmeasured amount where residents travel there.
 - Calibration: Advan's scale is about two units per resident (statewide 1.70–2.32 by month), not one; phantom home
-  block groups (3.3% of block group-months, 10.7% of devices seen at home) and St. Louis city's under-detection are
+  block groups (3.3% of block group-months, 10.7% of devices seen at home) and under-detection at home are
   unexplained. Question for Advan.
 - Crossover: b = 0.62 carries the homebody bias (residents who stay home more lower leaving as phantoms do), which
   pushes b upward; its size is not measured.
+- Advan coverage varies with block-group composition (detection ×1.28 per doubling of income, ×0.87 per doubling of
+  density, ×1.08 per +10 points aged 65+): the crossover and travel shares lean toward older, higher-income,
+  lower-density block groups within each county (Audrain's oldest block groups are seen at more than twice the rate of
+  its youngest).
+- Travel: destination residuals cluster spatially (Moran's I +0.175, p 0.005): neighbouring destinations are under- or
+  over-predicted together, a regional component the destination effects do not absorb; intervals do not cluster by
+  region. The 25-mile elasticity depends on the distance form (quadratic −0.98, splines −0.83 and −0.77 for metro
+  homes) although held-out error does not.
 - Travel: the border block's held-out gain is not established (+0.199 [−0.033, +0.426]); kept by theory. Unemployment
   rate × distance not tested (no estimates in `mo_county_acs_2024.csv`). Athletic conferences: statewide test pending;
   the three-county figure is against the 2026-10-18 model, not rerun.
 - Spillover: the Centralia Fireside Guard and
   Vandalia Leader have no usable spillover figure (short texts). Expectations for the 33 outlets that are not well
-  collected are extrapolations. Held out, St. Joseph and Quincy–Hannibal do worse than intercept only. The
+  collected are extrapolations. Held out, two TV markets do worse than intercept only. The
   print-outlet hypothesis term's gain interval touches zero.
 - Public travel model: no setting or correction is stable for the 9-county commuter classes — the major-metro rings'
   Stage 1 choice changes with the county left out (nested 6.05 vs in-sample 5.16), the regional-hub rings' with fold 1
   (outer-loop corrections 5.76 vs 4.38 in-sample); the destination pull needs public measures beyond sales and
   population (hospital, four-year college, supercenter, interstate, lakes and parks, county seat).
-- Public travel model, not rerun on the adopted outcome: the gap decomposition (`public_gap_corrections.py`), the
-  setting sensitivity (`public_default_sensitivity.py`), and Missouri corrections applied to Kansas small rural
-  counties only.
-- Kansas: the public model's 200-mile destination radius leaves 9.1% of Kansans' Advan share (max 40.7%, Thomas)
-  outside its support; a wider radius for the Kansas builds is untested. The Kansas outcome is not pass-through
-  discounted.
+- Public travel model, not rerun on the adopted outcome: the gap decomposition (`public_gap_corrections.py`) and the
+  setting sensitivity (`public_default_sensitivity.py`).
 - Civic interest areas: the multi-part rule has no distance limit — Kirksville II now has a Columbia part 127.3 km
   from its home body (and rural Boone parts at 116.9 and 150.7 km). A choice to confirm.
 - Civic interest areas: Cape Girardeau, Kansas City and St. Joseph have no built area and no ensemble run; their
@@ -2170,10 +2107,8 @@ size.
   were computed on the K = 6 areas and are not rerun. Linn's surface is the least stable (contested r 0.734).
 - Tie markets: Columbia's public market reaches 0.14 of Advan's beyond Boone (the public model sends Columbia's
   out-of-county travel to Jefferson City); with the round-3 tie the network terms no longer raise accuracy over travel
-  alone (0.58 against 0.59). The Kansas transfer of travel markets and the comparison with conventional market definitions
-  (2026-10-18) have not been rescored with home masked and the score taken beyond the home county.
-- Hospitals: Cooper County Memorial Hospital (Boonville) and Southeast Health Center of Ripley County (Doniphan) are in
-  OpenStreetMap but not in CMS.
+  alone (0.58 against 0.59). The comparison with conventional market definitions (2026-10-18) has not been rescored
+  with home masked and the score taken beyond the home county.
 
 ## Sources
 
@@ -2190,8 +2125,8 @@ size.
 - Missouri Secretary of State. (2025). *Official manual, State of Missouri, 2025–2026*. Newspaper listings (publication
   frequency codes).
 - U.S. Census Bureau. (2025). *American Community Survey 2020–2024 5-year estimates*, county population and 24
-  demographic measures; county per-capita income (B19301), Missouri and Kansas.
-- U.S. Census Bureau. (2025). *LEHD Origin-Destination Employment Statistics (LODES 8)*, Missouri and Kansas, 2023.
+  demographic measures; county per-capita income (B19301); block-group B01001, B19013, C17002.
+- U.S. Census Bureau. (2025). *LEHD Origin-Destination Employment Statistics (LODES 8)*, Missouri, 2023.
 - U.S. Census Bureau. (2021). *2020 Census centers of population by county* (CenPop2020).
 - U.S. Census Bureau. (2023). *2020 Census urban areas: county-level urban and rural information* (2020_UA_COUNTY).
 - U.S. Census Bureau. *Cartographic boundary files*: 2020 counties, county subdivisions, places and block groups;
@@ -2207,15 +2142,13 @@ size.
 - Nielsen. Designated Market Area boundaries (Columbia–Jefferson City).
 - U.S. Census Bureau. (2024). *County Business Patterns 2022* (cbp22co) [Data set].
 - U.S. Census Bureau. (2025). *American Community Survey 2020–2024 5-year estimates, table-based summary file*, tracts:
-  B19013, B19001, B15003, B25003, B08006; B01003 (Missouri and Kansas).
-- U.S. Census Bureau. (2025). *LODES 8 auxiliary origin-destination files*, 2023: IL, KS, IA, AR, OK, NE, TN, KY (for
-  Missouri); MO, NE, OK, CO (for Kansas).
-- U.S. Census Bureau. (2021). *2020 Census centers of population by census tract*, Missouri and Kansas.
+  B19013, B19001, B15003, B25003, B08006; B01003.
+- U.S. Census Bureau. (2025). *LODES 8 auxiliary origin-destination files*, 2023: IL, KS, IA, AR, OK, NE, TN, KY.
+- U.S. Census Bureau. (2021). *2020 Census centers of population by census tract*, Missouri.
 - Federal Highway Administration. (2024). *2022 NextGen National Household Travel Survey*, public use files v2 (trip,
   long-distance) and codebook. https://nhts.ornl.gov
 - Missouri Department of Revenue. (2026). *Public taxable sales reports, 2025*: by county (DI60IT15_SLS_CNTY) and by
   county and NAICS (DI60IL08_SLS_SICCNTY). https://dor.mo.gov/public-reports
-- Kansas Department of Revenue. (2025). *County trade pull factors, FY2025*.
 - Christaller, W. (1933/1966). *Central places in southern Germany*. Prentice-Hall.
 - Reilly, W. J. (1931). *The law of retail gravitation*. Knickerbocker Press.
 - Huff, D. L. (1964). Defining and estimating a trading area. *Journal of Marketing, 28*(3), 34–38.
@@ -2224,7 +2157,7 @@ size.
 - Bisiani, S., Gulyas, A., & Heravi, B. (2025). Mapping news geography: A computational framework for classifying local
   media through geographic coverage patterns. *Computational Humanities Research 2025*, Anthology of Computers and the
   Humanities 3, 860–881. https://doi.org/10.63744/PmuIcNvSnDuo
-- U.S. Census Bureau. (2025). *LODES 8 workplace area characteristics*, Missouri and Kansas, 2023
+- U.S. Census Bureau. (2025). *LODES 8 workplace area characteristics*, Missouri, 2023
   (mo_wac_S000_JT00_2023).
 - U.S. Census Bureau. (2023). *County adjacency file* (county_adjacency2023).
 - Schläpfer, M., et al. (2021). The universal visitation law of human mobility. *Nature, 593*, 522–527.
@@ -2234,133 +2167,118 @@ size.
   critical information needs of the American public*. Federal Communications Commission.
 - Steegen, S., Tuerlinckx, F., Gelman, A., & Vanpaemel, W. (2016). Increasing transparency through a multiverse
   analysis. *Perspectives on Psychological Science, 11*(5), 702–712.
+- Moran, P. A. P. (1950). Notes on continuous stochastic phenomena. *Biometrika, 37*(1/2), 17–23.
 - Software: Python, statsmodels, pandas, shapely, SciPy, pyosmium; D3 for figures.
 
 ## Superseded figures
 
 Every replaced figure, with what replaced it and why. "Was" gives the earlier values in order: 2026-10-16 to 10-18,
-then "first review" and "second review" (2026-10-24). "Now" is the current value (2026-10-25, after the third review;
-with every market final).
-"Not rerun" = no replacement figure; the old one stands only as dated history.
+then "audit round 1" and "audit round 2" (2026-10-24; civic-interest-area rows still say "first review" and "second
+review"). "Now" is the current value (2026-10-25, after audit round 3). "Not rerun" = no replacement figure; the old one
+stands only as dated history. Figures for counties other than Audrain, Boone and Osage are kept outside the repository.
 
 | Model | Figure (where) | Was | Now | Why |
 |---|---|---|---|---|
-| Data | Calibration factor as the device → person scale | Median 1.94, middle 80% 1.09–3.18; Audrain 1.19–2.54, Boone 1.58–2.52, Osage 2.19–4.26; monthly medians Jan 1.78 … Sep 1.65 (first review) | Kept as `factor`, not adopted; adopted `factor_statewide` 1.70–2.32 by month; trimmed Audrain 1.19–2.40, Boone 1.50–2.44, Osage 2.19–3.72 | The county factor measures home detection (county medians 0.24–10.78) |
-| Data | Calibration effect on the travel model | Log-distance term −2.14 → −1.58; "still predicts 93%"; first review: elasticity at 25 mi metro −0.95 → −0.89, nonmetro −0.45 → −0.46; held-out 3.29 → 3.26; second review county factor −0.904 / −0.475, error 3.28; statewide −0.978 / −0.473, error 3.31 | County factor −0.906 / −0.477, error 3.25; adopted statewide scale −0.983 / −0.478, error 3.28 (Travel model, Sensitivities) | Statewide scale; centred terms |
+| Data | Calibration factor as the device → person scale | Median 1.94, middle 80% 1.09–3.18; Audrain 1.19–2.54, Boone 1.58–2.52, Osage 2.19–4.26; monthly medians Jan 1.78 … Sep 1.65 (audit round 1) | Kept as `factor`, not adopted; adopted `factor_statewide` 1.70–2.32 by month; trimmed Audrain 1.19–2.40, Boone 1.50–2.44, Osage 2.19–3.72 | The county factor measures home detection (county medians 0.24–10.78) |
+| Data | Calibration effect on the travel model | Log-distance term −2.14 → −1.58; "still predicts 93%"; audit round 1: elasticity at 25 mi metro −0.95 → −0.89, nonmetro −0.45 → −0.46; held-out 3.29 → 3.26; audit round 2 county factor −0.904 / −0.475, error 3.28; statewide −0.978 / −0.473, error 3.31 | County factor −0.906 / −0.477, error 3.25; adopted statewide scale −0.983 / −0.478, error 3.28 (Travel model, Sensitivities) | Statewide scale; centred terms |
 | Data | Calibration, other models | "Outlet model unchanged (broadcaster 0.70, crossover 1.47)"; "coverage's response to travel 0.52" | Adopted spillover model has no travel term; coverage metro 0.49, nonmetro 0.25 | Models replaced |
 | Data | Estimated town residents | Columbia ~107,000 / ~106,900; Mexico ~7,100 / ~7,130; Linn ~1,800 / ~1,790 | ACS population of the block groups 111,055; 6,619; 1,381 (statewide factor 102,803; 6,742; 2,802); allocated to the area 103,086; 5,685; 1,172 | The county factor carried home over-detection |
 | Data | Device IDs "stable at least week to week" | 424 block groups, monthly lower in 71, 62 passing the same-scale check | Withdrawn: 376 block groups, lower in 55, 48 passing; 7 show the products' scales differ | Places merged by `PERSISTENT_ID`; cross-product scales unknown; no within-product test |
-| Data | Pass-through discount | Removes 3.0% (2026-10-16); 2.3% (first review); second review 1.74% (county-factor weighting; 2.2% on the statewide scale; old codes 2.32%, codes fixed 3.35%, highway at the statewide norm 2.98%) | 1.81%, empirical-Bayes shrunken, `visits_statewide`-weighted (same weights: old codes 3.04%, codes fixed 4.38%, highway at the statewide norm 3.86%, own store mix unshrunk 2.23%); signed mean excess −0.02% | Convenience stores missing (2017 NAICS); every road stop counted as a highway stop; small pairs unshrunk; weights not the adopted outcome (round 3) |
+| Data | Pass-through discount | Removes 3.0% (2026-10-16); 2.3% (audit round 1); audit round 2 1.74% (county-factor weighting; 2.2% on the statewide scale; old codes 2.32%, codes fixed 3.35%, highway at the statewide norm 2.98%) | 1.81%, empirical-Bayes shrunken, `visits_statewide`-weighted (same weights: old codes 3.04%, codes fixed 4.38%, highway at the statewide norm 3.86%, own store mix unshrunk 2.23%); signed mean excess −0.02% | Convenience stores missing (2017 NAICS); every road stop counted as a highway stop; small pairs unshrunk; weights not the adopted outcome (round 3) |
 | Data | Kingdom City share discounted (Audrain → Callaway) | 20% | Not rerun | Discount redefined |
-| Crossover | Distinct residents seen outside, lower bound | Audrain 41%, Boone 24%, Osage 45%, Missouri median 52%; second review b = 0.51: 44%, 26%, 57%, 58% (bounds 34–53%, 20–31%, 43–69%, 44–69%) | 44%, 26%, 59%, 59% (range over b in [0, 1]: 40–44%, 24–26%, 45–66%, 48–61%; over b's interval 43–44%, 26–26%, 57–61%, 58–60%) | Calibrated denominator, b by 2SLS; Kansas destinations; St. Louis unit before the leaving test |
-| Crossover | St. Louis | "22% summed, at least 46% as people"; second review at least 35% (bounds 18–46%) | 22% summed, at least 31% as people (range over b 18–43%; over b's interval 28–34%) | Unit fix before the leaving test; calibrated denominator |
-| Crossover | Detection slope b | — | 0.51 [0.43, 0.59] (reduced form, second review) → 0.621 [0.534, 0.708] (2SLS) | Reduced form attenuated by month-to-month detection noise (first stage 0.82) |
-| Crossover | Bounds | — | Second review: leavers ÷ Σ max(own, E) and ÷ Σ min(own, E) (e.g. Audrain 34–53%, Missouri median 44–69%) → range of the county figure over a b grid in [0, 1] and over b's interval | R(b) need not be monotone; capping leavers at D breaks the box argument |
-| Crossover | Three-county scripts | — | Second review: `residents_leaving.py` Osage 57%; `unique_people_by_county.py` Audrain → Boone 36.0% → Osage 59%; 35.5% | b by 2SLS |
-| Crossover | Denominators compared; population bands | — | Second review: calibrated Spearman −0.37 / +0.54 / +0.37, linear split −0.38; bounds width by population 22.9 / 25.0 / 20.7 / 19.5 points, calibrated medians 65 / 60 / 54 / 44% → −0.28 / +0.53 / +0.37, linear split −0.29; range over b, width 11.5 / 12.6 / 6.9 / 6.8 points, calibrated medians 66 / 60 / 55 / 44% | b by 2SLS; bounds over a b grid |
+| Crossover | Distinct residents seen outside, lower bound | Audrain 41%, Boone 24%, Osage 45%; audit round 2 b = 0.51: 44%, 26%, 57% (bounds 34–53%, 20–31%, 43–69%) | 44%, 26%, 59% (range over b in [0, 1]: 40–44%, 24–26%, 45–66%; over b's interval 43–44%, 26–26%, 57–61%) | Calibrated denominator, b by 2SLS; Kansas destinations; St. Louis unit before the leaving test |
+| Crossover | Detection slope b | — | 0.51 [0.43, 0.59] (reduced form, audit round 2) → 0.621 [0.534, 0.708] (2SLS) | Reduced form attenuated by month-to-month detection noise (first stage 0.82) |
+| Crossover | Bounds | — | Audit round 2: leavers ÷ Σ max(own, E) and ÷ Σ min(own, E) (e.g. Audrain 34–53%) → range of the county figure over a b grid in [0, 1] and over b's interval | R(b) need not be monotone; capping leavers at D breaks the box argument |
+| Crossover | Three-county scripts | — | Audit round 2: `residents_leaving.py` Osage 57%; `unique_people_by_county.py` Audrain → Boone 36.0% → Osage 59%; 35.5% | b by 2SLS |
+| Crossover | Denominators compared | — | Audit round 2: calibrated Spearman −0.37 / +0.54 / +0.37, linear split −0.38 → −0.28 / +0.53 / +0.37, linear split −0.29 | b by 2SLS; bounds over a b grid |
 | Crossover | March three-county check | Audrain 42%, Boone 29%, Osage 44% | Not restated for the calibrated form; b = 1: 39%, 27%, 66% | Denominator |
-| Crossover | Lower bound above commuting | 112 of 114 counties | 113 of 114 (St. Charles set by commuting) | As above; JT01 |
-| Crossover | Employed residents working in another county ÷ population (LODES) | Audrain 23%, Boone 11%, Osage 33%, median 23% | 21%, 11%, 31%, 21% | JT01; JT00 counted multiple jobholders twice (commuters ÷ employed: median 61.6% → 61.7%) |
-| Crossover | Tract floors, population-weighted conservative | Audrain 43%, Boone 28%, Osage 50%; second review 44%, 27%, 57% | 44%, 26%, 59% | January–July tracts only; calibrated denominator; JT01 |
+| Crossover | Lower bound above commuting | 112 of 114 counties | 113 of 114 | As above; JT01 |
+| Crossover | Employed residents working in another county ÷ population (LODES) | Audrain 23%, Boone 11%, Osage 33% | 21%, 11%, 31% | JT01; JT00 counted multiple jobholders twice |
+| Crossover | Tract floors, population-weighted conservative | Audrain 43%, Boone 28%, Osage 50%; audit round 2 44%, 27%, 57% | 44%, 26%, 59% | January–July tracts only; calibrated denominator; JT01 |
 | Data | Regular travel per tract (`directions_per_tract.py`): 1 / 2 / 3+ directions; count right, public / corrected | 8 / 29 / 63%; 77% / 78% | 8 / 30 / 63%; 78% / 77% (first direction 78% / 83%, unchanged) | January–July tracts only; 6 of 7 months |
-| Travel | Share of July–September shares predicted | 93%; 94% with commuting; first review: held-out R² 93.8% [92.4, 94.9], Jul–Sep stability 93.8% vs persistence 98.6% | Held-out R² 93.7% [92.4, 94.9]; stability R² 93.9% vs persistence 98.7% | Squared correlation, not R²; the Jul–Sep split is beaten by persistence |
-| Travel | Held-out error | First review 3.26 [2.93, 3.59]; classes 3.44 / 2.83 / 3.85 / 2.47; second review 3.31 [2.96, 3.64]; 3.57 / 2.87 / 3.68 / 2.45 | 3.28 [2.94, 3.61]; 3.54 / 2.86 / 3.70 / 2.39 | Statewide scale; shrunken highway discount; JT01 residents' jobs in and out of state |
-| Travel | Steps table | Deviance 480M / 359M / 275M / 165M / 137M; 76% / 81% / 86% / 92% / 93%; top destination 1.63× / 1.42× / 1.22× / 1.15×; first review: deviance 358.2M … 68.8M, held-out R² 64.8% … 93.8%, errors 9.62 / 7.25 / 5.79 / 5.03 / 4.24 / 3.71 / 3.26, top destination 1.15× … 1.02×, within 15% … 49%; second review 246.3M … 62.0M, 72.3% … 93.7%, 8.13 … 3.31, 1.26× … 1.03×, 18% … 51% | Steps table (246.1M … 62.0M; 72.4% … 93.7%; 8.06 … 3.28; 1.23× … 1.03×; 18% … 49%) | In-sample, observed-selected; then the second-round outcome |
-| Travel | Singly-constrained model's main destinations | Under-predicted by 1.6× (also Comparisons withdrawn); first review 1.19×, held-out error 7.25; second review held-out error 6.46 against 3.31 | 1.15× held out, forecast-selected; held-out error 6.40 against 3.28 | Selected on the outcome; in-sample |
-| Travel | Top destination, actual ÷ forecast | 1.15–1.2×; first review 1.02× (1.11× observed-selected) | 1.03× (1.13× observed-selected) | Held out, forecast-selected |
-| Travel | Big flows | Middle 80% 0.73×–1.88×; first review 483 pairs, error 3.45 [3.17, 3.74], 49% within, 0.57×–1.51×; second review 484 pairs, 3.44 [3.16, 3.73], 51% [46, 55], 0.61×–1.51× | 483 pairs, 3.44 [3.16, 3.72], 49% [45, 54], 0.60×–1.51× | In-sample, observed-selected; second-round outcome |
-| Travel | Main destinations, actual ÷ expected | Osage → Cole 2× (singly constrained), 1.15–1.2×, 1.28 → 1.09 with commuting; Osage → Boone 1.30 → 1.64; Audrain → Boone 0.99 → 0.97; Audrain → Callaway 1.68 → 1.39; Audrain → Marion 1.83 → 2.40; Boone → Cole 0.73 → 0.70; Boone → St. Louis 1.47 → 1.33; first review held out 1.14, 1.59, 1.01, 1.30, 2.21, 0.68, 1.29; second review in-sample 1.04, 1.64, 1.02, 1.44, 2.21, 0.71, 1.28 | In-sample / held out: 1.05 / 1.13, 1.65 / 1.56, 1.02 / 1.03, 1.45 / 1.35, 2.20 / 2.13, 0.71 / 0.67, 1.29 / 1.29 | Commuting; held out; second-round outcome |
-| Travel | Coefficients and elasticities | First review: −0.887, −0.282, +0.427, −0.273, +0.160, +0.501, +0.284, +0.192; metro −0.37 / −0.89 / −1.28 / −1.67, nonmetro +0.56 / −0.46 / −1.23 / −2.00 at 10 / 25 / 50 / 100 mi; second review −0.978, −0.265, +0.505, −0.258, +0.182, +0.465, +0.284, +0.200; metro −0.49 / −0.98 / −1.35 / −1.71, nonmetro +0.49 / −0.47 / −1.20 / −1.92 | −0.983, −0.265, +0.505, −0.261, +0.181, +0.464, +0.284, +0.197; metro −0.50 / −0.98 / −1.35 / −1.72, nonmetro +0.49 / −0.48 / −1.21 / −1.94 | Second-round outcome; JT01 |
-| Travel | Selection | First review joint test: adopted vs fixed effects 16.76 → 3.26 (−13.50); drop-one gains +0.056 to +0.377; candidates same metro +0.003, nearest centre −0.014, adjacent +0.003, size × distance +0.011; nested −0.050 / −0.041, one at a time −0.051 [−0.100, −0.002]; second review blocks distance +0.994, border +0.185 [−0.048, +0.411], commuting +0.474, all +12.852; nested guard reported as change −0.061 [−0.205, +0.096] / −0.031; one at a time change −0.047 | Block gains: distance +1.043, border +0.199 [−0.033, +0.426], commuting +0.465, all pair terms +12.756; nested guard gain +0.062 [−0.097, +0.203] / +0.031; one at a time gain +0.045 [+0.010, +0.081] (reference only) | Selection procedure (authors); one gain convention (round 3) |
-| Travel | Commuting gains | Small rural 3.76 → 3.28, top-3 4.81 → 4.25, independent towns 3.05 → 2.79, commuter 4.13 → 3.82, hubs 2.43 → 2.11; first review all 3.71 → 3.26 (−0.45 [−0.70, −0.21]), 3.94 → 3.44, 4.86 → 4.31, 3.18 → 2.83, 4.28 → 3.85, 3.04 → 2.47; second review all 3.78 → 3.31 (−0.47 [−0.72, −0.27]); 4.06 → 3.57; top-3 4.97 → 4.36; 3.33 → 2.87; 4.22 → 3.68; 2.78 → 2.45 | All 3.75 → 3.28 (−0.46 [−0.71, −0.26]); 4.02 → 3.54; top-3 4.92 → 4.34; 3.30 → 2.86; 4.21 → 3.70; 2.73 → 2.39 | Second-round outcome; JT01; forecast-ranked top-3 |
-| Travel | Commuting coefficients | +0.28 / +0.19; first review +0.284 (0.051) / +0.192 (0.036); second review +0.284 [+0.194, +0.373] / +0.200 [+0.127, +0.273] | +0.284 [+0.197, +0.371] / +0.197 [+0.125, +0.269] | JT01; out-of-state jobs in the denominator |
-| Travel | Kansas share of out-of-county visits | First review: border counties 37.7%, all Missouri 11.6%; Platte 30.4, Cass 28.8, Bates 22.7, Vernon 22.2, Jasper 20.0, Barton 19.9, Newton 8.1, McDonald 7.3, Atchison 7.0 | 34.9%, 12.3%; 30.3, 28.7, 22.6, 22.3, 20.1, 19.8, 8.0, 7.0, 7.2 | Statewide scale, undiscounted |
-| Travel | Driving time | Deviance 137M → 136M; Jul–Sep 93.0% → 92.3%; first review +0.07 [−0.14, +0.31]; second review +0.079 [−0.113, +0.310] | +0.078 [−0.115, +0.309] | Held out; second-round outcome |
-| Travel | "On the way" factor | Deviance 134M; first review −0.05 [−0.27, +0.22], weighted −0.06 [−0.31, +0.19]; second review −0.055 [−0.268, +0.209]; weighted −0.075 [−0.320, +0.184] | −0.052 [−0.265, +0.204]; weighted −0.079 [−0.321, +0.177] | As above |
-| Travel | Competing destinations | −0.05 and 0.00, deviance 80.0M → 79.5M / 80.0M; first review nearest alternative −0.051 [−0.100, −0.002], −0.065 (p 0.04), "passes one at a time"; other directions −0.01 [−0.04, +0.02]; second review −0.047 [−0.085, −0.009]; other direction −0.035 [−0.069, +0.001] | −0.045 [−0.081, −0.010], rejected by the nested guard; other direction −0.033 [−0.066, +0.001] | Nested guard; second-round outcome |
-| Travel | Fotheringham C_ij | −0.83, deviance 80.0M → 78.9M, within 46% → 44%, Osage → Cole 1.28× → 1.21×; first review −1.04, +0.02 [−0.08, +0.14]; second review −1.07; +0.031 [−0.063, +0.140] | −1.10; +0.025 [−0.070, +0.137] | As above |
-| Travel | Area-centre and similar terms | Same metro/micro "deviance unchanged", nearest centre p 0.74, intervening "small gain", adjacent "deviance −3M"; first review +0.00 / −0.01 / +0.00 / +0.03, all four +0.05; second review +0.008 / −0.015 / −0.005 / +0.032; all four +0.034 | +0.004 / −0.016 / −0.006 / +0.032; all four +0.030 | Held out; second-round outcome |
-| Travel | Singly-constrained destination attributes | Jobs per resident p 0.44, metro p 0.27; first review jobs p 0.69, metro p 0.75, stores p 0.19 | Not restated in round 3; second review: metro −0.08 (p 0.57), jobs p 0.71, stores +0.73 (p 0.002) | Two-way clustering; second-round outcome |
-| Travel | Origin-class-specific terms | Hubs 2.02 → 1.77; first review k = 4 all +0.17 [+0.00, +0.35], hubs −0.11, independent towns +0.51; k = 2 / 3 +0.08 / +0.09; second review −0.00 / +0.04 / +0.09; independent towns +0.40 | k = 2 / 3 / 4: −0.00 / +0.03 / +0.09; independent towns +0.39, hubs −0.32 | As above |
-| Travel | Work and non-work apart | First review −0.00; without commuting +0.41 [+0.19, +0.65], Audrain → Marion 2.40× → 1.96×; second review +0.44 [+0.24, +0.67] | −0.00; +0.43 [+0.23, +0.66] | As above |
-| Travel | Tier and county pull | 3.75 → 3.70 / 4.79 → 4.68; jobs pull 1.60 vs 1.39; first review pooled 3.86 / 4.80, tier pull 3.81 / 4.72, theory 4.40 / 5.28, county 3.82 / 4.70, tier + local 3.88 / 4.78; second review adopted 3.307 (small rural 3.572), nested reported as change +0.045 [−0.087, +0.199] | `travel_tier_pull_cv.py` table: adopted 3.283 (small rural 3.538); nested gain −0.048 [−0.199, +0.081]; none adopted | Held-out standardisation; 8 terms; forecast top-3; nested guard |
-| Travel | Small origins; measured draw; shrinkage | First review 3.76 vs 3.32; +0.94 / +1.33; 3.11 vs 3.05; second review 3.77 vs 3.46; +0.60 / +1.18; 3.20 vs 3.14 | 3.73 vs 3.43; +0.58 / +1.13; 3.16 vs 3.10 | Second-round outcome |
-| Travel | Job-hub distances | "All worse (3.93–4.60)"; first review 3.40–3.48 vs 3.35; second review 3.48–3.51 vs 3.47 | 3.45–3.47 vs 3.44 | As above; JT01 |
-| Travel | Blend with own shares; pass-through as recorded | First review 1.51 (−0.00); 3.18 against 3.26; second review 1.46; undiscounted 3.21 against 3.31 | 1.45 (−0.01 [−0.03, +0.02]); undiscounted 3.21 against 3.28 | As above |
-| Travel | Sensitivities table | — | Second review: county factor −0.904 / −0.475, 3.28; undiscounted −0.971 / −0.484, 3.21; old discount −0.963 / −0.462, 3.30; uncapped −1.051 / −0.634, 3.15 (94.5%); distinct people −0.658 / −0.567, 1.74 (89.2%) → −0.906 / −0.477, 3.25; −0.972 / −0.482, 3.21; −0.964 / −0.461, 3.30; −1.057 / −0.639, 3.13 (94.6%); −0.670 / −0.619, 1.77 (88.7%); unshrunk discount −0.979 / −0.471, 3.31 | Shrunken discount; JT01 residents |
-| Travel | Stability and references | First review: Jul–Sep error 3.01, persistence 1.51, big flows 3.20 / 55% and 1.43 / 92%, model − persistence +1.49 [+1.20, +1.78]; destination effects + log distance 6.13 (−2.87); in-sample deviance 68.8M; second review 2.95, model − persistence +1.49 [+1.17, +1.79]; 5.66 | 2.94, 1.46, model − persistence +1.47 [+1.16, +1.77]; 5.63 (adopted lower by 2.35 [1.86, 2.83]); 62.0M | Second-round outcome |
-| Travel | All marginal factors | 3.58 / 3.39 / 4.04, 93.1% / 93.6% / 90.4%, within 49% / 49% / 42%, "about 5% gain with all eight"; first review 3.26 / 3.15 / 3.21 / 3.84, −0.11 [−0.31, +0.10], −0.05, +0.58; second review 3.31 / 3.19 / 3.25 / 3.83; −0.11 [−0.31, +0.09]; +0.53 [+0.09, +0.97] | 3.28 / 3.17 / 3.22 / 3.79; −0.12 [−0.31, +0.09]; −0.06 [−0.20, +0.10]; +0.51 [+0.09, +0.95] | Held out; intervals; second-round outcome |
-| Travel | County characteristics, travel column | Baseline 3.51; degree × distance 3.43; hospitals 3.48; first review baseline 3.26 / 3.45; second review baseline 3.31 / 3.44 | Baseline 3.28 / 3.44; County characteristics table | Jul–Sep big-flow error selected on the outcome; second-round outcome |
+| Travel | Share of July–September shares predicted | 93%; 94% with commuting; audit round 1: held-out R² 93.8% [92.4, 94.9], Jul–Sep stability 93.8% vs persistence 98.6% | Held-out R² 93.7% [92.4, 94.9]; stability R² 93.9% vs persistence 98.7% | Squared correlation, not R²; the Jul–Sep split is beaten by persistence |
+| Travel | Held-out error | Audit round 1 3.26 [2.93, 3.59]; classes 3.44 / 2.83 / 3.85 / 2.47; audit round 2 3.31 [2.96, 3.64]; 3.57 / 2.87 / 3.68 / 2.45 | 3.28 [2.94, 3.61]; 3.54 / 2.86 / 3.70 / 2.39 | Statewide scale; shrunken highway discount; JT01 residents' jobs in and out of state |
+| Travel | Steps table | Deviance 480M / 359M / 275M / 165M / 137M; 76% / 81% / 86% / 92% / 93%; top destination 1.63× / 1.42× / 1.22× / 1.15×; audit round 1: deviance 358.2M … 68.8M, held-out R² 64.8% … 93.8%, errors 9.62 / 7.25 / 5.79 / 5.03 / 4.24 / 3.71 / 3.26, top destination 1.15× … 1.02×, within 15% … 49%; audit round 2 246.3M … 62.0M, 72.3% … 93.7%, 8.13 … 3.31, 1.26× … 1.03×, 18% … 51% | Steps table (246.1M … 62.0M; 72.4% … 93.7%; 8.06 … 3.28; 1.23× … 1.03×; 18% … 49%) | In-sample, observed-selected; then the second-round outcome |
+| Travel | Singly-constrained model's main destinations | Under-predicted by 1.6× (also Comparisons withdrawn); audit round 1 1.19×, held-out error 7.25; audit round 2 held-out error 6.46 against 3.31 | 1.15× held out, forecast-selected; held-out error 6.40 against 3.28 | Selected on the outcome; in-sample |
+| Travel | Top destination, actual ÷ forecast | 1.15–1.2×; audit round 1 1.02× (1.11× observed-selected) | 1.03× (1.13× observed-selected) | Held out, forecast-selected |
+| Travel | Big flows | Middle 80% 0.73×–1.88×; audit round 1 483 pairs, error 3.45 [3.17, 3.74], 49% within, 0.57×–1.51×; audit round 2 484 pairs, 3.44 [3.16, 3.73], 51% [46, 55], 0.61×–1.51× | 483 pairs, 3.44 [3.16, 3.72], 49% [45, 54], 0.60×–1.51× | In-sample, observed-selected; second-round outcome |
+| Travel | Main destinations, actual ÷ expected | Osage → Cole 2× (singly constrained), 1.15–1.2×, 1.28 → 1.09 with commuting; Osage → Boone 1.30 → 1.64; Audrain → Boone 0.99 → 0.97; Audrain → Callaway 1.68 → 1.39; Audrain → Marion 1.83 → 2.40; Boone → Cole 0.73 → 0.70; Boone → St. Louis 1.47 → 1.33; audit round 1 held out 1.14, 1.59, 1.01, 1.30, 2.21, 0.68, 1.29; audit round 2 in-sample 1.04, 1.64, 1.02, 1.44, 2.21, 0.71, 1.28 | In-sample / held out: 1.05 / 1.13, 1.65 / 1.56, 1.02 / 1.03, 1.45 / 1.35, 2.20 / 2.13, 0.71 / 0.67, 1.29 / 1.29 | Commuting; held out; second-round outcome |
+| Travel | Coefficients and elasticities | Audit round 1: −0.887, −0.282, +0.427, −0.273, +0.160, +0.501, +0.284, +0.192; metro −0.37 / −0.89 / −1.28 / −1.67, nonmetro +0.56 / −0.46 / −1.23 / −2.00 at 10 / 25 / 50 / 100 mi; audit round 2 −0.978, −0.265, +0.505, −0.258, +0.182, +0.465, +0.284, +0.200; metro −0.49 / −0.98 / −1.35 / −1.71, nonmetro +0.49 / −0.47 / −1.20 / −1.92 | −0.983, −0.265, +0.505, −0.261, +0.181, +0.464, +0.284, +0.197; metro −0.50 / −0.98 / −1.35 / −1.72, nonmetro +0.49 / −0.48 / −1.21 / −1.94 | Second-round outcome; JT01 |
+| Travel | Selection | Audit round 1 joint test: adopted vs fixed effects 16.76 → 3.26 (−13.50); drop-one gains +0.056 to +0.377; candidates same metro +0.003, nearest centre −0.014, adjacent +0.003, size × distance +0.011; nested −0.050 / −0.041, one at a time −0.051 [−0.100, −0.002]; audit round 2 blocks distance +0.994, border +0.185 [−0.048, +0.411], commuting +0.474, all +12.852; nested guard reported as change −0.061 [−0.205, +0.096] / −0.031; one at a time change −0.047 | Block gains: distance +1.043, border +0.199 [−0.033, +0.426], commuting +0.465, all pair terms +12.756; nested guard gain +0.062 [−0.097, +0.203] / +0.031; one at a time gain +0.045 [+0.010, +0.081] (reference only) | Selection procedure (authors); one gain convention (round 3) |
+| Travel | Commuting gains | Small rural 3.76 → 3.28, top-3 4.81 → 4.25, independent towns 3.05 → 2.79, commuter 4.13 → 3.82, hubs 2.43 → 2.11; audit round 1 all 3.71 → 3.26 (−0.45 [−0.70, −0.21]), 3.94 → 3.44, 4.86 → 4.31, 3.18 → 2.83, 4.28 → 3.85, 3.04 → 2.47; audit round 2 all 3.78 → 3.31 (−0.47 [−0.72, −0.27]); 4.06 → 3.57; top-3 4.97 → 4.36; 3.33 → 2.87; 4.22 → 3.68; 2.78 → 2.45 | All 3.75 → 3.28 (−0.46 [−0.71, −0.26]); 4.02 → 3.54; top-3 4.92 → 4.34; 3.30 → 2.86; 4.21 → 3.70; 2.73 → 2.39 | Second-round outcome; JT01; forecast-ranked top-3 |
+| Travel | Commuting coefficients | +0.28 / +0.19; audit round 1 +0.284 (0.051) / +0.192 (0.036); audit round 2 +0.284 [+0.194, +0.373] / +0.200 [+0.127, +0.273] | +0.284 [+0.197, +0.371] / +0.197 [+0.125, +0.269] | JT01; out-of-state jobs in the denominator |
+| Travel | Driving time | Deviance 137M → 136M; Jul–Sep 93.0% → 92.3%; audit round 1 +0.07 [−0.14, +0.31]; audit round 2 +0.079 [−0.113, +0.310] | +0.078 [−0.115, +0.309] | Held out; second-round outcome |
+| Travel | "On the way" factor | Deviance 134M; audit round 1 −0.05 [−0.27, +0.22], weighted −0.06 [−0.31, +0.19]; audit round 2 −0.055 [−0.268, +0.209]; weighted −0.075 [−0.320, +0.184] | −0.052 [−0.265, +0.204]; weighted −0.079 [−0.321, +0.177] | As above |
+| Travel | Competing destinations | −0.05 and 0.00, deviance 80.0M → 79.5M / 80.0M; audit round 1 nearest alternative −0.051 [−0.100, −0.002], −0.065 (p 0.04), "passes one at a time"; other directions −0.01 [−0.04, +0.02]; audit round 2 −0.047 [−0.085, −0.009]; other direction −0.035 [−0.069, +0.001] | −0.045 [−0.081, −0.010], rejected by the nested guard; other direction −0.033 [−0.066, +0.001] | Nested guard; second-round outcome |
+| Travel | Fotheringham C_ij | −0.83, deviance 80.0M → 78.9M, within 46% → 44%, Osage → Cole 1.28× → 1.21×; audit round 1 −1.04, +0.02 [−0.08, +0.14]; audit round 2 −1.07; +0.031 [−0.063, +0.140] | −1.10; +0.025 [−0.070, +0.137] | As above |
+| Travel | Area-centre and similar terms | Same metro/micro "deviance unchanged", nearest centre p 0.74, intervening "small gain", adjacent "deviance −3M"; audit round 1 +0.00 / −0.01 / +0.00 / +0.03, all four +0.05; audit round 2 +0.008 / −0.015 / −0.005 / +0.032; all four +0.034 | +0.004 / −0.016 / −0.006 / +0.032; all four +0.030 | Held out; second-round outcome |
+| Travel | Singly-constrained destination attributes | Jobs per resident p 0.44, metro p 0.27; audit round 1 jobs p 0.69, metro p 0.75, stores p 0.19 | Not restated in round 3; audit round 2: metro −0.08 (p 0.57), jobs p 0.71, stores +0.73 (p 0.002) | Two-way clustering; second-round outcome |
+| Travel | Origin-class-specific terms | Hubs 2.02 → 1.77; audit round 1 k = 4 all +0.17 [+0.00, +0.35], hubs −0.11, independent towns +0.51; k = 2 / 3 +0.08 / +0.09; audit round 2 −0.00 / +0.04 / +0.09; independent towns +0.40 | k = 2 / 3 / 4: −0.00 / +0.03 / +0.09; independent towns +0.39, hubs −0.32 | As above |
+| Travel | Work and non-work apart | Audit round 1 −0.00; without commuting +0.41 [+0.19, +0.65], Audrain → Marion 2.40× → 1.96×; audit round 2 +0.44 [+0.24, +0.67] | −0.00; +0.43 [+0.23, +0.66] | As above |
+| Travel | Tier and county pull | 3.75 → 3.70 / 4.79 → 4.68; jobs pull 1.60 vs 1.39; audit round 1 pooled 3.86 / 4.80, tier pull 3.81 / 4.72, theory 4.40 / 5.28, county 3.82 / 4.70, tier + local 3.88 / 4.78; audit round 2 adopted 3.307 (small rural 3.572), nested reported as change +0.045 [−0.087, +0.199] | `travel_tier_pull_cv.py` table: adopted 3.283 (small rural 3.538); nested gain −0.048 [−0.199, +0.081]; none adopted | Held-out standardisation; 8 terms; forecast top-3; nested guard |
+| Travel | Small origins; measured draw; shrinkage | Audit round 1 3.76 vs 3.32; +0.94 / +1.33; 3.11 vs 3.05; audit round 2 3.77 vs 3.46; +0.60 / +1.18; 3.20 vs 3.14 | 3.73 vs 3.43; +0.58 / +1.13; 3.16 vs 3.10 | Second-round outcome |
+| Travel | Job-hub distances | "All worse (3.93–4.60)"; audit round 1 3.40–3.48 vs 3.35; audit round 2 3.48–3.51 vs 3.47 | 3.45–3.47 vs 3.44 | As above; JT01 |
+| Travel | Blend with own shares; pass-through as recorded | Audit round 1 1.51 (−0.00); 3.18 against 3.26; audit round 2 1.46; undiscounted 3.21 against 3.31 | 1.45 (−0.01 [−0.03, +0.02]); undiscounted 3.21 against 3.28 | As above |
+| Travel | Sensitivities table | — | Audit round 2: county factor −0.904 / −0.475, 3.28; undiscounted −0.971 / −0.484, 3.21; old discount −0.963 / −0.462, 3.30; uncapped −1.051 / −0.634, 3.15 (94.5%); distinct people −0.658 / −0.567, 1.74 (89.2%) → −0.906 / −0.477, 3.25; −0.972 / −0.482, 3.21; −0.964 / −0.461, 3.30; −1.057 / −0.639, 3.13 (94.6%); −0.670 / −0.619, 1.77 (88.7%); unshrunk discount −0.979 / −0.471, 3.31 | Shrunken discount; JT01 residents |
+| Travel | Stability and references | Audit round 1: Jul–Sep error 3.01, persistence 1.51, big flows 3.20 / 55% and 1.43 / 92%, model − persistence +1.49 [+1.20, +1.78]; destination effects + log distance 6.13 (−2.87); in-sample deviance 68.8M; audit round 2 2.95, model − persistence +1.49 [+1.17, +1.79]; 5.66 | 2.94, 1.46, model − persistence +1.47 [+1.16, +1.77]; 5.63 (adopted lower by 2.35 [1.86, 2.83]); 62.0M | Second-round outcome |
+| Travel | All marginal factors | 3.58 / 3.39 / 4.04, 93.1% / 93.6% / 90.4%, within 49% / 49% / 42%, "about 5% gain with all eight"; audit round 1 3.26 / 3.15 / 3.21 / 3.84, −0.11 [−0.31, +0.10], −0.05, +0.58; audit round 2 3.31 / 3.19 / 3.25 / 3.83; −0.11 [−0.31, +0.09]; +0.53 [+0.09, +0.97] | 3.28 / 3.17 / 3.22 / 3.79; −0.12 [−0.31, +0.09]; −0.06 [−0.20, +0.10]; +0.51 [+0.09, +0.95] | Held out; intervals; second-round outcome |
+| Travel | County characteristics, travel column | Baseline 3.51; degree × distance 3.43; hospitals 3.48; audit round 1 baseline 3.26 / 3.45; audit round 2 baseline 3.31 / 3.44 | Baseline 3.28 / 3.44; County characteristics table | Jul–Sep big-flow error selected on the outcome; second-round outcome |
 | Travel | Tier sizes | Hubs 8 | Hubs 8 in `county_class_k4.csv` (114 counties); scored, 9 with St. Louis city (115 homes) | St. Louis city and county scored apart |
 | Coverage | Headline elasticity | "About 0.7–0.8% more stories per 1% more visits" | Metro 0.49, nonmetro 0.25 | No distance terms: distance loaded onto visits |
 | Coverage | Response to travel (calibration; commuting) | 0.52; "falls from 0.52 to 0.36"; twice the travel → 1.4×, then 1.3× | Metro 0.49 (1.41×), nonmetro 0.25 (1.19×); pooled 0.36 | Log distance + border only; log visits; hypothesis term |
-| Coverage | Elasticities | First review: metro 0.49 (0.066; 0.36–0.62), nonmetro 0.25 (0.061; 0.13–0.37); print 0.51 / 0.25; difference −0.235 (0.039); 1.40× / 1.19×; leave-one-out 0.45–0.53; pooled 0.36 (0.060); second review 0.49 (0.070; 0.36–0.63), 0.25 (0.063; 0.13–0.38); print 0.52 / 0.26; −0.241 (0.040); 1.41× / 1.19×; 0.46–0.54; pooled 0.36 (0.064) | 0.50 (0.067; 0.37–0.63), 0.26 (0.061; 0.14–0.38); print 0.52 / 0.26; −0.244 (0.040); 1.42× / 1.19×; leave one out 0.47–0.54; pooled 0.37 (0.061) | Second-round outcome |
-| Coverage | Commuting terms | In +0.51 (p < 0.001), out +0.04; first review in +0.42 (0.073), out −0.02; second review in +0.41 (0.073), out −0.03 | In +0.41 (0.072), out −0.04 (0.085) | Adopted specification; JT01 |
-| Coverage | Held-out error | 4.15 → 4.12; first review 0.913 [0.844, 0.982] / 4.42 [4.00, 4.91] (print 0.939 / 4.53); second review 4.49 [4.04, 4.98] (print 4.59); all destinations 0.915 (print 0.941) | Primary 4.46 [4.02, 4.93] (print 4.56), per-county mean over 8 folds; all destinations 0.915 (print 0.942) | Destination set chosen partly by the held-out stories; loco folds; second-round outcome |
-| Coverage | Primary destination set; excluded stories | — | Second review 1,174 pairs; 498 stories in `EXCLUDE` → 1,185 pairs; 547 stories (Dos Mundos and KHQA 7 added) | Outcome; exclusions |
-| Coverage | Nonmetro interaction | First review: adopted on held-out error, change −0.143 [−0.221, −0.068] vs pooled; second review gain +0.125 [+0.048, +0.202] (print +0.090) | Hypothesis term, gain +0.125 [+0.048, +0.203] (print +0.088) | Selection procedure |
-| Coverage | Saturation | Response 0.67 → 0.50, p 0.004 / < 0.001, "real and in the predicted direction"; first review own stories −0.007 (p 0.34), changes ≤ 0.021; second review nested guard reported as change +0.011 [−0.005, +0.027]; own stories −0.006 (p 0.43) | Nested guard gain −0.010 [−0.024, +0.004]: not supported; own stories −0.006 (p 0.48) | Separate non-adopted model; HC1; nested guard |
-| Coverage | Border test | "±60% at 95%"; raw "about half"; first review +0.04 [−0.04, +0.12] (print +0.06), raw 6.7% / 7.8% / 15.8%, ring −1.16 (0.52); second review 6.7% / 7.7% / 15.9%, ring −1.22 (0.54) | +0.04 [−0.04, +0.13] (print +0.07); 6.8% / 7.7% / 16.0%; ring −1.23 (0.55) | HC1; specification labelled; second-round outcome |
-| Coverage | Zero-visit treatment | First review adopted 0.486 / 0.252, at log(1e-3) 0.482 / 0.246; second review 0.494 / 0.254; at log(1e-3) 0.490 / 0.248 | 0.501 / 0.257; at log(1e-3) 0.497 / 0.252 | Second-round outcome |
-| Coverage | All marginal factors | 4.15 / 4.14 / 4.18; print 4.50 / 4.58 / 4.52; first review scratch 0.91 / 0.91, 4.42 / 4.39 (print 0.94 / 0.93, 4.53 / 4.50); scripts on outcome-selected destinations 3.47 / 3.78; second review pooled over pairs: 4.25 / 4.24 / 4.23 / 4.34 (no broadcast 4.37 / 4.38 / 4.36 / 4.41) | Per-county mean over 8 folds on 1%+ of visits: 4.46 / 4.46 / 4.44 / 4.51 (no broadcast 4.56 / 4.54 / 4.57 / 4.58) | Outcome-selected destinations; scratch table; then pooled scoring, not `coverage_model.py`'s per-county mean (round 3) |
-| Coverage | Collection quality | 0.52 → 0.48 (all), 0.50 → 0.42 (print); first review 0.36 → 0.26, 0.34 → 0.25 | Pooled specification 0.36 → 0.25 (all), 0.35 → 0.25 (print and digital); 88 → 33 newsroom counties (rerun 2026-10-25) | Old specification; rerun |
-| Coverage | County characteristics column; hospitals | 4.00; 4.01; second review `hospital_test.py` 4.25 → 4.26 (no broadcasters 4.37 → 4.36), pooled | Not rerun; `hospital_test.py` 4.46 → 4.45 (no broadcasters 4.56 → 4.54) | Outcome-selected destinations; old specification |
-| Coverage | Out-of-state stories (Dos Mundos, KHQA 7) | Dropped silently (49 stories); first review DECISION NEEDED (re-home or exclude) | Excluded (`EXCLUDE`, user; 547 stories in `EXCLUDE`) | Spanish-language; Illinois newsroom |
+| Coverage | Elasticities | Audit round 1: metro 0.49 (0.066; 0.36–0.62), nonmetro 0.25 (0.061; 0.13–0.37); print 0.51 / 0.25; difference −0.235 (0.039); 1.40× / 1.19×; leave-one-out 0.45–0.53; pooled 0.36 (0.060); audit round 2 0.49 (0.070; 0.36–0.63), 0.25 (0.063; 0.13–0.38); print 0.52 / 0.26; −0.241 (0.040); 1.41× / 1.19×; 0.46–0.54; pooled 0.36 (0.064) | 0.50 (0.067; 0.37–0.63), 0.26 (0.061; 0.14–0.38); print 0.52 / 0.26; −0.244 (0.040); 1.42× / 1.19×; leave one out 0.47–0.54; pooled 0.37 (0.061) | Second-round outcome |
+| Coverage | Commuting terms | In +0.51 (p < 0.001), out +0.04; audit round 1 in +0.42 (0.073), out −0.02; audit round 2 in +0.41 (0.073), out −0.03 | In +0.41 (0.072), out −0.04 (0.085) | Adopted specification; JT01 |
+| Coverage | Held-out error | 4.15 → 4.12; audit round 1 0.913 [0.844, 0.982] / 4.42 [4.00, 4.91] (print 0.939 / 4.53); audit round 2 4.49 [4.04, 4.98] (print 4.59); all destinations 0.915 (print 0.941) | Primary 4.46 [4.02, 4.93] (print 4.56), per-county mean over 8 folds; all destinations 0.915 (print 0.942) | Destination set chosen partly by the held-out stories; loco folds; second-round outcome |
+| Coverage | Primary destination set; excluded stories | — | Audit round 2 1,174 pairs; 498 stories in `EXCLUDE` → 1,185 pairs; 547 stories (Dos Mundos and KHQA 7 added) | Outcome; exclusions |
+| Coverage | Nonmetro interaction | Audit round 1: adopted on held-out error, change −0.143 [−0.221, −0.068] vs pooled; audit round 2 gain +0.125 [+0.048, +0.202] (print +0.090) | Hypothesis term, gain +0.125 [+0.048, +0.203] (print +0.088) | Selection procedure |
+| Coverage | Saturation | Response 0.67 → 0.50, p 0.004 / < 0.001, "real and in the predicted direction"; audit round 1 own stories −0.007 (p 0.34), changes ≤ 0.021; audit round 2 nested guard reported as change +0.011 [−0.005, +0.027]; own stories −0.006 (p 0.43) | Nested guard gain −0.010 [−0.024, +0.004]: not supported; own stories −0.006 (p 0.48) | Separate non-adopted model; HC1; nested guard |
+| Coverage | Border test | "±60% at 95%"; raw "about half"; audit round 1 +0.04 [−0.04, +0.12] (print +0.06), raw 6.7% / 7.8% / 15.8%, ring −1.16 (0.52); audit round 2 6.7% / 7.7% / 15.9%, ring −1.22 (0.54) | +0.04 [−0.04, +0.13] (print +0.07); 6.8% / 7.7% / 16.0%; ring −1.23 (0.55) | HC1; specification labelled; second-round outcome |
+| Coverage | Zero-visit treatment | Audit round 1 adopted 0.486 / 0.252, at log(1e-3) 0.482 / 0.246; audit round 2 0.494 / 0.254; at log(1e-3) 0.490 / 0.248 | 0.501 / 0.257; at log(1e-3) 0.497 / 0.252 | Second-round outcome |
+| Coverage | All marginal factors | 4.15 / 4.14 / 4.18; print 4.50 / 4.58 / 4.52; audit round 1 scratch 0.91 / 0.91, 4.42 / 4.39 (print 0.94 / 0.93, 4.53 / 4.50); scripts on outcome-selected destinations 3.47 / 3.78; audit round 2 pooled over pairs: 4.25 / 4.24 / 4.23 / 4.34 (no broadcast 4.37 / 4.38 / 4.36 / 4.41) | Per-county mean over 8 folds on 1%+ of visits: 4.46 / 4.46 / 4.44 / 4.51 (no broadcast 4.56 / 4.54 / 4.57 / 4.58) | Outcome-selected destinations; scratch table; then pooled scoring, not `coverage_model.py`'s per-county mean (round 3) |
+| Coverage | Collection quality | 0.52 → 0.48 (all), 0.50 → 0.42 (print); audit round 1 0.36 → 0.26, 0.34 → 0.25 | Pooled specification 0.36 → 0.25 (all), 0.35 → 0.25 (print and digital); 88 → 33 newsroom counties (rerun 2026-10-25) | Old specification; rerun |
+| Coverage | County characteristics column; hospitals | 4.00; 4.01; audit round 2 `hospital_test.py` 4.25 → 4.26 (no broadcasters 4.37 → 4.36), pooled | Not rerun; `hospital_test.py` 4.46 → 4.45 (no broadcasters 4.56 → 4.54) | Outcome-selected destinations; old specification |
+| Coverage | Out-of-state stories (Dos Mundos, KHQA 7) | Dropped silently (49 stories); audit round 1: open (re-home or exclude) | Excluded (`EXCLUDE`, authors; 547 stories in `EXCLUDE`) | Spanish-language; Illinois newsroom |
 | Spillover | 2026-10-16 models (whole section) | Broadcaster +0.70, travel out +1.47, held-out 14.5 (broadcaster only 15.5; full 15.3); urban-share model 15.0, well collected 14.1, coefficients +0.65 / −0.81 / +1.17 | Hypothesis terms broadcaster + print outlets: +0.667, −0.387; honest error 6.57 / 5.50 (fitted model 5.98 / 4.66) | Earlier measure (any story touching another county); earlier data |
-| Spillover | 2026-10-17 intermediate re-run | 83 outlets, 46 counties; held-out 7.1 (8.6 before); broadcaster +0.58, crowded weekly −0.47, border −0.17, print outlets −0.42; Cole 30% / 33% (36% with statewide outlets); Jackson 29% / 29%; KC Beacon 37% → 23%, The Pitch 28% → 26%; Boone print 23% / 20% | Cole 23.1% / 25.4%, Jackson 21.9% / 19.1%, Boone print 18.3% / 19.3%, KC Beacon 17.3% / 11.7%, The Pitch 24.1% / 11.7% (held out) | CAMPUS, HOME_COUNTY, market-count rule, one home rule, selection procedure, held-out expectations |
+| Spillover | 2026-10-17 intermediate re-run | 83 outlets, 46 counties; held-out 7.1 (8.6 before); broadcaster +0.58, crowded weekly −0.47, border −0.17, print outlets −0.42; Boone print 23% / 20% | Boone print 18.3% / 19.3% (held out) | CAMPUS, HOME_COUNTY, market-count rule, one home rule, selection procedure, held-out expectations |
 | Spillover | Fitted outlets, counties | 87, 47 (also 83, 43) | 85, 48 | HOME_COUNTY, CAMPUS |
 | Spillover | Outlets with 10+ stories | 133 | 128 | CAMPUS |
-| Spillover | Broadcaster | +0.68 (p < 0.001, z); +0.71; first review CRV1 s.e. 0.135 | +0.667 (CRV3 s.e. 0.148); CI +0.388 to +0.939 | CRV3, t(47) |
+| Spillover | Broadcaster | +0.68 (p < 0.001, z); +0.71; audit round 1 CRV1 s.e. 0.135 | +0.667 (CRV3 s.e. 0.148); CI +0.388 to +0.939 | CRV3, t(47) |
 | Spillover | Weekly in a daily-and-TV county | −0.56 (0.008); −0.37 (0.05) | Not adopted (gain −0.09, −0.27 to +0.05) | Nested guard |
 | Spillover | Miles to the county edge (log) | −0.14 (< 0.001), every outlet; −0.17 (0.001) | Not adopted (gain +0.08, −0.33 to +0.45) | Nested guard |
-| Spillover | Print outlets in the county | −0.28 (0.001); −0.41 (0.01); first review s.e. 0.089 (CRV1), p < 0.001 | −0.387 (CRV3 s.e. 0.124, p 0.003); CI −0.655 to −0.232 | Market-count rule; CRV3 |
+| Spillover | Print outlets in the county | −0.28 (0.001); −0.41 (0.01); audit round 1 s.e. 0.089 (CRV1), p < 0.001 | −0.387 (CRV3 s.e. 0.124, p 0.003); CI −0.655 to −0.232 | Market-count rule; CRV3 |
 | Spillover | Held-out error | 6.0; 8.62 / 7.20 (83-outlet fit) | Honest error (nested search B) 6.57 / 5.50; fitted model 5.98 / 4.66 | Selection procedure: the search's nested figure |
-| Spillover | Nested figure | 9.18 / 7.81 (pre-rerun data), same pair in 38 of 43 folds; first review 6.27 / 4.76 (joint rule inside each fold; adopted set in 47 of 48 folds) | Search B 6.57 / 5.50; nested guard from the hypothesis pair 6.05 / 5.05 | Selection procedure |
-| Spillover | Joint test (first review) | Adopted set vs intercept only −1.51 [−2.61, −0.32]; term by term −1.55, −1.04 | Hypothesis-term gains +1.51 [+0.31, +2.58], broadcaster +1.55 [+0.36, +2.70], print +1.04 (lower bound −0.05 to +0.01 by seed) | Selection procedure |
+| Spillover | Nested figure | 9.18 / 7.81 (pre-rerun data), same pair in 38 of 43 folds; audit round 1 6.27 / 4.76 (joint rule inside each fold; adopted set in 47 of 48 folds) | Search B 6.57 / 5.50; nested guard from the hypothesis pair 6.05 / 5.05 | Selection procedure |
+| Spillover | Joint test (audit round 1) | Adopted set vs intercept only −1.51 [−2.61, −0.32]; term by term −1.55, −1.04 | Hypothesis-term gains +1.51 [+0.31, +2.58], broadcaster +1.55 [+0.36, +2.70], print +1.04 (lower bound −0.05 to +0.01 by seed) | Selection procedure |
 | Spillover | Alternative models (83-outlet fit) | Broadcaster + crowded weekly 9.39 / 7.05; + town population 9.45 / 8.24; broadcaster + town population 9.79 / 8.64 | Broadcaster + crowded weekly 6.98 / 5.35; broadcaster only 7.02 / 5.11 | Current data and definitions |
-| Spillover | Audrain / Boone / Osage / Cole / Jackson, actual / expected | 20% / 23%; 29% / 24% (print 18% / 16%); 26% / 24%; first review 20% / 22%, 29% / 26% (18% / 19%), 26% / 25%, 23% / 25%, 22% / 21% (print 23% / 14%) | Held out: 19.5% / 22.5%, 28.7% / 26.4% (18.3% / 19.3%), 25.6% / 25.3%, 23.1% / 25.4%, 21.9% / 19.1% (22.8% / 11.7%) | Expectations held out |
-| Spillover | Outlets, actual / expected | First review: Mid Rivers 17% / 27%, Commonwealth 18% / 18%, Cash-Book Journal 23% / 18%, KC Beacon 17% / 15%, Kansas City Star 26% / 15%, The Pitch 24% / 13%, Vandalia Leader 4% / 26% | 17.3% / 22.6%, 18.5% / 17.4%, 22.5% / 22.3%, 17.3% / 11.7%, 26.4% / 11.7%, 24.1% / 11.7%, 4.2% / 22.5% | Expectations held out |
-| Spillover | Springfield region held out | 10.9 (crowded 11.7, town population 11.9), 28% / 29%, Webster 44% / 26%; then 8.6, 27% / 27%; second review 8.0 as the headline (all 10 outlets) | 8.4 on the 8 well-collected outlets (primary), 8.0 on all 10 (crowded 9.7 / 9.0, town population 9.4 / 8.8), 24% / 26%, Webster 36% / 23% | Primary metric is the well-collected set |
-| Spillover | Weight table | Rates 30.6% / 25.6% / 20.5% / 22.1% / 18.6% / 15.1%; held-out 7.1 / 6.0 / 6.8 / 6.7 / 5.5 / 5.6; "held-out ÷ mean" ranking; "best combination uses mention 0.5"; first review held-out expected Boone 27% (adopted row), Audrain 49% / 27% (mention 1.0) | Measure sensitivity table (Boone 26%, Audrain 48% / 28%): skill and out-of-sample R² against intercept only; weights are definitions | No code for the ranking; weights are not selected; held-out expectations |
+| Spillover | Audrain / Boone / Osage, actual / expected | 20% / 23%; 29% / 24% (print 18% / 16%); 26% / 24%; audit round 1 20% / 22%, 29% / 26% (18% / 19%), 26% / 25% | Held out: 19.5% / 22.5%, 28.7% / 26.4% (18.3% / 19.3%), 25.6% / 25.3% | Expectations held out |
+| Spillover | Weight table | Rates 30.6% / 25.6% / 20.5% / 22.1% / 18.6% / 15.1%; held-out 7.1 / 6.0 / 6.8 / 6.7 / 5.5 / 5.6; "held-out ÷ mean" ranking; "best combination uses mention 0.5"; audit round 1 held-out expected Boone 27% (adopted row), Audrain 49% / 27% (mention 1.0) | Measure sensitivity table (Boone 26%, Audrain 48% / 28%): skill and out-of-sample R² against intercept only; weights are definitions | No code for the ranking; weights are not selected; held-out expectations |
 | Spillover | Leave one market out | Weight combinations per market, mean 23.1 vs 23.4 (24.2 vs 23.7 without Columbia–Jefferson City) | Adopted model per market: 5.9 in sample, 6.2 held out, intercept only 7.4 | No code; weights are definitions |
 | Spillover | By outlet type; non-weeklies only; Vandalia Leader 34%; Boone County Journal 15%, Centralia Fireside Guard 17% expected | 10.03 → 7.86 etc.; 9.40; 34%; 15%, 17% | Not rerun; held out: Vandalia Leader 22.5%, Boone County Journal 19.3%, Centralia Fireside Guard 19.3% | Model replaced |
 | Spillover | Weekly alone in its county | −0.16 (p 0.28), −0.14, −0.18; nested 7.41 vs 7.36 | Not rerun | Crowded weekly not adopted |
-| Spillover | Market position | p 0.35 / 0.82 / 0.24; mean 9.3 against 8.6; first review p 0.31–0.70 | CRV3 p 0.34–0.75; mean 6.03–6.07 against 5.90 (border form) | Current data; CRV3 |
+| Spillover | Market position | p 0.35 / 0.82 / 0.24; mean 9.3 against 8.6; audit round 1 p 0.31–0.70 | CRV3 p 0.34–0.75; mean 6.03–6.07 against 5.90 (border form) | Current data; CRV3 |
 | Spillover | Crowded-county weeklies' median; fits on all 128 outlets; mention weight under town population | 11% vs 24%; 11.5 / 11.1 / 11.2; Boone County Journal 2–21% … Mexico Ledger 14–57% | Not rerun | Model replaced |
 | Spillover | Mid Rivers Newsmagazine, Greene County Commonwealth | Left out of the fit | Fitted with the covered county as home | HOME_COUNTY |
 | Spillover | Quality selection | Not stated | 24.5% vs 17.5% (r +0.26, p 0.003) | Reported every run |
 | Spillover | All marginal factors | 14.5; 14.9; 14.2 with ridge 0.05; 14.5 with ridge 0.2; "ridge 0.05 is 0.3 points better" | 6.43; 7.00 / 7.66; every combination worse | Current measure and model |
-| Spillover | Crossover–spillover correlation | 68 counties r 0.10 (p 0.43), urban share fixed 0.08; well collected 44 counties r 0.30 (p 0.05) (53 counties, p 0.02 on 2026-10-17 data); first review all 72 +0.11 (0.36), weighted −0.01 (0.93); well collected 53 +0.35 (0.010), weighted +0.15 (0.27); well-collected counties 29 +0.35 (0.061), +0.20 (0.31); second review (b = 0.51): +0.18 (0.138) / +0.14 (0.225); +0.41 (0.002) / +0.37 (0.007); +0.40 (0.030) / +0.32 (0.095) | Crossover b = 0.62 (rerun 2026-10-25): all 72 +0.18 (0.120) / +0.17 (0.142); well collected 53 +0.41 (0.003) / +0.40 (0.003); well-collected counties 29 +0.40 (0.034) / +0.34 (0.067) | Crossover rebuilt (b by 2SLS) |
-| Spillover | Collection quality | Urban share −1.09; 15.0 → 14.1; 28 counties, 36 outlets; first review in well-collected counties broadcaster p 0.042, print p 0.88 | 7.5 / 6.6 / 8.9 held-out miss (all 128 outlets, 72 counties / well collected 95, 54 / well-collected counties 40, 29); clustered-t p 0.077, 0.90 in well-collected counties (rerun 2026-10-25, unchanged) | Current model; `EXCLUDE` in the newsroom count; CRV3 |
+| Spillover | Crossover–spillover correlation | 68 counties r 0.10 (p 0.43), urban share fixed 0.08; well collected 44 counties r 0.30 (p 0.05) (53 counties, p 0.02 on 2026-10-17 data); audit round 1 all 72 +0.11 (0.36), weighted −0.01 (0.93); well collected 53 +0.35 (0.010), weighted +0.15 (0.27); well-collected counties 29 +0.35 (0.061), +0.20 (0.31); audit round 2 (b = 0.51): +0.18 (0.138) / +0.14 (0.225); +0.41 (0.002) / +0.37 (0.007); +0.40 (0.030) / +0.32 (0.095) | Crossover b = 0.62 (rerun 2026-10-25): all 72 +0.18 (0.120) / +0.17 (0.142); well collected 53 +0.41 (0.003) / +0.40 (0.003); well-collected counties 29 +0.40 (0.034) / +0.34 (0.067) | Crossover rebuilt (b by 2SLS) |
+| Spillover | Collection quality | Urban share −1.09; 15.0 → 14.1; 28 counties, 36 outlets; audit round 1 in well-collected counties broadcaster p 0.042, print p 0.88 | 7.5 / 6.6 / 8.9 held-out miss (all 128 outlets, 72 counties / well collected 95, 54 / well-collected counties 40, 29); clustered-t p 0.077, 0.90 in well-collected counties (rerun 2026-10-25, unchanged) | Current model; `EXCLUDE` in the newsroom count; CRV3 |
 | Spillover | County characteristics column | 15.6 baseline; 15.0; 14.1 | Not rerun; not comparable with the current model | Earlier measure and model |
-| Spillover | Springfield comparison | Spillover 41% / 40% (print 26% / 25%); medians 44% / 43%; Webster 68% / 46% | Region held out 24% / 26%; Webster 36% / 23% | Earlier measure |
-| All | Selection rule | First review joint test (adopted set beats baseline; each coefficient's interval excludes zero; candidates one at a time) | Selection procedure: core blocks, hypothesis terms, nested guard, one primary metric | Authors, 2026-10-24 |
-| Public | Public, best setting per class, Missouri all | 4.34 (4.30 audit rerun), classes 3.99 / 4.06 / 5.56 / 5.48 / 5.08; first review nested 4.85 (4.38 / 4.78 / 6.96 / 5.47 / 5.25), in-sample 4.67; second review nested 4.64 (4.15 / 4.48 / 6.05 / 6.28 / 5.25), in-sample 4.41 | Nested 4.60 (4.10 / 4.41 / 6.05 / 6.26 / 5.24); in-sample 4.37 | Nested selection; outcome; JT01; all destinations |
+| All | Selection rule | Audit round 1 joint test (adopted set beats baseline; each coefficient's interval excludes zero; candidates one at a time) | Selection procedure: core blocks, hypothesis terms, nested guard, one primary metric | Authors, 2026-10-24 |
+| Public | Public, best setting per class, Missouri all | 4.34 (4.30 rerun), classes 3.99 / 4.06 / 5.56 / 5.48 / 5.08; audit round 1 nested 4.85 (4.38 / 4.78 / 6.96 / 5.47 / 5.25), in-sample 4.67; audit round 2 nested 4.64 (4.15 / 4.48 / 6.05 / 6.28 / 5.25), in-sample 4.41 | Nested 4.60 (4.10 / 4.41 / 6.05 / 6.26 / 5.24); in-sample 4.37 | Nested selection; outcome; JT01; all destinations |
 | Public | Public reference (start of 2026-10-18) | 5.22 / 4.78 / 6.05 / 6.72; 5.35 | Not rerun | Superseded by per-class settings |
-| Public | + segment corrections (C) | 3.73 (3.43 / 3.52 / 3.93 / 6.40 / 3.48); refined 3.63 (regional-hub rings 5.62); first review outer loop 3.97 (3.53 / 3.97 / 4.05 / 6.12 / 4.54), in-sample structure 3.71; second review outer loop 4.07 (3.70 / 3.87 / 4.41 / 5.58 / 5.18), in-sample structure 3.61 | Outer loop 4.05 (3.61 / 3.86 / 4.54 / 5.76 / 5.23); in-sample structure 3.59 | Outer loop; fold base; all destinations |
-| Public | + destination factor from public measures (B) | 3.76 (3.50 / 3.51 / 3.86 / 6.67 / 3.30); first review 3.95 (3.58 / 3.99 / 3.88 / 5.65 / 4.52); second review 3.96 (3.56 / 3.91 / 3.91 / 5.72 / 4.86) | 3.91 (3.50 / 3.85 / 3.93 / 5.79 / 4.72) | As above |
-| Public | + one factor per destination county (A) | 3.40 (2.94 / 3.07 / 4.44 / 6.33 / 3.52); first review 3.47 (3.10 / 3.52 / 4.31 / 5.91 / 2.35); second review 3.46 (3.12 / 3.25 / 4.44 / 6.32 / 2.53) | 3.45 (3.09 / 3.23 / 4.45 / 6.29 / 2.55) | As above |
-| Public | Advan-fitted, Missouri | 3.13 (3.28 / 2.79 / 4.38 / 3.26 / 2.11); first review 3.34 (3.51 / 2.95 / 4.36 / 3.41 / 2.61) on the common set; second review 3.31 (3.57 / 2.87 / 4.12 / 3.25 / 2.45), common set 3.38 | 3.28 (3.54 / 2.86 / 4.14 / 3.25 / 2.39) on all destinations; 3.36 on the common set | Outcome; JT01; primary metric |
-| Public | Gap and share closed | First review: public − Advan +1.50 [+1.02, +2.01] (log-ratio +0.17); C − Advan +0.63; corrected − public −0.88 [−1.26, −0.49]; closed 58% (C), 91% (A) without interval; second review +1.34 [+0.87, +1.82] (log-ratio +0.23); C − Advan +0.76 [+0.36, +1.16]; C − fold base −0.60 [−0.96, −0.25]; closed 44% [22, 67] (C), 89% [63, 117] (A) | +1.31 [+0.85, +1.79] (log-ratio +0.24); C − Advan +0.76 [+0.34, +1.16]; C − fold base −0.58 [−0.94, −0.23]; closed 43% [21, 66] (C), 88% [62, 116] (A) | Fold base; intervals; all destinations |
-| Public | Log-ratio errors | First review 0.35 / 0.53 / 0.45 / 0.39 | 0.35 / 0.58 / 0.51 / 0.44 | As above |
+| Public | + segment corrections (C) | 3.73 (3.43 / 3.52 / 3.93 / 6.40 / 3.48); refined 3.63 (regional-hub rings 5.62); audit round 1 outer loop 3.97 (3.53 / 3.97 / 4.05 / 6.12 / 4.54), in-sample structure 3.71; audit round 2 outer loop 4.07 (3.70 / 3.87 / 4.41 / 5.58 / 5.18), in-sample structure 3.61 | Outer loop 4.05 (3.61 / 3.86 / 4.54 / 5.76 / 5.23); in-sample structure 3.59 | Outer loop; fold base; all destinations |
+| Public | + destination factor from public measures (B) | 3.76 (3.50 / 3.51 / 3.86 / 6.67 / 3.30); audit round 1 3.95 (3.58 / 3.99 / 3.88 / 5.65 / 4.52); audit round 2 3.96 (3.56 / 3.91 / 3.91 / 5.72 / 4.86) | 3.91 (3.50 / 3.85 / 3.93 / 5.79 / 4.72) | As above |
+| Public | + one factor per destination county (A) | 3.40 (2.94 / 3.07 / 4.44 / 6.33 / 3.52); audit round 1 3.47 (3.10 / 3.52 / 4.31 / 5.91 / 2.35); audit round 2 3.46 (3.12 / 3.25 / 4.44 / 6.32 / 2.53) | 3.45 (3.09 / 3.23 / 4.45 / 6.29 / 2.55) | As above |
+| Public | Advan-fitted, Missouri | 3.13 (3.28 / 2.79 / 4.38 / 3.26 / 2.11); audit round 1 3.34 (3.51 / 2.95 / 4.36 / 3.41 / 2.61) on the common set; audit round 2 3.31 (3.57 / 2.87 / 4.12 / 3.25 / 2.45), common set 3.38 | 3.28 (3.54 / 2.86 / 4.14 / 3.25 / 2.39) on all destinations; 3.36 on the common set | Outcome; JT01; primary metric |
+| Public | Gap and share closed | Audit round 1: public − Advan +1.50 [+1.02, +2.01] (log-ratio +0.17); C − Advan +0.63; corrected − public −0.88 [−1.26, −0.49]; closed 58% (C), 91% (A) without interval; audit round 2 +1.34 [+0.87, +1.82] (log-ratio +0.23); C − Advan +0.76 [+0.36, +1.16]; C − fold base −0.60 [−0.96, −0.25]; closed 44% [22, 67] (C), 89% [63, 117] (A) | +1.31 [+0.85, +1.79] (log-ratio +0.24); C − Advan +0.76 [+0.34, +1.16]; C − fold base −0.58 [−0.94, −0.23]; closed 43% [21, 66] (C), 88% [62, 116] (A) | Fold base; intervals; all destinations |
+| Public | Log-ratio errors | Audit round 1 0.35 / 0.53 / 0.45 / 0.39 | 0.35 / 0.58 / 0.51 / 0.44 | As above |
 | Public | Advan share outside the common set | 1.37% (max 8.5%) | 1.34% (max 8.2%) | Outcome |
-| Public | "Beats the Advan-fitted model in major-metro rings (3.93 vs 4.38)" | Claim; first review 4.05 vs 4.36; second review 4.41 vs 4.12, gap +0.28 [−1.57, +2.41] | Deleted: 4.54 vs 4.14, gap +0.39 [−1.35, +2.48], no difference | Never a claim of the study; intervals |
-| Public | "With destination factors, beats it in small rural counties (2.94 vs 3.28)" | Claim; first review 3.10 vs 3.51; second review 3.12 vs 3.57, gap −0.46 [−0.93, −0.03] | Deleted: 3.09 vs 3.54, gap −0.44 [−0.91, −0.02] — model A carries one Advan-learned factor per destination; it is not the public model | Never a claim of the study; intervals |
-| Public | Commuter-class instability | First review: major-metro rings nested 6.96 vs in-sample 5.36 (cost 1.60); regional-hub rings outer loop 6.12 vs 4.27 (cost 1.85; Lawrence 1.97 → 8.96, Polk 6.33 → 12.42); second review 6.05 vs 5.15; 5.58 vs 4.38 | 6.05 vs 5.16; 5.76 vs 4.38; out-of-sample cost 0.23 (Stage 1) and 0.46 (Stage 2) overall | Second-round rerun |
-| Public | Stage 1 picks and fold structures | First review: independent towns 23 / 9; major metro `_s_alpha15`; hubs 6 / 3; mode C folds 2, 4, 7 metro-core, 0, 1 pooled hub | Stage 1 table and fold structures (Public-data travel model) | JT01 rebuilds; primary metric |
-| Public | 2026-10-18 structure rebuilt (`public_adjusted_pairs_trnear.csv`) | First review segment corrections 3.84; second review public base 4.47, segment corrections 3.71, + per-destination 3.54 (ad hoc run) | Public base 4.43, segment corrections 3.69, + public destination factor 3.70, + per-destination 3.53 (all destinations; printed by `public_adjusted_model.py`, `logs/adj_trnear.log`) | Outcome; JT01; printed by the script, not an ad hoc run |
+| Public | "Beats the Advan-fitted model in major-metro rings (3.93 vs 4.38)" | Claim; audit round 1 4.05 vs 4.36; audit round 2 4.41 vs 4.12, gap +0.28 [−1.57, +2.41] | Deleted: 4.54 vs 4.14, gap +0.39 [−1.35, +2.48], no difference | Never a claim of the study; intervals |
+| Public | "With destination factors, beats it in small rural counties (2.94 vs 3.28)" | Claim; audit round 1 3.10 vs 3.51; audit round 2 3.12 vs 3.57, gap −0.46 [−0.93, −0.03] | Deleted: 3.09 vs 3.54, gap −0.44 [−0.91, −0.02] — model A carries one Advan-learned factor per destination; it is not the public model | Never a claim of the study; intervals |
+| Public | Commuter-class instability | Audit round 1: major-metro rings nested 6.96 vs in-sample 5.36 (cost 1.60); regional-hub rings outer loop 6.12 vs 4.27 (cost 1.85); audit round 2 6.05 vs 5.15; 5.58 vs 4.38 | 6.05 vs 5.16; 5.76 vs 4.38; out-of-sample cost 0.23 (Stage 1) and 0.46 (Stage 2) overall | Second-round rerun |
+| Public | Stage 1 picks and fold structures | Audit round 1: independent towns 23 / 9; major metro `_s_alpha15`; hubs 6 / 3; mode C folds 2, 4, 7 metro-core, 0, 1 pooled hub | Stage 1 table and fold structures (Public-data travel model) | JT01 rebuilds; primary metric |
+| Public | 2026-10-18 structure rebuilt (`public_adjusted_pairs_trnear.csv`) | Audit round 1 segment corrections 3.84; audit round 2 public base 4.47, segment corrections 3.71, + per-destination 3.54 (ad hoc run) | Public base 4.43, segment corrections 3.69, + public destination factor 3.70, + per-destination 3.53 (all destinations; printed by `public_adjusted_model.py`, `logs/adj_trnear.log`) | Outcome; JT01; printed by the script, not an ad hoc run |
 | Public | "Destination pull closes 46% of the gap … together 68%" | 5.35 reference, in-sample | Not rerun | `public_gap_corrections.py` unchanged |
-| Public | Kansas public, all | 3.74 (3.80 / 3.83 / 4.42 / 3.01 / 2.62); first review 4.29 (4.10 / 4.59 / — / — / 2.94) | 3.78 (3.86 / 3.85 / 2.64 hubs) on all destinations | Primary metric; outcome; JT01 |
-| Public | Kansas + Missouri corrections | 3.98 (3.64 / 3.83 / 8.82 / 4.16 / 4.61); first review 4.27 (3.83 / 4.16 / 4.95 hubs); second review 4.05 (3.65 / 4.03 / 3.68 hubs; structure destination class × band, 3.62) | 4.05 (3.65 / 4.03 / 3.65 hubs) | Structure chosen out of sample for Kansas (destination class × band, 3.59; first review metro-core factor, 3.71) |
-| Public | Kansas Advan-fitted | 3.05 (4.12 / 2.74 / 2.84 / 3.09 / 1.55); first review 3.27 (4.15 / 3.06 / 1.78 hubs); second review 3.06 (4.12 / 2.76 / 1.55 hubs) | 3.06 (4.12 / 2.76 / 1.56 hubs) | Per-origin maximum; outcome; JT01 |
-| Public | Kansas: public "better than the benchmark for small rural counties" (3.80 vs 4.12) | Claim; first review 4.10 vs 4.15 | Deleted: 3.86 vs 4.12, gap −0.26 [−1.15, +0.55], no difference | Never a claim of the study; intervals |
-| Public | Kansas gap to the benchmark | 0.69 (Missouri 1.21); first review +1.03 [+0.53, +1.52] (Missouri +1.50); second review +0.72 [+0.30, +1.15] | +0.72 [+0.30, +1.14] all destinations, +1.04 [+0.53, +1.54] common set (Missouri +1.31 [+0.85, +1.79]) | Primary metric |
-| Public | Kansas corrections | "Corrections that encode the rural-to-regional-centre relation transfer"; first review corrected − public −0.02 [−0.38, +0.34], log-ratio +0.03; second review share closed −37% [−124, 4] | +0.27 [−0.03, +0.58]; share of the gap closed −37% [−123, 4]: none; log-ratio +0.04 | As above |
-| Public | Kansas counties under the corrections | Cowley 10.19 → 5.41, Harper 8.77 → 5.34, Kearny 7.57 → 3.72, Barber 4.70 → 2.29, Greenwood 3.84 → 1.69; Johnson 4.32 → 10.06, Douglas 1.70 → 9.62, Doniphan 1.32 → 7.45; first review Harper 11.50 → 3.23, Cowley 11.74 → 5.87, Barber 5.99 → 2.70, Lane 7.08 → 4.55; Johnson 4.18 → 10.77, Douglas 2.25 → 10.21, Doniphan 1.59 → 6.52; second review Cowley 10.01 → 5.04, Kearny 8.07 → 4.86, Kingman 7.19 → 4.55, Lincoln 4.21 → 1.90, Greenwood 3.83 → 1.54; Johnson 4.55 → 9.15, Douglas 1.95 → 8.24, Doniphan 1.28 → 7.89, Morton 2.98 → 6.51 | Cowley 10.01 → 5.23, Kearny 8.07 → 4.75, Kingman 7.19 → 4.64, Lincoln 4.21 → 1.97, Greenwood 3.83 → 1.51; Johnson 4.55 → 9.16, Douglas 1.95 → 8.27, Doniphan 1.28 → 7.97, Morton 2.98 → 6.52 | As above |
-| Public | Kansas commuter counties | "Commuter, KC metro (3)", "Wichita ring (1)" 2.84–8.82; first review Butler 2.50 / 5.38 / 7.37, Leavenworth 1.75 / 2.42 / 7.24, Miami 6.42 / 5.72 / 10.98, Wyandotte 0.35 / 1.79 / 6.61; second review Butler 3.12 / 6.72 / 8.19, Leavenworth 1.69 / 4.14 / 7.24, Miami 6.30 / 5.91 / 12.47, Wyandotte 0.42 / 0.79 / 4.37 | Butler 3.14 / 6.72 / 8.05, Leavenworth 1.69 / 4.14 / 7.29, Miami 6.28 / 5.91 / 12.65, Wyandotte 0.43 / 0.79 / 4.43 | n < 5; primary metric |
-| Public | Kansas Advan share outside the common set | 9.13% | 9.08% | Outcome |
-| Public | Corrections applied to Kansas small rural counties only | About 3.69 | Not rerun | — |
-| Public | Kansas county classes | 2020 Census population | ACS 2020–2024 B01003; no county moved | One population source in both states |
 | Areas | Number of patterns K | K = 6 in every market, chosen on held-out months (2.87 points at K = 1, 2.30 at K = 6, 2.42 at K = 8); same day: paired one-SE rule (K = 5–18; Columbia 11), per-market population and volume (K = 2–5; Columbia 2); first review per town with county-factor residents and the odd fit's order (Columbia 3, Springfield 7, Cape Girardeau 3, Kirksville 3, Joplin 4, Kansas City 3, St. Joseph 3) | Columbia 2, Springfield 7, Cape Girardeau 3, Kirksville 2, Joplin 4, Kansas City 5, St. Joseph 5 | Splits drawn inside the K loop; a market share depends on which home counties form the market; ACS residents; independent halves |
 | Areas | Columbia's areas | Two: Columbia I and II (primary 42% on 2026-10-17, then 72% / 16%; 76,912 / 17,513 residents); first review one area, 91%, ~97,020 | One: "Columbia's civic interest area", 93%, 103,086 (ACS) | K rule; ACS residents |
 | Areas | Mexico, Linn share of residents | Mexico 79%, then 74% (5,241); Linn 93%, then 92% (1,641); first review Mexico 92% (~6,530), Linn 71% (~1,270) | Mexico 86% (5,685); Linn 85% (1,172) | As above |
