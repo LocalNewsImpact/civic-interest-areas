@@ -70,18 +70,18 @@ print(f"\nCoefficients (distance centred at {REF_MILES:.0f} miles, home populati
 print(term_table(m, FACTORS).round(4).to_string())
 
 
-def elasticity(mod, mi, nonmetro):
+def elasticity(mod, mi, rural):
     """d log visits / d log distance at `mi` miles, home county of mean population; delta-method s.e."""
     l = np.log(mi) - LOG_D0
     g = pd.Series(0.0, index=mod.params.index)
     g["log_dist"], g["log_dist_sq"] = 1, 2 * l
-    if nonmetro:
-        g["nonmetro_i_x_log_dist"], g["nonmetro_i_x_log_dist_sq"] = 1, 2 * l
+    if rural:
+        g["rural_i_x_log_dist"], g["rural_i_x_log_dist_sq"] = 1, 2 * l
     return float(g @ mod.params), float(np.sqrt(g @ mod.cov_params() @ g))
 
 
 print("\nDistance elasticity of visits (home county of mean population), estimate (2-way s.e.):")
-print("| Distance | Metro home county | Nonmetro home county |\n|---|---:|---:|")
+print("| Distance | Urban home county | Rural home county |\n|---|---:|---:|")
 for mi in (10, 25, 50, 100):
     print(f"| {mi} mi | " + " | ".join("{:+.2f} ({:.2f})".format(*elasticity(m, mi, nm)) for nm in (False, True)) + " |")
 
@@ -147,7 +147,7 @@ def sens_row(label, yy, P, XX, mod=None):
 
 
 print("\n## Sensitivities: distance elasticity at 25 miles, mean-size home county (2-way s.e.); held out (each home county left out)")
-print("| Outcome | Metro home | Nonmetro home | Weighted share error | R^2 | R^2 vs fixed effects only |\n|---|---:|---:|---:|---:|---:|")
+print("| Outcome | Urban home | Rural home | Weighted share error | R^2 | R^2 vs fixed effects only |\n|---|---:|---:|---:|---:|---:|")
 sens_row("adopted: visits_statewide, highway discount", y, pairs, X, m)
 sens_row("county factor (visits, 2026-10-16)", travel_visits(pairs, ALL, col="visits", disc=disc), pairs, X)
 sens_row("undiscounted", travel_visits(pairs, ALL, discounted=False), pairs, X)
@@ -171,14 +171,10 @@ ks = pd.DataFrame([(mo, h, v) for (mo, h), v in kv.items()], columns=["month", "
 ks["v"] = ks.v / calibration_factor(ks.home, ks.month)          # statewide units per resident
 ksv = ks[ks.month.isin(ALL)].groupby("home").v.sum()
 mov = pairs.groupby("i").visits_undiscounted.sum()            # statewide scale, not discounted: the same basis as ksv
-BORDER = ["29095", "29047", "29165", "29037", "29013", "29217", "29011", "29097", "29145", "29119", "29021", "29005",
-          "29087", "29003"]
 print("\n## Kansas destinations (neighborhood/raw_ks): Missouri residents' visits, Jan-Sep, statewide scale, undiscounted")
 print("| Home county | Visits to Kansas | Share of out-of-county visits (Missouri + Kansas) |\n|---|---:|---:|")
-for f in BORDER:
+for f in ("29007", "29019", "29151"):
     k = ksv.get(f, 0)
     print(f"| {cov.name[f]} | {k:,.0f} | {k / (k + mov[f]):.1%} |")
-kb = sum(ksv.get(f, 0) for f in BORDER)
-print(f"| 14 border counties | {kb:,.0f} | {kb / (kb + mov[BORDER].sum()):.1%} |")
-print(f"| all Missouri | {ksv.sum():,.0f} | {ksv.sum() / (ksv.sum() + mov.sum()):.1%} |")
+print(f"| all Missouri homes (model-level total) | {ksv.sum():,.0f} | {ksv.sum() / (ksv.sum() + mov.sum()):.1%} |")
 pairs.to_csv(root / "analysis/od_predicted.csv", index=False)

@@ -47,8 +47,8 @@ def y_for(months):
 
 y9, y6, y3 = y_for(ALL), y_for(ALL[:6]), y_for(ALL[6:])
 share = lambda x: shares(x, pairs.i.values)
-pair = ["log_dist", "nonmetro_i_x_log_dist", "adjacent"]
-curved = ["log_dist_sq", "nonmetro_i_x_log_dist_sq"]
+pair = ["log_dist", "rural_i_x_log_dist", "adjacent"]
+curved = ["log_dist_sq", "rural_i_x_log_dist_sq"]
 base = FACTORS
 
 
@@ -82,7 +82,7 @@ if __name__ == "__main__" and "selection" in sys.argv[1:]:
     print("| Block removed from the adopted model | Held-out error | Change in error when removed (gain from the block) [95%] |")
     print("|---|---:|---:|")
     print(f"| none (adopted, 8 terms) | {full.werr.mean():.3f} | |")
-    for lab, blk in (("distance (log distance, its square, nonmetro x both, home population x distance)", DIST_TERMS),
+    for lab, blk in (("distance (log distance, its square, rural x both, home population x distance)", DIST_TERMS),
                      ("border", ["adjacent"]), ("commuting (out and in)", ["commute_out", "commute_in"]),
                      ("all pair terms (fixed effects only)", FACTORS)):
         st = fe if blk is FACTORS else county_stats(a9, loco(y9, Xof([c for c in FACTORS if c not in blk]), o), o, y9, ref_ps=pfe)

@@ -6,7 +6,12 @@ DOUBLY CONSTRAINED: a fixed effect for every home county (o_*) holds its total, 
 pair terms explain is how distance and borders distribute that travel or those stories. For i -> j:
   log_dist                   log miles between 2020 population centres (CenPop2020), CENTRED: log(miles / 25)
   log_dist_sq                its square: the distance elasticity changes with distance
-  nonmetro_i_x_log_dist(_sq) the same two when the home county is nonmetropolitan (USDA RUCC 4-9), else 0
+  rural_i_x_log_dist(_sq)    the same two when the home county is RURAL, else 0: under 50% of its 2020 population lives in
+                             Census urban areas (county_urban_share.csv, pct_urban < 0.5; Census "mostly or completely
+                             rural"; St. Louis city takes St. Louis County's value). Settlement, not commuting: until
+                             2026-10-25 the flag was USDA RUCC nonmetro (4-9), a commuting definition under which Osage
+                             (0% urban) counted as metro through commuting to Jefferson City. 89 rural counties (69 of
+                             them RUCC nonmetro, 20 RUCC metro), 26 urban (11 of them RUCC nonmetro)
   log_pop_i_x_log_dist       larger home counties travel farther: (log population - its mean over the 115 counties,
                              ACS 2020-2024; geometric mean 21,980) x centred log distance
   adjacent                   1 if the counties share a border
@@ -18,8 +23,7 @@ pair terms explain is how distance and borders distribute that travel or those s
                              i's residents, in Missouri or out of state
 CENTRING. Distance is measured from 25 miles (REF_MILES; the visit-weighted geometric mean distance of out-of-county
 trips is 26 miles) and home-county population from its mean, so the log_dist coefficient is the distance elasticity of
-travel at 25 miles for a metropolitan home county of mean size, and log_dist + nonmetro_i_x_log_dist the same for a
-nonmetropolitan one. The constants are absorbed by the fixed effects: predictions and fit are unchanged by centring.
+travel at 25 miles for an urban home county of mean size, and log_dist + rural_i_x_log_dist the same for a rural one. The constants are absorbed by the fixed effects: predictions and fit are unchanged by centring.
 
 SELECTION (authors, 2026-10-24): core gravity terms by theory, tested as BLOCKS -- distance (the five distance terms),
 border, commuting (out + in) -- never one term at a time; no hypothesis terms; an exploratory addition is adopted only
@@ -42,8 +46,11 @@ from shapely.geometry import shape
 
 root = Path(__file__).resolve().parents[1]
 cov = pd.read_csv(root / "analysis/county_covariates.csv", dtype={"fips": str}).set_index("fips")
+_urb = pd.read_csv(root / "analysis/county_urban_share.csv", dtype={"u": str}).set_index("u").pct_urban
+cov["pct_urban"] = [_urb["29189" if f == "29510" else f] for f in cov.index]   # 2020 Census urban areas
+cov["rural"] = (cov.pct_urban < 0.5).astype(int)      # settlement-based rural flag (adopted 2026-10-25); cov.metro = RUCC
 FIPS = list(cov.index)
-FACTORS = ["log_dist", "log_dist_sq", "nonmetro_i_x_log_dist", "nonmetro_i_x_log_dist_sq", "log_pop_i_x_log_dist",
+FACTORS = ["log_dist", "log_dist_sq", "rural_i_x_log_dist", "rural_i_x_log_dist_sq", "log_pop_i_x_log_dist",
            "adjacent", "commute_out", "commute_in"]
 # SELECTION (authors, final, 2026-10-24): the three blocks -- distance (first five), border, commuting (out + in) -- are
 # core gravity terms by theory, tested as blocks against the model without them (travel_model_dc_test.py selection,
@@ -54,7 +61,7 @@ REF_MILES = 25.0                                   # centring point of every dis
 LOG_D0 = math.log(REF_MILES)
 LOG_POP0 = float(np.log(cov.population).mean())    # centring point of home-county log population
 # the singly-constrained model the doubly-constrained one replaced: origin effects + measured destination draw
-SINGLY = ["log_pop_j", "log_retail_pc_j", "log_dist", "adjacent", "nonmetro_i_x_log_dist"]
+SINGLY = ["log_pop_j", "log_retail_pc_j", "log_dist", "adjacent", "rural_i_x_log_dist"]
 
 
 def _lodes():
@@ -97,9 +104,9 @@ def distance_terms(logd, origins, ref=LOG_D0):
     """The five distance terms from any log distance (miles, driving minutes), centred at `ref` and at mean log
     home-county population."""
     l = np.asarray(logd, float) - ref
-    nonmetro = 1 - cov.metro.reindex(origins).values
-    return pd.DataFrame({"log_dist": l, "log_dist_sq": l ** 2, "nonmetro_i_x_log_dist": nonmetro * l,
-                         "nonmetro_i_x_log_dist_sq": nonmetro * l ** 2,
+    rural = cov.rural.reindex(origins).values
+    return pd.DataFrame({"log_dist": l, "log_dist_sq": l ** 2, "rural_i_x_log_dist": rural * l,
+                         "rural_i_x_log_dist_sq": rural * l ** 2,
                          "log_pop_i_x_log_dist": (np.log(cov.population.reindex(origins).values) - LOG_POP0) * l})
 
 

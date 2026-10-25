@@ -12,7 +12,7 @@ outcome). Destination's own coverage (March):
   broadcaster_j   j has a TV or radio newsroom
 Base: the ADOPTED coverage specification (coverage_model.py) -- controls (distance block, border, commuting block),
 newsroom-county and destination fixed effects, log visits where > 0, zero-visit indicator, hypothesis term log visits x
-nonmetro newsroom county. The destination effects absorb each destination's overall draw, so what is tested is how the
+rural newsroom county (cov.rural). The destination effects absorb each destination's overall draw, so what is tested is how the
 association of stories with visits changes: log visits x the destination's own coverage. Coefficients: errors
 clustered by newsroom county (a story counts once per county it names).
 
@@ -102,17 +102,17 @@ for version in ("all", "no_broadcast"):
     own_j = np.log1p(np.array([own[j] for j in p.j], float))
     nr_j = np.log1p(np.array([len(outlets[j]) for j in p.j], float))
     bc_j = np.array([float(j in bcast) for j in p.j])
-    nonmetro = 1 - cov.metro.reindex(p.i).values
+    rural_i = cov.rural.reindex(p.i).values.astype(float)
     Xd = design(p)
     FE = Xd[[c for c in Xd.columns if c.startswith(("o_", "d_"))]]
-    base = Xd[FACTORS].assign(log_visits=lv, zero_visits=(~pos).astype(float), log_visits_x_nonmetro=lv * nonmetro)
+    base = Xd[FACTORS].assign(log_visits=lv, zero_visits=(~pos).astype(float), log_visits_x_rural=lv * rural_i)
     adds = {
         "adopted (no saturation)": {},
         "+ x destination's own stories": {"lv_x_own": lv * own_j},
         "+ x destination's newsrooms": {"lv_x_newsrooms": lv * nr_j},
         "+ x destination has broadcaster": {"lv_x_broadcast": lv * bc_j},
-        "+ x own stories, x own stories x nonmetro home": {"lv_x_own": lv * own_j,
-                                                           "lv_x_own_x_nonmetro": lv * own_j * nonmetro},
+        "+ x own stories, x own stories x rural home": {"lv_x_own": lv * own_j,
+                                                        "lv_x_own_x_rural": lv * own_j * rural_i},
         "+ x own stories, x broadcaster": {"lv_x_own": lv * own_j, "lv_x_broadcast": lv * bc_j},
     }
     Xc = {k: pd.concat([base.assign(**v), FE], axis=1) for k, v in adds.items()}
@@ -169,8 +169,8 @@ for version in ("all", "no_broadcast"):
         t = [c for c in m.params.index if c.startswith("lv_x")]
         est = "; ".join(f"{c.replace('lv_x_', '')} {m.params[c]:+.3f} ({m.bse[c]:.3f}, p {m.pvalues[c]:.3f})" for c in t)
         if not t:
-            est = (f"log visits {m.params['log_visits']:.3f} ({m.bse['log_visits']:.3f}); x nonmetro "
-                   f"{m.params['log_visits_x_nonmetro']:+.3f} ({m.bse['log_visits_x_nonmetro']:.3f})")
+            est = (f"log visits {m.params['log_visits']:.3f} ({m.bse['log_visits']:.3f}); x rural "
+                   f"{m.params['log_visits_x_rural']:+.3f} ({m.bse['log_visits_x_rural']:.3f})")
         row(("one at a time (not nested): " if t else "") + k, E[k], est)
     for k, v in nested.items():
         e = errors(v, y, o, vs)
@@ -179,11 +179,11 @@ for version in ("all", "no_broadcast"):
         lo, hi = boot(d)
         print(f"   -> nested ({k}) primary gain {d.mean():+.3f} [{lo:+.3f}, {hi:+.3f}]: "
               f"{'interval excludes zero' if lo > 0 or hi < 0 else 'interval includes zero: no addition adopted'}")
-    b = full["+ x own stories, x own stories x nonmetro home"].params
+    b = full["+ x own stories, x own stories x rural home"].params
     print("Association of stories with visits (elasticity) by the destination's own stories, "
-          "model '+ x own stories, x own stories x nonmetro home' (not adopted):")
+          "model '+ x own stories, x own stories x rural home' (not adopted):")
     for n_ in (0, 20, 100, 500):
         lo_ = np.log1p(n_)
-        metro = b.log_visits + b.lv_x_own * lo_
-        rural = metro + b.log_visits_x_nonmetro + b.lv_x_own_x_nonmetro * lo_
-        print(f"    {n_} own stories: metro home {metro:.2f}, nonmetro home {rural:.2f}")
+        urban = b.log_visits + b.lv_x_own * lo_
+        rural = urban + b.log_visits_x_rural + b.lv_x_own_x_rural * lo_
+        print(f"    {n_} own stories: urban home {urban:.2f}, rural home {rural:.2f}")

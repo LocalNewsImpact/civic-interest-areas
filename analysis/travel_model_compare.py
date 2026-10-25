@@ -24,11 +24,11 @@ y9, y6, y3 = (travel_visits(pairs, m, disc=DISC) for m in (MONTHS, MONTHS[:6], M
 steps = [
     ("plain gravity: population + distance", ["log_pop_j", "log_dist"]),
     ("+ shared border", ["log_pop_j", "log_dist", "adjacent"]),
-    ("+ rural home county x distance", ["log_pop_j", "log_dist", "adjacent", "nonmetro_i_x_log_dist"]),
-    ("+ metro destination", ["log_pop_j", "log_dist", "adjacent", "nonmetro_i_x_log_dist", "metro_j"]),
-    ("+ stores per resident", ["log_pop_j", "log_dist", "adjacent", "nonmetro_i_x_log_dist", "metro_j", "log_retail_pc_j"]),
-    ("+ jobs per resident", ["log_pop_j", "log_dist", "adjacent", "nonmetro_i_x_log_dist", "metro_j", "log_retail_pc_j", "log_jobs_pc_j"]),
-    ("previous row without stores", ["log_pop_j", "log_dist", "adjacent", "nonmetro_i_x_log_dist", "metro_j", "log_jobs_pc_j"]),
+    ("+ rural home county x distance", ["log_pop_j", "log_dist", "adjacent", "rural_i_x_log_dist"]),
+    ("+ metro destination", ["log_pop_j", "log_dist", "adjacent", "rural_i_x_log_dist", "metro_j"]),
+    ("+ stores per resident", ["log_pop_j", "log_dist", "adjacent", "rural_i_x_log_dist", "metro_j", "log_retail_pc_j"]),
+    ("+ jobs per resident", ["log_pop_j", "log_dist", "adjacent", "rural_i_x_log_dist", "metro_j", "log_retail_pc_j", "log_jobs_pc_j"]),
+    ("previous row without stores", ["log_pop_j", "log_dist", "adjacent", "rural_i_x_log_dist", "metro_j", "log_jobs_pc_j"]),
 ]
 EV = {}
 prev = []
