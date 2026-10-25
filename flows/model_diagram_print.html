@@ -63,6 +63,11 @@ function formula(x, y, lines) {
     .attr("fill", C.ink).style("font-family", "ui-monospace, SFMono-Regular, Menlo, monospace")
     .style("white-space", "pre").text(t));
 }
+function words(x, y, lines) {
+  // an equation in words: first line bold, the factors indented beneath it
+  lines.forEach((t, i) => svg.append("text").attr("x", x + (i ? 10 : 0)).attr("y", y + i * 13).attr("font-size", 9.8)
+    .attr("font-weight", i ? 400 : 600).attr("fill", C.ink).text(t));
+}
 function note(x, y, lines) {
   lines.forEach((t, i) => svg.append("text").attr("x", x).attr("y", y + i * 12).attr("font-size", 9)
     .attr("fill", C.mute).text(t));
@@ -76,41 +81,44 @@ const a2 = box(142, y0 + 28, 110, 52, "data", [["Calibrate to", 600], ["populati
 const a3 = box(266, y0 + 28, 118, 52, "model", [["Gravity model", 650], ["(Poisson, every", 400], ["county pair)", 400]]);
 const a4 = box(398, y0 + 28, 120, 52, "out", [["Expected visits", 650], ["for every", 400], ["county pair", 400]]);
 arrow([[a1.r, a1.cy], [a2.x - 2, a2.cy]]); arrow([[a2.r, a2.cy], [a3.x - 2, a3.cy]]); arrow([[a3.r, a3.cy], [a4.x - 2, a4.cy]]);
-formula(14, y0 + 104, [
-  "expected visits(i→j) = exp( home(i) + draw(j) − 0.98·D − 0.27·D²",
-  "    + rural(i)·(0.51·D − 0.26·D²) + 0.18·P(i)·D",
-  "    + 0.46·border(i,j) + 0.28·commute(i→j) + 0.20·commute(j→i) )",
+words(14, y0 + 102, [
+  "Visits from county i to county j =",
+  "how much county i's residents travel overall",
+  "× how strongly county j draws visitors from everywhere (jobs, stores, hospitals, campus)",
+  "× distance: around 25 miles, twice as far gets about half the visits from a metro county,",
+  "   three-quarters from a rural one",
+  "× 1.6 if the two counties share a border",
+  "× more where workers commute between them, either way",
 ]);
-note(14, y0 + 166, [
-  "home(i): how much county i's residents travel; draw(j): county j's pull, from the data",
-  "D: ln(miles ÷ 25) between population centres; rural(i): nonmetro home; P(i): ln population, centred",
-  "commute: LODES 2023 primary jobs. Each county predicted from the others: R² 93.7%",
-  "Crossover = residents seen outside the county ÷ residents (home detection",
-  "calibrated); Audrain 44%, Boone 26%, Osage 59%",
+note(14, y0 + 200, [
+  "Each county's travel predicted without its own data: 94% of the variation in where residents go.",
+  "Crossover = residents seen outside the county ÷ residents: Audrain 44%, Boone 26%, Osage 59%",
 ]);
 
 // ---- B: coverage --------------------------------------------------------------------------------------------------
 y0 = 244;
-panel(y0, 186, "B", "Coverage: which counties each county's newsrooms cover");
+panel(y0, 204, "B", "Coverage: which counties each county's newsrooms cover");
 const b1 = box(10, y0 + 34, 118, 52, "data", [["Stories by county i's", 600], ["newsrooms about", 400], ["county j, March", 400]]);
 const b3 = box(266, y0 + 34, 118, 52, "model", [["Same gravity terms", 650], ["+ residents' visits", 400], ["i → j", 400]]);
 const b4 = box(398, y0 + 34, 120, 52, "out", [["Expected stories", 650], ["about each", 400], ["other county", 400]]);
 arrow([[b1.r, b1.cy], [b3.x - 2, b3.cy]]); arrow([[b3.r, b3.cy], [b4.x - 2, b4.cy]]);
 // calibrated visits (A) feed the coverage model (B): under the boxes and down the right margin, clear of the text
 arrow([[a2.cx, a2.b], [a2.cx, a2.b + 7], [W - 5, a2.b + 7], [W - 5, b3.y - 6], [b3.cx, b3.y - 6], [b3.cx, b3.y - 2]]);
-formula(14, y0 + 110, [
-  "expected stories(i→j) = exp( newsroom(i) + draw(j)",
-  "    + same distance, border and commuting terms",
-  "    + 0.50·ln visits(i→j) − 0.24·rural(i)·ln visits(i→j) )",
+words(14, y0 + 104, [
+  "Stories by county i's newsrooms about county j =",
+  "how much county i's newsrooms publish overall",
+  "× how much county j is written about by newsrooms everywhere",
+  "× the same distance, border and commuting effects as travel",
+  "× residents' visits from i to j: twice the visits, 1.41 times the stories from",
+  "   metro newsrooms, 1.20 times from rural ones",
 ]);
-note(14, y0 + 154, [
-  "A story counts once for each other county it is centred in or mentions. Twice the",
-  "visits: 1.41 times the stories from metro newsrooms, 1.20 times from rural ones",
+note(14, y0 + 190, [
+  "A story counts once for each other county it is centred in or mentions",
 ]);
 
 // ---- C: spillover -------------------------------------------------------------------------------------------------
-y0 = 438;
-panel(y0, 176, "C", "Spillover: how much of an outlet's news is about another county");
+y0 = 456;
+panel(y0, 208, "C", "Spillover: how much of an outlet's news is about another county");
 const c1 = box(10, y0 + 28, 118, 30, "data", [["Broadcaster?", 600]]);
 const c2 = box(10, y0 + 66, 118, 40, "data", [["Print and digital", 600], ["outlets in county", 400]]);
 const c3 = box(150, y0 + 36, 112, 58, "model", [["Logistic model", 650], ["fitted on 85 well-", 400], ["collected outlets", 400]]);
@@ -118,36 +126,43 @@ const c4 = box(284, y0 + 36, 100, 58, "out", [["Expected share", 650], ["for eac
 const c5 = box(398, y0 + 36, 120, 58, "out", [["County expected", 650], ["outlets averaged,", 400], ["weighted by stories", 400]]);
 arrow([[c1.r, c1.cy], [c3.x - 2, c3.y + 14]]); arrow([[c2.r, c2.cy], [c3.x - 2, c3.b - 14]]);
 arrow([[c3.r, c3.cy], [c4.x - 2, c4.cy]]); arrow([[c4.r, c4.cy], [c5.x - 2, c5.cy]]);
-formula(14, y0 + 128, [
-  "share about another county = 1 / (1 + e^−z)",
-  "z = −0.81 + 0.67·broadcaster − 0.39·ln(1 + print outlets in county)",
+words(14, y0 + 126, [
+  "Share of an outlet's stories about other counties (expected):",
+  "in a county with 2 print outlets: print 22%, broadcaster 36%",
+  "in a county with 5 print outlets: print 18%, broadcaster 30%",
+  "the more print outlets a county has, the more each one keeps to its own county",
 ]);
-note(14, y0 + 156, [
+note(14, y0 + 186, [
   "A story centred in another county counts 1, a home story mentioning another county ½,",
   "a sports story half that",
 ]);
 
 // ---- D: civic interest area ---------------------------------------------------------------------------------------
-y0 = 622;
-panel(y0, 214, "D", "Civic interest area: the places a town's residents share");
+y0 = 672;
+panel(y0, 258, "D", "Civic interest area: the places a town's residents share");
 const q1 = box(10, y0 + 28, 92, 58, "data", [["Travel of each", 600], ["block group to", 400], ["each place", 400]]);
 const q2 = box(112, y0 + 28, 92, 58, "model", [["Travel", 650], ["patterns", 650], ["(NMF)", 400]]);
 const q3 = box(214, y0 + 28, 98, 58, "model", [["Tie to each", 650], ["3 km hexagon:", 400], ["travel × news", 400]]);
 const q4 = box(322, y0 + 28, 92, 58, "model", [["1,728 ways", 650], ["of drawing", 400], ["the map", 400]]);
 const q5 = box(424, y0 + 28, 94, 58, "out", [["Area: places", 650], ["likely 50%", 400], ["or more", 400]]);
 [[q1, q2], [q2, q3], [q3, q4], [q4, q5]].forEach(([u, v]) => arrow([[u.r, u.cy], [v.x - 2, v.cy]]));
-formula(14, y0 + 110, [
-  "tie(town→x) = travel(town→x) × (1 + 0.3·out + 0.3·in",
-  "                 + 0.7·shared places + 0.7·shared coverage)",
-  "likelihood(x) = drawings that include x ÷ 1,728",
+words(14, y0 + 108, [
+  "Tie from a town to each place =",
+  "the town's residents' travel there",
+  "× up to 3 times more where news ties it: each town's news about the other (up to 0.3",
+  "   each way) and places one town visits and the other covers (up to 0.7 each)",
 ]);
-note(14, y0 + 160, [
-  "Patterns: each pattern must hold 10%+ and 1,000+ of a town's residents and 10%+ of its",
-  "travel, and recur in odd and even months. out / in: each town's news about the other.",
-  "Drawings vary hexagon size, spread within places, smoothing, selectivity, reach.",
-  "Area: the home part and every other part of 3+ hexagons drawn in half or more",
+words(14, y0 + 170, [
+  "Likelihood a place is in the area =",
+  "how many of 1,728 reasonable ways of drawing the map include it",
 ]);
-svg.attr("height", 840).attr("viewBox", [0, 0, W, 840]);
+note(14, y0 + 212, [
+  "Travel patterns: each must hold 10%+ and 1,000+ of some town's residents and 10%+ of",
+  "its travel, and recur in odd and even months. Ways of drawing the map vary hexagon size,",
+  "spread within places, smoothing, selectivity and reach. Area: every part of 3+ hexagons",
+  "likely 50% or more",
+]);
+svg.attr("height", 934).attr("viewBox", [0, 0, W, 934]);
 document.body.dataset.height = Math.ceil(document.querySelector("figure").getBoundingClientRect().height);
 document.body.dataset.ready = "1";
 </script>
