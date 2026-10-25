@@ -3,7 +3,7 @@ effects; log distance and its square, nonmetro origin x log distance and its squ
 adjacency, pair commuting out and in) fitted to Kansas Advan (od_ks_2026.csv, Kansas homes, Kansas and Missouri
 destinations, out of county), each home county held out (8 folds). Outcome: visits_statewide (Kansas calibration
 factors, analysis/calibration_county_month_ks.csv, on the statewide device->person scale used in Missouri); no
-pass-through discount (no Kansas road-stop shares). Commuting: LODES 2023 primary jobs (JT01). Every fold's fit is
+pass-through discount (no Kansas road-stop shares). Commuting: LODES 2023 primary jobs (JT01) of residents, in and out of state. Every fold's fit is
 checked for convergence (no start values are used). Scored by score_ks.py."""
 import csv
 import gzip
@@ -35,10 +35,15 @@ ADJ = set(zip(adj["County GEOID"], adj["Neighbor GEOID"]))
 rucc = pd.read_csv(REF / "rucc2023.csv", dtype=str, encoding="latin-1"); rucc = rucc[rucc.Attribute == "RUCC_2023"]
 nonmetro = {r.FIPS.zfill(5): float(int(r.Value) >= 4) for r in rucc.itertuples()}
 flow, work = defaultdict(float), defaultdict(float)
-for f in (root / "free/ks/ks_od_main_JT01_2023.csv.gz", root / "free/ks/mo_od_aux_JT01_2023.csv.gz", root / "free/mo_od_main_JT01_2023.csv.gz",
-          root / "free/ks_od_aux_JT01_2023.csv.gz"):                                    # LODES 2023 primary jobs (JT01)
-    with gzip.open(f, "rt") as fh:
+# LODES 2023 primary jobs (JT01) of Kansas and Missouri residents, in state and out of state (no row twice): Kansas
+# main + the Kansas-home rows of the MO, NE, OK, CO aux files; Missouri homes from free/mo_residents_od_JT01_2023.csv.gz.
+# Out-of-state jobs enter the denominators ("all workers living in i"), as in gravity_terms.py
+for f, home in [("free/ks/ks_od_main_JT01_2023.csv.gz", None)] + [(f"free/ks/{s}_od_aux_JT01_2023.csv.gz", "20") for s in ("mo", "ne", "ok", "co")] \
+        + [("free/mo_residents_od_JT01_2023.csv.gz", None)]:
+    with gzip.open(root / f, "rt") as fh:
         for r in csv.DictReader(fh):
+            if home and not r["h_geocode"].startswith(home):
+                continue
             h, w, n = r["h_geocode"][:5], r["w_geocode"][:5], float(r["S000"])
             flow[h, w] += n; work[h] += n
 ld = np.log(P.dist.values)

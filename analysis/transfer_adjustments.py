@@ -7,7 +7,8 @@ counties; Kansas is held out entirely, so choosing on all of Missouri is out of 
   distance band      tract miles to the destination's centre of population, bands <15, 15-30, 30-50, 50-80, 80-120,
                      120+; DIST_BY_RANK: learned apart for the dominant/secondary commuting county and the hub relation
   adjacency          Census county adjacency 2023
-  commuting          LODES 2023 primary jobs, JT01 (Kansas main + Missouri auxiliary): the home county's out-of-county work destinations
+  commuting          LODES 2023 primary jobs (JT01) of residents (Kansas main + Kansas-home rows of the MO, NE, OK, CO aux;
+                     Missouri: mo_residents_od_JT01_2023.csv.gz): the home county's out-of-county work destinations
                      in Kansas and Missouri (rank; out and in bands)
   destination order  transferable definitions: central county of a 1M+ metro area (OMB 2023, Census 2024); rest of
                      such a metro; resort (marinas + RV parks and camps per resident, top tenth of U.S. counties, CBP
@@ -98,10 +99,17 @@ def miles(i, j):
 
 # commuting (Kansas homes; destinations in Kansas and Missouri; workers living in the destination from both files)
 flow, work = defaultdict(float), defaultdict(float)
-for f in (root / "free/ks/ks_od_main_JT01_2023.csv.gz", root / "free/ks/mo_od_aux_JT01_2023.csv.gz",      # primary jobs (JT01)
-          root / "free/mo_od_main_JT01_2023.csv.gz", root / "free/ks_od_aux_JT01_2023.csv.gz"):
-    with gzip.open(f, "rt") as fh:
+# LODES 2023 primary jobs (JT01) of Kansas and Missouri residents, in state and out of state (no row twice):
+#   Kansas homes   Kansas main + the Kansas-home rows of the MO, NE, OK, CO aux files
+#   Missouri homes free/mo_residents_od_JT01_2023.csv.gz (Missouri main + Missouri-home rows of 8 aux files)
+# out-of-state jobs enter the denominators (all workers living in i) and as destinations outside the frame
+LODES_KS = [("free/ks/ks_od_main_JT01_2023.csv.gz", None)] + [(f"free/ks/{s}_od_aux_JT01_2023.csv.gz", "20") for s in ("mo", "ne", "ok", "co")] \
+    + [("free/mo_residents_od_JT01_2023.csv.gz", None)]
+for f, home in LODES_KS:
+    with gzip.open(root / f, "rt") as fh:
         for r in csv.DictReader(fh):
+            if home and not r["h_geocode"].startswith(home):
+                continue
             h, w, n = r["h_geocode"][:5], r["w_geocode"][:5], float(r["S000"])
             flow[h, w] += n; work[h] += n
 rank = {}

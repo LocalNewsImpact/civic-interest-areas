@@ -152,10 +152,11 @@ nearest = {i: min((j for j in central if j != i), key=lambda j: dmiles.get((i, j
 core_of = lambda i, j: (j in central and cbsa.get(i) is not None and cbsa.get(i) == cbsa.get(j)) or (cbsa.get(i) is None and nearest[i] == j)
 core_S = np.array([core_of(i, j) for i, j in zip(S.i, S.j)])
 core_T = np.array([core_of(h, j) for h, j in zip(T.home, T.j)])
-# pair commuting: LODES 2023 primary jobs (JT01), Missouri main + aux OD, as gravity_terms.py (the aux file adds
-# out-of-state residents working in Missouri; it changes no Missouri pair)
+# pair commuting: LODES 2023 primary jobs (JT01) of Missouri residents, as gravity_terms.py:
+# free/mo_residents_od_JT01_2023.csv.gz (Missouri main + the Missouri-home rows of the eight neighbouring states' aux
+# files). Pairs and ranks are Missouri pairs; out-of-state jobs enter only the denominator, "all workers living in i"
 _flow, _work = defaultdict(float), defaultdict(float)
-for _f in ("free/mo_od_main_JT01_2023.csv.gz", "free/mo_od_aux_JT01_2023.csv.gz"):
+for _f in ("free/mo_residents_od_JT01_2023.csv.gz",):
     with gzip.open(root / _f, "rt") as fh:
         for r in csv.DictReader(fh):
             h, w_, n = r["h_geocode"][:5], r["w_geocode"][:5], float(r["S000"])
@@ -394,7 +395,16 @@ def main():
         e = per_county(S.i.values, a, p)
         cell = lambda d: f"{d.sw.mean():.2f} / {d.lr.mean():.2f}"
         print(f"| {lab} | " + " | ".join(cell(e[cls_h.reindex(e.index) == c]) for c in LABEL) + f" | {cell(e)} |")
-    print("(share-weighted error / log-ratio error, county mean, by learning class)")
+    print("(share-weighted error / log-ratio error, county mean, by learning class; common destination set)")
+    rows_all = {"Advan-fitted": adv_raw, "public reference": p0, **{f"public + adjustments, {k}": v for k, v in results.items()}}
+    print("\nAll Advan destinations (primary metric; model share 0 outside its support), by segment (score_segments.py):")
+    print("| Model | " + " | ".join(SEGS) + " | all |\n|---|" + "---:|" * (len(SEGS) + 1))
+    for lab, p in rows_all.items():
+        e = per_county(S.i.values, a_raw, p)
+        sg = SEG_OF.reindex(e.index)
+        cell = lambda d: f"{d.sw.mean():.2f} / {d.lr.mean():.2f}"
+        print(f"| {lab} | " + " | ".join(cell(e[sg == c]) for c in SEGS) + f" | {cell(e)} |")
+    print("(share-weighted error / log-ratio error, county mean)")
     kk = {kx: n for n, kx in enumerate(key)}
     print("\n| Pair | Advan | Advan-fitted | public | public + A | public + B | public + C |\n|---|---:|---:|---:|---:|---:|---:|")
     for i, j, n in (("29151", "29051", "Osage -> Cole"), ("29151", "29019", "Osage -> Boone"), ("29007", "29019", "Audrain -> Boone"),

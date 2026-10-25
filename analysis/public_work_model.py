@@ -54,7 +54,10 @@ rural = {r.FIPS.zfill(5): int(float(getattr(r, rcol))) >= 4 for r in rucc.itertu
 flow = defaultdict(float)
 # LODES job type: JT01 primary jobs, one job per worker (adopted 2026-10-24, as gravity_terms.py); JT=JT00 all jobs
 JT = os.environ.get("JT", "JT01")
-files = ([root / ("free/od_2023.csv.gz" if JT == "JT00" else f"free/mo_od_main_{JT}_2023.csv.gz")] + [root / f"free/{s}_od_aux_{JT}_2023.csv.gz" for s in ("il", "ks", "ia", "ar", "ok", "ne", "tn", "ky")]
+# Missouri JT01: free/mo_residents_od_JT01_2023.csv.gz = the Missouri main file + the Missouri-home rows of the eight
+# neighbouring states' aux files (the same rows as reading them one by one); out-of-state jobs enter as destinations
+files = ([root / "free/mo_residents_od_JT01_2023.csv.gz"] if JT == "JT01" and ST == "29" else
+         [root / ("free/od_2023.csv.gz" if JT == "JT00" else f"free/mo_od_main_{JT}_2023.csv.gz")] + [root / f"free/{s}_od_aux_{JT}_2023.csv.gz" for s in ("il", "ks", "ia", "ar", "ok", "ne", "tn", "ky")]
          if ST == "29" else [root / f"free/ks/ks_od_main_{JT}_2023.csv.gz"] + [root / f"free/ks/{s}_od_aux_{JT}_2023.csv.gz" for s in ("mo", "ne", "ok", "co")])
 for f in files:
     with gzip.open(f, "rt") as fh:
