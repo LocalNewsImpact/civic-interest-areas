@@ -7,8 +7,12 @@ weighted). Plus LODES 2023 commuting share (employed residents working in anothe
                ~ log population + nonmetro + commuting share [+ one ACS variable]; ordinary least squares on the logit;
                leave one county out; then forward selection by that error.
   2 SPILLOVER  outlet model (broadcaster + crossover) + one county ACS variable; leave one county out.
-  3 TRAVEL     the adopted travel model + (home-county variable x log distance): does a county's makeup change how far
-               its residents travel? Fit Jan-Jun, score Jul-Sep shares.
+  3 TRAVEL     the adopted travel model + (home-county variable x centred log distance): does a county's makeup change
+               how far its residents travel? Outcome: the adopted one (calibrated, pass-through discounted). Primary:
+               leave one home county out (8 folds, seed 7), share-weighted error and big flows (FORECAST at 5%+) with
+               95% bootstrap intervals over counties and the change vs adopted; stability check: fit Jan-Jun, score
+               Jul-Sep (R^2 = 1 - SSE/SST), beside persistence. Coefficient p-values: errors clustered by home and
+               destination county. Crossover p-values: HC1; spillover: clustered by county.
 """
 import sys
 import warnings
@@ -68,7 +72,7 @@ print(f"## 1 CROSSOVER ({len(c)} counties): baseline (population, nonmetro, comm
 res = []
 for v in VARS:
     e = loo(BASE + f" + {v}", c, "dedup_lower", inv)
-    m = smf.ols(BASE + f" + {v}", c).fit()
+    m = smf.ols(BASE + f" + {v}", c).fit(cov_type="HC1")
     res.append((v, e, m.params[v], m.pvalues[v]))
 r = pd.DataFrame(res, columns=["variable", "error", "coef", "p"]).sort_values("error")
 print(r.head(10).round(3).to_string(index=False))
@@ -106,37 +110,37 @@ print(f"\n## 2 SPILLOVER ({len(so)} outlets): adopted error {s0:.1f} points")
 print(r.head(8).round(3).to_string(index=False))
 
 sys.path.insert(0, str(here))
-from gravity_terms import FACTORS, all_pairs, design  # noqa: E402
-pairs = all_pairs()
-od = pd.read_csv(root / "analysis/od_mo_2026.csv", dtype={"home_county": str, "dest_county": str})
-od = od[(od.home_county != "OUT") & (od.home_county != od.dest_county)]
-key = list(zip(pairs.i, pairs.j))
-yf = lambda ms: (lambda v: np.array([v.get(k, 0) for k in key], float))(od[od.month.isin(ms)].groupby(["home_county", "dest_county"]).visits.sum())
-ALL = [f"2026-{m:02d}" for m in range(1, 10)]
-y6, y3 = yf(ALL[:6]), yf(ALL[6:])
-share = lambda x: x / pd.Series(x).groupby(pairs.i.values).transform("sum").values
-s3 = share(y3)
-Xd = design(pairs)
-ld = np.log(pairs.dist.values)
+import gravity_terms as gt  # noqa: E402
+pairs = gt.all_pairs()
+DISC = gt.stop_discount(pairs)
+y9, y6, y3 = (gt.travel_visits(pairs, m, disc=DISC) for m in (gt.MONTHS, gt.MONTHS[:6], gt.MONTHS[6:]))
+o = pairs.i.values
+Xd = gt.design(pairs)
+ld = Xd["log_dist"].values                         # centred at 25 miles
 Xi = X.copy(); Xi.loc["29510"] = Xi.loc["29189"]
 for v in VARS:
     Xi[v] = (Xi[v] - Xi[v].mean()) / Xi[v].std()
-
-
-def oos(Xm):
-    m = sm.GLM(y6, Xm, family=sm.families.Poisson()).fit(maxiter=300)
-    p3 = share(m.predict(Xm))
-    big = s3 >= 0.05
-    return np.corrcoef(s3, p3)[0, 1] ** 2, 100 * np.mean(np.abs(s3 - p3)[big]), m
-r2, e0, _ = oos(Xd)
-print(f"\n## 3 TRAVEL: adopted Jul-Sep shares explained {r2:.2%}, big-flow error {e0:.2f} points")
-res = []
+ev0 = gt.evaluate(Xd, pairs, y9, y6, y3, full=False)
+r0 = gt.summary(ev0["loco"])
+print(f"\n## 3 TRAVEL: adopted, leave one county out: weighted share error {r0['werr']:.2f}, big-flow error {r0['big']:.2f}; "
+      f"Jul-Sep from Jan-Jun R^2 {gt.summary(ev0['split'])['r2']:.1%} (stability check; {gt.persistence(pairs, y6, y3)})")
+print("| home-county variable x log distance | LOCO weighted error, change vs adopted [95%] | LOCO big-flow error, change [95%] | Jul-Sep R^2 | coef (2-way p) |")
+print("|---|---:|---:|---:|---|")
 for v in ("median_household_income", "per_capita_income", "median_age", "age_65_and_over", "households_with_broadband",
           "mean_travel_time", "below_poverty", "bachelors_or_higher", "unemployment_rate", "in_labor_force", "owner_occupied"):
     if v not in Xi:
         continue
-    Xm = Xd.assign(**{f"{v}_x_log_dist": Xi[v].reindex(pairs.i).values * ld})
-    r2v, ev, m = oos(Xm)
-    res.append((v, r2v, ev, m.params[f"{v}_x_log_dist"]))
-print(pd.DataFrame(res, columns=["home-county variable x log distance", "Jul-Sep explained", "big-flow error", "coef"])
-      .sort_values("big-flow error").round(4).to_string(index=False))
+    t = f"{v}_x_log_dist"
+    if Xi[v].reindex(pairs.i).isna().any():
+        print(f"| {v} | missing for some counties: not tested | | | |")
+        continue
+    try:
+        ev = gt.evaluate(Xd.assign(**{t: Xi[v].reindex(pairs.i).values * ld}), pairs, y9, y6, y3, extra=[t])
+    except np.linalg.LinAlgError:
+        print(f"| {v} | singular design: not identified | | | |")
+        continue
+    r = gt.summary(ev["loco"])
+    cw = gt.boot(ev["loco"], "werr", ref=ev0["loco"]); cb = gt.boot(ev["loco"], "big", ref=ev0["loco"])
+    print(f"| {v} | {r['werr']:.2f}, {r['werr'] - r0['werr']:+.2f} [{cw[0]:+.2f}, {cw[1]:+.2f}] | {r['big']:.2f}, "
+          f"{r['big'] - r0['big']:+.2f} [{cb[0]:+.2f}, {cb[1]:+.2f}] | {gt.summary(ev['split'])['r2']:.1%} | "
+          f"{ev['m'].params[t]:+.3f} ({ev['m'].pvalues[t]:.3f}) |", flush=True)

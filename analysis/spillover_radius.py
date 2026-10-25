@@ -18,15 +18,15 @@ import pandas as pd
 
 root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root / "analysis"))
-from excluded_outlets import EXCLUDE  # noqa: E402
+from spillover_common import MENTION_WEIGHT, NOT_LOCAL, SPORTS_WEIGHT, home_fips, registry  # noqa: E402
 
 data = json.load(open(root / "coverage/storymap/statewide_2026_03_articles.json"))
 cov = pd.read_csv(root / "analysis/county_covariates.csv", dtype={"fips": str}).set_index("fips")
 cp = pd.read_csv(root / "census_dl/ref/CenPop2020_Mean_CO.txt", dtype=str, encoding="utf-8-sig")
 cen = {r.STATEFP + r.COUNTYFP: (float(r.LATITUDE), float(r.LONGITUDE)) for r in cp.itertuples()}
 CIN = pd.read_csv(root / "coverage/cin_labels_2026_03.csv").set_index("id").primary_label
-so = pd.read_csv(root / "analysis/spillover_outlets.csv", dtype={"fips": str}).set_index("outlet")
-reg = pd.read_csv(Path.home() / "VSCode/NewsCrawler/MizzouNewsCrawler/src/lookups/mo_outlet_registry.csv", dtype=str)
+so = pd.read_csv(root / "analysis/spillover_outlets.csv", dtype={"fips": str, "home_also": str}).set_index("outlet")
+reg = registry()
 reg = reg[reg.state == "MO"].dropna(subset=["lat", "lon"]).drop_duplicates("outlet").set_index("outlet")
 
 
@@ -40,30 +40,30 @@ by_name = {n.lower(): f for f, n in cov.name.items()}
 by_name.update({"st. louis": "29189", "st louis": "29189", "st. louis city": "29510"})
 fips_of = lambda n: by_name.get((n or "").lower().replace(" county", "").strip())
 unit = lambda f: "29189" if f == "29510" else f
-KC_HOME = frozenset({"20209"})
 near = {}
 w = defaultdict(list)           # outlet -> [(miles, weight)]
 for a in data["articles"]:
     pub = a["publisher"]
     f = fips_of(a["publisher_county"])
-    if not f or not a["counties"] or pub in EXCLUDE or pub not in so.index:
+    if not f or not a["counties"] or pub in NOT_LOCAL or pub not in so.index:
         continue
-    i = unit(f)
+    i = unit(home_fips(pub, f))
     if i != so.at[pub, "fips"]:
         continue
     if i not in near:
         src = [i] + (["29510"] if i == "29189" else [])
         near[i] = {g for g in cen if not g.startswith("29") and any(miles(cen[s], cen[g]) <= 60 for s in src)}
-    home_also = KC_HOME if pub in reg.index and str(reg.at[pub, "city"]).lower() == "kansas city" else frozenset()
-    away = lambda c: ((c.startswith("29") and unit(c) != i) or c in near[i]) and c not in home_also
+    # HOME rule (spillover_common.home_set), as spillover_outlets.csv records it
+    home_also = {i} | (set(so.at[pub, "home_also"].split(";")) if isinstance(so.at[pub, "home_also"], str) else set())
+    away = lambda c: ((c.startswith("29") and unit(c) not in home_also) or c in near[i]) and c not in home_also
     office = (float(reg.at[pub, "lat"]), float(reg.at[pub, "lon"])) if pub in reg.index else cen[i]
-    sw = 0.5 if CIN.get(a["id"]) == "Sports" else 1.0
+    sw = SPORTS_WEIGHT if CIN.get(a["id"]) == "Sports" else 1.0
     if a["central"] and away(a["central"]):
         w[pub].append((miles(office, cen[a["central"]]), sw, unit(a["central"])))
     else:
         others = [c for c in set(a["counties"]) if away(c) and c in cen]
         for c in others:
-            w[pub].append((miles(office, cen[c]), sw * 0.5 / len(others), unit(c)))
+            w[pub].append((miles(office, cen[c]), sw * MENTION_WEIGHT / len(others), unit(c)))
 
 
 def wmedian(v, wt):

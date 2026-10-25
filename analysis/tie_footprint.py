@@ -13,6 +13,24 @@ rural block groups), scaled so the busiest unit is 1:
 Footprint: hexagons with a tie of 5+ (the maps' cut); market: closed over gaps of 2 hexagons, holes filled.
 Also the same with travel alone (all coverage weights 0), to show what the network terms add.
 Usage: tie_footprint.py <region>   (flows/regions.json; default columbia)
+
+RUN SETTINGS (environment; printed at the start of every run). The adopted tie-market table (MODEL_CHANGES.md, "+
+population, all tracts (adopted)") is
+  ATTRPOP=1 REGRULE=1 BETA_IN=0.5 PUBCOL=adjusted_C OUTTAG=_pop tie_footprint.py <region>
+  PUBFILE   the public model's tract -> county shares (default public_adjusted_pairs_trnear.csv; a path outside
+            analysis/ may be given)
+  PUBCOL    its share column (default combined_share; adjusted_C: with the Missouri segment corrections)
+  BETA_IN   within-county distance exponent (default 1)
+  REGRULE   1: Advan's regularity as a rule on the public prediction
+  ATTRPOP   1: population a third of the within-county spread; nonmetro; density:<people per km2>
+  OUTTAG    suffix of the output file; OUTDIR its folder (default analysis/)
+Diagnostics (2026-10-24, to isolate changes since 2026-10-18; defaults are the current method):
+  CAMPUS_IN=1     campus papers (excluded_outlets.CAMPUS) counted as local outlets, as before 2026-10-24
+  REHOME=0        Mid Rivers Newsmagazine and Greene County Commonwealth homed where they are filed, as before 2026-10-24
+  SCORE=2026-10-18  the market without the home county added, scored whole (before the home county was put in every
+                  market and the scores taken beyond it)
+  MASKHOME=0      the town's own units kept in its travel before scaling (before they were masked as in
+                  market_patterns.py): a hub's own city is then its busiest unit and every other tie shrinks
 """
 import csv
 import gzip
@@ -29,8 +47,42 @@ root = Path(__file__).resolve().parents[1]
 FLOWS = root / "flows"
 REGION_ = sys.argv[1] if len(sys.argv) > 1 else "columbia"
 sys.argv = ["market_patterns.py", REGION_]
+import os as _os
+SETTINGS = {k_: _os.environ.get(k_, d_) for k_, d_ in (("PUBFILE", "public_adjusted_pairs_trnear.csv"), ("PUBCOL", "combined_share"),
+            ("BETA_IN", "1"), ("REGRULE", "0"), ("ATTRPOP", "0"), ("OUTTAG", ""), ("OUTDIR", "analysis"), ("CAMPUS_IN", "0"),
+            ("REHOME", "1"), ("SCORE", "current"), ("MASKHOME", "1"))}
+if _os.environ.get("SUMMARY") != "1":
+    print("tie_footprint.py", REGION_, " ".join(f"{k_}={v_}" for k_, v_ in SETTINGS.items()), flush=True)
+if _os.environ.get("SUMMARY") == "1":       # the figures the log quotes, over every market's output (OUTTAG, OUTDIR)
+    import json as _json
+    _R = ("columbia", "springfield", "cape", "kirksville", "joplin", "kansascity", "stjoseph")
+    # the settings the summarised runs used, as each recorded them (not this call's defaults)
+    _st = {r_: _json.load(open(root / SETTINGS["OUTDIR"] / f"tie_footprint_{r_}{SETTINGS['OUTTAG']}.settings.json")) for r_ in _R}
+    _keys = ("PUBFILE", "PUBCOL", "BETA_IN", "REGRULE", "ATTRPOP", "CAMPUS_IN", "REHOME", "SCORE", "MASKHOME")
+    _set = {_json.dumps({k_: v_.get(k_) for k_ in _keys}, sort_keys=True) for v_ in _st.values()}
+    if len(_set) != 1:
+        raise SystemExit(f"the summarised runs used different settings: {_set}")
+    print("summary of tie_footprint.py runs with", " ".join(f"{k_}={v_}" for k_, v_ in _json.loads(_set.pop()).items()), flush=True)
+    _d = pd.concat([pd.read_csv(root / SETTINGS["OUTDIR"] / f"tie_footprint_{r_}{SETTINGS['OUTTAG']}.csv").assign(region=r_) for r_ in _R])
+    _n = _d[_d.measure == "network tie"]
+    _acc, _rep = "accuracy: public vs Advan overlap", "replicability: odd vs even overlap"
+    print(f"{len(_n)} towns: accuracy median {_n[_acc].median():.2f}, mean {_n[_acc].mean():.3f}; month-split stability median "
+          f"{_n[_rep].median():.2f}; travel alone accuracy median {_d[_d.measure == 'travel alone'][_acc].median():.2f}")
+    print("by market:", _n.groupby("region", sort=False)[_acc].median().round(2).to_dict())
+    print(_n[["region", "town", _rep, _acc]].to_string(index=False))
+    sys.exit(0)
+sys.path.insert(0, str(root / "analysis"))
+import excluded_outlets as _eo  # noqa: E402
+if SETTINGS["CAMPUS_IN"] == "1":
+    _eo.EXCLUDE = _eo.EXCLUDE - _eo.CAMPUS
+if SETTINGS["REHOME"] == "0":
+    _eo.HOME_COUNTY = {}
 _src = open(FLOWS / "market_patterns.py").read()
+# read-only: market_patterns.py writes market_patterns.json before the cut; with the diagnostics above it would write
+# other numbers over the published file
+_src = _src.replace('json.dump(', '(lambda *a, **k: None)(').replace('open(R / "market_patterns.json", "w")', "None")
 _cut = _src.index('maps = {"hexes": hexes, "towns": {}}')
+assert '"w")' not in _src[:_cut], "market_patterns.py opens a file for writing before the cut; neutralise it here"
 __file__ = str(FLOWS / "market_patterns.py")
 exec(compile(_src[:_cut], str(FLOWS / "market_patterns.py"), "exec"))
 A = root / "analysis"
@@ -136,7 +188,7 @@ def own_units(town):
 def to_units(bgv, town=None):
     """travel to the maps' units, scaled so the busiest unit is 1; the town's own units are masked first, as in
     market_patterns.py (nobody travels to home -- home is 100 by definition)"""
-    drop = own_units(town) if town else set()
+    drop = own_units(town) if town and SETTINGS["MASKHOME"] == "1" else set()
     u = defaultdict(float)
     for b, v in bgv.items():
         if bg_unit.get(b) and bg_unit[b] not in drop:
@@ -147,11 +199,12 @@ def to_units(bgv, town=None):
 
 # --- the tie map (the loop body of market_patterns.py, one travel input) ----------------------------------------------
 def tie_map(town, Hk, weights=BASE_W):
+    Hk_u, Hk = Hk, norm_hex(Hk)             # busiest hexagon = 1 (market_patterns.norm_hex); Hk_u: busiest place = 1
     cu = COV[town]
     own_u = {P["bg_unit"].get(h) for h in town_bgs(town)} | {HOME_PLACE[town]}
     OV = {X: overlap_of(Hk, own_u, X) for X in place_outlets if X not in own_u}
-    h_cov = cov_dist([o for o, al in by_outlet.items() if fips_of(al[0]["publisher_county"]) == STUDY[town] and o not in EXCLUDE])
-    mkt = {u_ for u_, w in Hk.items() if w >= 0.05}
+    h_cov = cov_dist([o for o, al in by_outlet.items() if home_of(al[0]) == STUDY[town] and o not in EXCLUDE])
+    mkt = {u_ for u_, w in Hk_u.items() if w >= 0.05}
     inm_ = lambda d_: {u_: w for u_, w in d_.items() if u_ in mkt}
     SC = {X: overlap_dists(inm_(h_cov), inm_(cov_dist(place_outlets[X])), own_u | {X}) for X in place_outlets if X not in own_u}
     wo, wi, wv, wc = weights
@@ -163,7 +216,7 @@ def tie_map(town, Hk, weights=BASE_W):
         xk = hex_place.get(k) or u
         o_, i_ = cu["out"].get(k, 0), cu["in"].get(k, 0)
         gate = 1.0 if (o_ + i_) >= 0.10 else 0.0
-        raw[k] = min(1.0, t_ * (1 + wo * o_ + wi * i_ + gate * (wv * OV.get(xk, 0) + wc * SC.get(xk, 0))))
+        raw[k] = min(DCAP, t_ * (1 + wo * o_ + wi * i_ + gate * (wv * OV.get(xk, 0) + wc * SC.get(xk, 0))))
     if raw:
         raw = spatial(raw, home_hexes_of[town])
     out_ = {k: 100 * x for k, x in raw.items()}
@@ -213,7 +266,8 @@ jac = lambda a, b: len(a & b) / len(a | b) if (a | b) else float("nan")
 CUT = 5
 # THE HOME COUNTY IS IN EVERY MARKET by definition: residents have an inherent interest in its news (county government,
 # schools, courts, taxes) whether or not they travel to all of it. Scores compare the travel-defined part beyond it.
-home_county_hexes = lambda town: {tuple(map(int, k.split(","))) for k, c_ in hex_county.items() if c_ == STUDY[town]}
+home_county_hexes = lambda town: ({tuple(map(int, k.split(","))) for k, c_ in hex_county.items() if c_ == STUDY[town]}
+                                   if SETTINGS["SCORE"] != "2026-10-18" else set())
 beyond = lambda M_, town: M_ - home_county_hexes(town)
 if not _os.environ.get("TIE_LIB"):          # TIE_LIB=1: load the functions only (confidence_layer.py)
     rows = []
@@ -236,7 +290,11 @@ if not _os.environ.get("TIE_LIB"):          # TIE_LIB=1: load the functions only
     print(R_.to_string(index=False))
     print("\nmedian over towns:")
     print(R_.groupby("measure")[["replicability: odd vs even overlap", "accuracy: public vs Advan overlap", "public area / Advan area"]].median().to_string())
-    R_.to_csv(A / f"tie_footprint_{REGION_}{_os.environ.get('OUTTAG', '')}.csv", index=False)
+    _od = root / SETTINGS["OUTDIR"]
+    _od.mkdir(parents=True, exist_ok=True)
+    R_.to_csv(_od / f"tie_footprint_{REGION_}{SETTINGS['OUTTAG']}.csv", index=False)
+    import json as _json
+    _json.dump(SETTINGS, open(_od / f"tie_footprint_{REGION_}{SETTINGS['OUTTAG']}.settings.json", "w"), indent=1)   # read by SUMMARY=1
 
 
     # DETAIL=town,town: each market (lobe) of the public and the Advan tie footprints, named, with what Advan observes in it

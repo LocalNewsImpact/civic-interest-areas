@@ -2,9 +2,11 @@
 
 Large and small counties are not modelled alike: a small county's residents leave for most goods and services, and how
 they choose among larger centres need not follow the decay fitted mostly on big counties. Every model is fitted on
-January-June pairs from small origins only, scored on July-September: each small origin's share of out-of-county visits
-going to each larger county (weighted share error, points; R^2 of shares). The pooled adopted model, scored on the same
-pairs, is the reference; the January-June observed shares are the ceiling.
+pairs from small origins only. Outcome: the adopted one (calibrated, pass-through discounted). Scored on each small
+origin's share of out-of-county visits going to each larger county (weighted share error, points, with a 95% bootstrap
+interval over home counties; R^2 = 1 - SSE/SST of those shares): primary, leave-one-county-out among small origins (8
+folds, seed 7), Jan-Sep; stability check, fit Jan-Jun and score Jul-Sep, beside persistence (Jan-Jun observed shares).
+The pooled adopted model (gravity_terms.FACTORS; LOCO over all counties), scored on the same pairs, is the reference.
 
 Terms tried for small origins (destination draw is MEASURED, so the model can predict a thin sample):
   distance     log distance and its square; shared border
@@ -40,31 +42,34 @@ X0["rank60"] = [(near[i].index(j) + 1) if j in near[i] else 20 for i, j in zip(P
 X0["log_rank60"] = np.log(X0["rank60"])
 X0["log_pop_j_x_log_dist"] = X0["log_pop_j"] * X0["log_dist"]
 
-# pooled adopted model, all pairs, Jan-Jun
-base = pair + ["log_dist_sq", "nonmetro_i_x_log_dist_sq", "log_pop_i_x_log_dist"]
-Xfe = pd.concat([X0[base + O], Dd], axis=1)
-pfe = sm.GLM(y6, Xfe, family=sm.families.Poisson()).fit(maxiter=300).predict(Xfe)
-
+from gravity_terms import loco, poisson_fit, r2_oos  # noqa: E402
+import warnings  # noqa: E402
+warnings.filterwarnings("ignore")
 S = P.small_i.values
 sub = np.flatnonzero(S)
 Osub = [c for c in O if X0.loc[sub, c].sum() > 0]
 tgt = S & P.larger_j.values
+o = P.i.values
+a9, s3, s6 = share(y9), share(y3), share(y6)
 
 
-def score(pred, mask):
-    ps = pd.Series(pred).groupby(P.i.values).transform(lambda x: x / x.sum()).values
-    ys_ = share(y3)
-    w = ys_[mask]
-    return 100 * np.sum(w * np.abs(ps[mask] - ys_[mask])) / np.sum(w), np.corrcoef(ps[mask], ys_[mask])[0, 1] ** 2
+def score(ps, a, mask, draws=1000):
+    """weighted share error (points) on mask pairs, 95% bootstrap over home counties, R^2 (1 - SSE/SST)."""
+    d = pd.DataFrame({"o": o[mask], "n": a[mask] * np.abs(ps[mask] - a[mask]), "w": a[mask]}).groupby("o").sum()
+    rng = np.random.default_rng(7)
+    bs = [(lambda b: 100 * b.n.sum() / b.w.sum())(d.loc[rng.choice(d.index, len(d))]) for _ in range(draws)]
+    lo, hi = np.quantile(bs, [.025, .975])
+    return f"{100 * d.n.sum() / d.w.sum():.2f} [{lo:.2f}, {hi:.2f}] | {r2_oos(a[mask], ps[mask]):.3f}"
 
 
-s6 = share(y6)
+Xfe = Xof(FACTORS)
 print(f"small origins: {P[S].i.nunique()} counties; their flows into larger counties carry "
-      f"{share(y9)[tgt].sum() / P[S].i.nunique():.0%} of their out-of-county visits on average\n")
-print("| Model (fitted on small origins only, Jan-Jun) | Into larger counties: weighted share error | R^2 |")
-print("|---|---:|---:|")
-print(f"| ceiling: Jan-Jun observed shares | {100 * np.sum(share(y3)[tgt] * np.abs(s6[tgt] - share(y3)[tgt])) / np.sum(share(y3)[tgt]):.2f} | {np.corrcoef(s6[tgt], share(y3)[tgt])[0, 1] ** 2:.3f} |")
-a, b = score(pfe, tgt); print(f"| pooled adopted model (reference) | {a:.2f} | {b:.3f} |")
+      f"{a9[tgt].sum() / P[S].i.nunique():.0%} of their out-of-county visits on average\n")
+print("| Model (fitted on small origins only) | LOCO: weighted share error [95%] | LOCO R^2 | Jul-Sep from Jan-Jun: error [95%] | R^2 |")
+print("|---|---:|---:|---:|---:|")
+print(f"| persistence: Jan-Jun observed shares | | | {score(s6, s3, tgt)} |")
+print(f"| pooled adopted model (reference) | {score(loco(y9, Xfe, o), a9, tgt)} | "
+      f"{score(share(poisson_fit(y6, Xfe).predict(Xfe).values), s3, tgt)} |", flush=True)
 specs = {
     "distance + draw": ["log_dist", "log_dist_sq", "adjacent", "log_pop_j", "log_jobs_j", "log_places_j"],
     "+ hub (largest within 60 mi)": ["log_dist", "log_dist_sq", "adjacent", "log_pop_j", "log_jobs_j", "log_places_j", "hub60"],
@@ -74,9 +79,8 @@ specs = {
     "all": ["log_dist", "log_dist_sq", "adjacent", "log_pop_j", "log_jobs_j", "log_places_j", "hub60", "log_rank60", "fotheringham", "log_pop_j_x_log_dist"],
 }
 for label, cols in specs.items():
-    X = X0.loc[sub, cols + Osub]
-    m = sm.GLM(y6[sub], X, family=sm.families.Poisson()).fit(maxiter=300)
-    pred = np.zeros(len(P)); pred[sub] = m.predict(X)
-    a, b = score(pred, tgt)
-    extra = {c: round(m.params[c], 3) for c in cols if c not in ("log_dist", "log_dist_sq", "adjacent")}
-    print(f"| {label} | {a:.2f} | {b:.3f} |   {extra}")
+    X = X0.loc[sub, cols + Osub].reset_index(drop=True)
+    ph = np.full(len(P), np.nan); ph[sub] = loco(y9[sub], X, o[sub])
+    m = poisson_fit(y6[sub], X)
+    pt = np.zeros(len(P)); pt[sub] = m.predict(X)
+    print(f"| {label} | {score(ph, a9, tgt)} | {score(share(pt), s3, tgt)} |", flush=True)

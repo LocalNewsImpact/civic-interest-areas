@@ -3,69 +3,79 @@ predict travel beyond distance, borders and commuting?
 
 County Business Patterns 2022 establishments (analysis/cbp_2022_mo_sectors.csv): retail (NAICS 44-45), general
 merchandise (452), health care (62), hospitals (622), food and lodging (72), arts and recreation (71). Each enters as
-log((destination + 1) / (origin + 1)) -- a destination's business on its own is absorbed by its fixed effect; the GAP
-between origin and destination is a pair measure. Added to the adopted model (with commuting). Scored: each county held
-out in 8 folds (share error by tier), July-September from January-June, and the study counties' main destinations.
+log((destination + 1) / (origin + 1)). FINDING (2026-10-24): the gap is log(destination + 1) - log(origin + 1), a
+destination term minus an origin term, so with both sets of fixed effects it is exactly collinear (absorbed): the
+design is rank-deficient, every score is unchanged and the coefficients are not identified. The test cannot inform
+the adopted model; it is kept to show that. Added to the adopted model (gravity_terms.FACTORS). Outcome: the
+adopted one (calibrated, pass-through discounted). Scored: each county held out in 8 folds, seed 7 (primary; share
+error by tier with 95% bootstrap intervals over home counties, change vs adopted); Jul-Sep from Jan-Jun (stability
+check; R^2 = 1 - SSE/SST, persistence beside it); in-sample actual / expected for two study pairs; gap coefficients
+with errors clustered by home and destination county.
 """
 import math
 import sys
+import warnings
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import statsmodels.api as sm
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from gravity_terms import all_pairs, design, root, cov  # noqa: E402
+from gravity_terms import (MONTHS, all_pairs, boot, county_stats, design, fit_twoway, loco, persistence,  # noqa: E402
+                           poisson_fit, root, shares, stop_discount, summary, travel_visits)
 
-od = pd.read_csv(root / "analysis/od_mo_2026.csv", dtype={"home_county": str, "dest_county": str})
-od = od[(od.home_county != "OUT") & (od.home_county != od.dest_county)]
+warnings.filterwarnings("ignore")
 pairs = all_pairs()
+DISC = stop_discount(pairs)
 X = design(pairs)
 biz = pd.read_csv(root / "analysis/cbp_2022_mo_sectors.csv", dtype={"fips": str}).set_index("fips")
 SECT = ["retail", "general_merch", "health", "hospitals", "food_lodging", "arts_rec"]
-for s in SECT:
-    X[f"gap_{s}"] = [math.log((biz[s].get(j, 0) + 1) / (biz[s].get(i, 0) + 1)) for i, j in zip(pairs.i, pairs.j)]
-ALL = [f"2026-{m:02d}" for m in range(1, 10)]
-
-
-def yv(months):
-    v = od[od.month.isin(months)].groupby(["home_county", "dest_county"]).visits.sum()
-    return np.array([v.get((i, j), 0) for i, j in zip(pairs.i, pairs.j)], float)
-
-
-y9, y6, y3 = yv(ALL), yv(ALL[:6]), yv(ALL[6:])
-share = lambda x: x / pd.Series(x).groupby(pairs.i.values).transform("sum").values
+for s_ in SECT:
+    X[f"gap_{s_}"] = [math.log((biz[s_].get(j, 0) + 1) / (biz[s_].get(i, 0) + 1)) for i, j in zip(pairs.i, pairs.j)]
+y9, y6, y3 = (travel_visits(pairs, m, disc=DISC) for m in (MONTHS, MONTHS[:6], MONTHS[6:]))
+o = pairs.i.values
+share = lambda x: shares(x, o)
 basecols = [c for c in X.columns if not c.startswith("gap_")]
-models = {"current (with commuting)": basecols,
+models = {"adopted": basecols,
           "+ retail gap": basecols + ["gap_retail"],
           "+ general merchandise gap": basecols + ["gap_general_merch"],
           "+ health care gap": basecols + ["gap_health"],
-          "+ all six business gaps": basecols + [f"gap_{s}" for s in SECT]}
+          "+ all six business gaps": basecols + [f"gap_{s_}" for s_ in SECT]}
 unit = lambda f: "29189" if f == "29510" else f
 tier = pd.read_csv(root / "analysis/county_class_k4.csv", dtype={"fips": str}).set_index("fips")["class"]
-cls = np.array([tier.get(unit(i), "class 1") for i in pairs.i])
 names = {"class 1": "small rural", "class 2": "indep. towns", "class 3": "commuter", "class 4": "hubs"}
 a = share(y9)
-folds = np.array_split(np.random.default_rng(7).permutation(sorted(set(pairs.i))), 8)
-print("| Model | Jul-Sep R^2 | " + " | ".join(names.values()) + " | Audrain->Marion | Osage->Boone |")
-print("|---|---:|" + "---:|" * 6)
 idx = {(i, j): k for k, (i, j) in enumerate(zip(pairs.i, pairs.j))}
-for label, cols in models.items():
+S, out = {}, []
+for label, cols in list(models.items()):
     XX = X[cols]
-    m6 = sm.GLM(y6, XX, family=sm.families.Poisson()).fit(maxiter=300)
-    r2 = np.corrcoef(share(y3), share(np.asarray(m6.predict(XX))))[0, 1] ** 2
-    pred = np.zeros(len(pairs))
-    for f in folds:
-        test = pairs.i.isin(f).values; train = ~test
-        cc = XX.columns[(XX[train] != 0).any()]
-        m = sm.GLM(y9[train], XX.loc[train, cc], family=sm.families.Poisson()).fit(maxiter=300)
-        lin = XX.loc[test, cc].values @ m.params.values
-        pred[test] = np.exp(lin - lin.max())
-    ps = pd.Series(pred).groupby(pairs.i.values).transform(lambda x: x / x.sum()).values
-    errs = [100 * np.sum(a[cls == c] * np.abs(ps[cls == c] - a[cls == c])) / np.sum(a[cls == c]) for c in names]
-    p9 = np.asarray(sm.GLM(y9, XX, family=sm.families.Poisson()).fit(maxiter=300).predict(XX))
+    if np.linalg.matrix_rank(XX.values) < XX.shape[1]:          # the gap is absorbed by the two sets of fixed effects
+        print(f"{label}: design rank {np.linalg.matrix_rank(XX.values)} of {XX.shape[1]} columns -- not identified, not fitted")
+        del models[label]
+        continue
+    S[label] = county_stats(a, loco(y9, XX, o), o, y9)
+    r2 = summary(county_stats(share(y3), share(poisson_fit(y6, XX).predict(XX).values), o, y3))["r2"]
+    p9 = fit_twoway(y9, XX, pairs).predict(XX).values
     rat = lambda i, j: y9[idx[(i, j)]] / p9[idx[(i, j)]]
-    print(f"| {label} | {r2:.1%} | " + " | ".join(f"{e:.2f}" for e in errs) + f" | {rat('29007', '29127'):.2f} | {rat('29151', '29019'):.2f} |", flush=True)
-m = sm.GLM(y9, X[models["+ all six business gaps"]], family=sm.families.Poisson()).fit(maxiter=300)
-print("gaps:", {s: (round(m.params[f"gap_{s}"], 3), round(m.pvalues[f"gap_{s}"], 3)) for s in SECT})
+    out.append((label, r2, rat("29007", "29127"), rat("29151", "29019")))
+    print("done:", label, flush=True)
+ref = S["adopted"]
+ct = pd.Series({f: tier.get(unit(f), "class 1") for f in ref.index})
+print("\nLOCO weighted share error by tier [95%]; change vs adopted [95%]")
+print("| Model | Jul-Sep R^2 (stability) | " + " | ".join(names.values()) + " | Audrain->Marion (in-sample) | Osage->Boone (in-sample) |")
+print("|---|---:|" + "---|" * 4 + "---:|---:|")
+for label, r2, am, ob in out:
+    s_, cells = S[label], []
+    for c in names:
+        mk = (ct == c).values
+        lo, hi = boot(s_, "werr", mask=mk)
+        cell = f"{s_[mk].werr.mean():.2f} [{lo:.2f}, {hi:.2f}]"
+        if s_ is not ref:
+            dl, dh = boot(s_, "werr", ref=ref, mask=mk)
+            cell += f"; {s_[mk].werr.mean() - ref[mk].werr.mean():+.2f} [{dl:+.2f}, {dh:+.2f}]"
+        cells.append(cell)
+    print(f"| {label} | {r2:.1%} | " + " | ".join(cells) + f" | {am:.2f} | {ob:.2f} |")
+print(persistence(pairs, y6, y3))
+XX = X[basecols + [f"gap_{s_}" for s_ in SECT]].values
+print(f"design rank with all six gaps: {np.linalg.matrix_rank(XX)} of {XX.shape[1]} columns "
+      f"(adopted alone: {np.linalg.matrix_rank(X[basecols].values)} of {len(basecols)}): the gaps are absorbed")

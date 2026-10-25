@@ -1,23 +1,27 @@
 """Missouri counties with near-complete, high-quality collection from all known newsrooms, March 2026.
 
-Known newsrooms: crawler outlet registry (src/lookups/mo_outlet_registry.csv), status active. Per county:
+Known newsrooms: the pinned outlet registry (excluded_outlets.registry(); HOME_COUNTY applied), status active, not
+EXCLUDE or CAMPUS (spillover_common.NOT_LOCAL: statewide and student outlets are not a county's local news). Per county:
   coverage        active newsrooms collected in March / all active newsrooms
   local_news      local news stories (enriched or enrichment_skipped) from them
   text_ok         stories with text (local news / (local news + text unavailable))
   full_length     local news stories of 600+ characters
   placed          local news stories placed on the map (statewide_2026_03_articles.json)
   paywall         any collected newsroom flagged has_paywall or requires_login
-TV market: crawler src/enrichment/reference/county_dma.csv. Audrain, Boone and Osage excluded.
+TV market: pinned county_dma.csv (excluded_outlets.county_dma()). Audrain, Boone and Osage excluded.
 """
 import json
+import sys
 from pathlib import Path
 
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from spillover_common import NOT_LOCAL, county_dma, registry  # noqa: E402
+
 root = Path(__file__).resolve().parents[1]
-repo = Path.home() / "VSCode/NewsCrawler/MizzouNewsCrawler"
-reg = pd.read_csv(repo / "src/lookups/mo_outlet_registry.csv", dtype=str, keep_default_na=False)
-reg = reg[(reg.status == "active") & (reg.county_fips.str.startswith("29"))]
+reg = registry(keep_default_na=False)
+reg = reg[(reg.status == "active") & (reg.county_fips.str.startswith("29")) & ~reg.outlet.isin(NOT_LOCAL)]
 q = pd.read_csv(root / "coverage/source_quality_2026_03.csv", dtype={"source_id": str})
 for c in ("has_paywall", "requires_login"):
     q[c] = q[c].astype(str).str.lower().isin(["t", "true"])
@@ -26,7 +30,7 @@ placed = pd.DataFrame(arts).assign(placed=lambda x: x.counties.map(bool)).groupb
 m = reg.merge(q, on="source_id", how="left", suffixes=("", "_q"))
 m["collected"] = m.collected_in_march.eq("yes") & m.local_news.fillna(0).gt(0)
 m["placed_n"] = m.source_id.map(placed["sum"]).fillna(0)
-dma = pd.read_csv(repo / "src/enrichment/reference/county_dma.csv", dtype=str).set_index("county_geoid").dma_name
+dma = county_dma(dtype=str).set_index("county_geoid").dma_name
 rows = []
 for f, g in m.groupby("county_fips"):
     c = g[g.collected]

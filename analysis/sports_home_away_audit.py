@@ -1,15 +1,20 @@
 """Sports stories centred away from home, before and after the focus-v4 re-run (home-team rule).
 
-A Sports story is spillover when the county it is centred in is not the outlet's home county. Before focus-v4 the
+A Sports story is spillover when the county it is centred in is outside the outlet's HOME set (spillover_common:
+its county, HOME_COUNTY applied, every county its city lies in, Kansas City, Kansas for Kansas City outlets). Before focus-v4 the
 enrichment model centred a game story on where it was played; focus-v4 centres it on the publication's local team.
 This compares each re-run Sports story's centre county in the story-map export made before the re-run
 (coverage/rerun_2026_10_17/statewide_export_pre_sports.json) with the current export, and writes the stories still
 centred away from home for reading (coverage/rerun_2026_10_17/sports_still_away.csv).
 """
 import json
+import sys
 from pathlib import Path
 
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from spillover_common import outlet_home  # noqa: E402
 
 root = Path(__file__).resolve().parents[1]
 R = root / "coverage/rerun_2026_10_17"
@@ -29,10 +34,11 @@ def frame(path):
     for a in json.load(open(path))["articles"]:
         if cin.get(a["id"]) != "Sports":
             continue
-        h = fips_of(a["publisher_county"])
+        f = fips_of(a["publisher_county"])
+        h, hs = outlet_home(a["publisher"], f) if f else (None, frozenset())
         c = a["central"]
         rows.append({"id": a["id"], "outlet": a["publisher"], "type": a["publisher_type"] or "", "home": h,
-                     "central": c, "away": bool(c) and bool(h) and unit(c) != unit(h)})
+                     "central": c, "away": bool(c) and bool(h) and unit(c) not in hs})
     return pd.DataFrame(rows).set_index("id")
 
 

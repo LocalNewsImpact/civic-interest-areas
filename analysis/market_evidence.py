@@ -1,6 +1,5 @@
-"""How much evidence each hexagon on an information needs map rests on. For every market of a region: the hexagons
-drawn (the approved selection, then the stability filter -- inside the connected area that holds in both halves of
-the year), and for each the residents' worth of travel behind it: the market's residents x the share of the market's
+"""How much evidence each hexagon on a civic interest area (the published, network-tie map) rests on. For every market of a region: the hexagons
+drawn (the area: the ensemble core, p >= 0.5, flows/area_ensemble.py; home left out), and for each the residents' worth of travel behind it: the market's residents x the share of the market's
 travel going to the hexagon's unit (a town, or a rural block group), divided evenly over the unit's hexagons.
 Usage: market_evidence.py <region>"""
 import json
@@ -19,9 +18,10 @@ os.environ["TIE_LIB"] = "1"
 sys.argv = ["confidence_layer.py", region]
 g = {"__file__": str(root / "analysis/confidence_layer.py"), "__name__": "lib"}
 src = open(root / "analysis/confidence_layer.py").read()
-exec(compile(src[:src.index("out = {}\nfor town in")], "confidence_layer.py", "exec"), g)
+exec(compile(src[:src.index("if __name__ == \"__main__\":")], "confidence_layer.py", "exec"), g)
 ns, MAPS, P = g["ns"], g["MAPS"], g["P"]
 C = json.load(open(root / ("flows/reach/confidence_columbia.json" if region == "columbia" else f"flows/reach/{region}/confidence.json")))
+PROB = json.load(open(root / ("flows/reach/probability_columbia.json" if region == "columbia" else f"flows/reach/{region}/probability.json")))
 Wa, Ha = np.array(P["W"]), np.array(P["H"])
 unit_at, centre = ns["unit_at"], ns["centre"]
 unit_hexes = defaultdict(list)
@@ -31,18 +31,15 @@ rows = []
 for town, ms in MAPS["towns"].items():
     for m in ms:
         pt = next(p for p in ns["out"][town] if p["rank"] == m["rank"])
-        hbi = [P["homes"].index(h) for h in ns["town_bgs"](town) if h in P["homes"]]
-        Wm, Xm = Wa[hbi], np.asarray(P["X"])[hbi]
-        den = np.maximum(Wm @ Ha, 1e-9)
-        trav = sum((Xm * (Wm[:, k:k + 1] * Ha[k][None, :] / den)).sum(0) for k in pt["patterns"])
+        # residents' visits attributed to the area's pattern, own units masked (confidence_layer.pattern_travel)
         drop = ns["own_units"](town)
-        tv = {u: x for u, x in zip(P["units"], trav) if x > 0 and u not in drop}
+        tv = {u: x for u, x in g["pattern_travel"](town, pt["patterns"], P["X"]).items() if u not in drop}
         tot = sum(tv.values())
         res_u = {u: m["residents"] * x / tot for u, x in tv.items()}
-        net = m["index"]["net"]
-        on, basef = g["shown_set"](net, set(MAPS.get("in_market", [])))
-        area = shape(C[town][str(m["rank"])]["outline"])
-        drawn = [k for k in on if net[k] < 100 and k in centre and area.contains(Point(*centre[k]))]
+        net = m["index"]["net"]                    # the published (network-tie) map
+        # THE AREA = the ensemble core, p >= 0.5 (flows/area_ensemble.py; user 2026-10-25), home left out
+        core = {k for k, v in PROB.get(town, {}).get(str(m["rank"]), {}).get("p", {}).items() if v >= 0.5}
+        drawn = [k for k in core if k not in g["HOMES"][town] and k in centre]
         for k in drawn:
             u = unit_at.get(k)
             rows.append({"town": town, "rank": m["rank"], "residents": m["residents"], "hex": k,

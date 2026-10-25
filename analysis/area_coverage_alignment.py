@@ -1,8 +1,14 @@
-"""How well news coverage lines up with where residents travel, in each published civic interest area
-(Columbia I and II, Mexico, Linn), and how many newsrooms it takes to supply that coverage.
+"""QA DIAGNOSTIC (2026-10-24: supply figures belong to the next paper, not this one). How well news coverage lines up
+with where residents travel, in each civic interest area's travel-only footprint
+(Columbia, Mexico, Linn), and how many newsrooms it takes to supply that coverage.
 
-AREA: the published area -- the footprint: the hexagons whose centres lie inside its outline
-  (flows/reach/confidence_columbia.json). Every hexagon counts the same.
+AREA (2026-10-25): the TRAVEL-ONLY CORE of the settings ensemble (hexagons drawn in half or more of its members,
+  flows/area_ensemble.py p_travel). Before: the hexagons whose centres lie inside the travel-only outline
+  (flows/reach/confidence_columbia.json), drawn from the TRAVEL-ONLY civic interest area (user, 2026-10-24, option A:
+  supply is measured on where residents go, not on an area news ties already enlarged). Every hexagon counts the same.
+  Area = the hexagons' area on the ground, 5.85 km2 x cos(latitude) / cos(38.7) each (the hexagon plane is scaled at
+  38.7 N). "people inside" = the 2020 population of those hexagons (block-group population over the
+  hexagons whose centres lie in it), beside the residents allocated to the area's travel pattern.
 STORIES, March 2026, local outlets statewide (statewide and campus outlets excluded): each story's geolocated central
   point, standing for an area set by its geographic scope (the enrichment's scope classification,
   coverage/storymap/statewide_2026_03_scope.csv):
@@ -24,6 +30,8 @@ STORIES, March 2026, local outlets statewide (statewide and campus outlets exclu
   "local" = the same without county-level points and county mentions.
   A hexagon's coverage = the weighted stories in the month whose area includes it. Tiers (user, 2026-10-19; renamed 2026-10-20):
   regular = 2+ a month (2-3 a month as the floor); frequent = 9+ a month (2-3 a week: 2 x 31/7); sporadic = under 2.
+  "None" cannot occur in an area: every hexagon lies in a county, and every county in an area has county-level stories
+  or mentions, which reach all of its hexagons (by population); the tier is reported for completeness.
 
 Per area, with and without the home town: the share of the footprint's hexagons with any and with regular coverage;
 the same from town- and point-scope stories alone (without whole-county stories); and the fewest outlets that together
@@ -93,9 +101,20 @@ def within_km(lon, lat, km):
             if math.hypot((hc[_ids[i]][0] - lon) * KX, (hc[_ids[i]][1] - lat) * 110.57) <= km]
 
 
+from functools import lru_cache  # noqa: E402
+
+from shapely.ops import transform as _tf  # noqa: E402
+
+_KXP, _KYP = 111.32 * math.cos(math.radians(38.7)), 110.57      # the hexagon plane, km
+
+
+@lru_cache(maxsize=None)
 def town_area(g_):
-    geom = pl_shapes[g_][1].buffer(3 / 110.57)
-    return set([_ids[i] for i in _tree.query(geom) if geom.contains(Point(*hc[_ids[i]]))]) | set(place_hexes(g_))
+    """the town and 3 km around it -- buffered on the km plane (isotropic; 2026-10-24: was 3/110.57 degrees, 2.4 km
+    east-west), as a set of hexagons"""
+    gk = _tf(lambda x, y, z=None: (x * _KXP, y * _KYP), pl_shapes[g_][1]).buffer(3.0)
+    geom = _tf(lambda x, y, z=None: (x / _KXP, y / _KYP), gk)
+    return frozenset([_ids[i] for i in _tree.query(geom) if geom.contains(Point(*hc[_ids[i]]))]) | set(place_hexes(g_))
 
 
 def town_at(lon, lat):
@@ -162,7 +181,9 @@ def attribute(hs, w, by_pop):
     tot_pop = sum(hex_pop.get(k, 0) for k in hs)
     if tot_pop <= 0:
         return {k: per for k in hs}
-    return {k: per * len(hs) * hex_pop.get(k, 0) / tot_pop for k in hs}
+    # spread by population, CAPPED at the story's weight w per hexagon (2026-10-24, peer review): a county story spread
+    # by population put up to several stories' weight on one dense hexagon (a county seat's centre)
+    return {k: min(w, per * len(hs) * hex_pop.get(k, 0) / tot_pop) for k in hs}
 
 
 story_hexes = defaultdict(dict)                 # article -> hexagon -> (weight, local), the strongest claim kept
@@ -199,22 +220,31 @@ print("stories with a local area:", len(story_area), "of", sum(1 for a in art_ou
 RDIR = flows / "reach" if REGION == "columbia" else flows / "reach" / REGION
 MAPS = json.load(open(RDIR / "market_pattern_maps.json"))
 CONF = json.load(open(RDIR / ("confidence_columbia.json" if REGION == "columbia" else "confidence.json")))
+# THE QA FOOTPRINT (2026-10-25, D2-A): the TRAVEL-ONLY core of the settings ensemble -- hexagons drawn in half or more of
+# its members with travel-only ties (flows/area_ensemble.py p_travel) -- the same kind of object as the published area
+PROB = json.load(open(RDIR / ("probability_columbia.json" if REGION == "columbia" else "probability.json")))
+# the multi-part rule applies (area_core.py: the home body and every piece of 3+ hexagons; specks out)
+travel_core = lambda town, rank: sorted(k for k in PROB[town][str(rank)].get("core50_travel_part_hexes",
+                                        [k for k, v in PROB[town][str(rank)]["p_travel"].items() if v >= 0.5]) if k in MAPS["hexes"])
+HOME_HEX = {t_: set(h_.get("hexes", [])) for t_, h_ in MAPS["home"].items()}
+# area on the ground (2026-10-25): a hexagon of the plane x = lon x 111.32 cos 38.7 is 5.85 x cos(lat) / cos(38.7) km2
+_hlat = lambda k: sum(c[1] for c in MAPS["hexes"][k][:6]) / 6
+km2_of = lambda hs: sum(ns["HEX_KM2"] * math.cos(math.radians(_hlat(k))) / math.cos(math.radians(38.7)) for k in hs)
 # the study's three towns in the Columbia region; every town's areas elsewhere
-AREAS = ([("Columbia", 1), ("Columbia", 2), ("Mexico", 1), ("Linn", 1)] if REGION == "columbia"
-         else [(t, m["rank"]) for t, ms in MAPS["towns"].items() for m in ms if str(m["rank"]) in CONF.get(t, {})])
+AREAS = ([(t, m["rank"]) for t in ("Columbia", "Mexico", "Linn") for m in MAPS["towns"][t]] if REGION == "columbia"
+         else [(t, m["rank"]) for t, ms in MAPS["towns"].items() for m in ms if str(m["rank"]) in PROB.get(t, {})])
 SUFFIX = "" if REGION == "columbia" else f"_{REGION}"
 rows = []
 for town, rank in ([] if os.environ.get("COV_LIB") == "1" else AREAS):
     m = next(x for x in MAPS["towns"][town] if x["rank"] == rank)
-    outline = shape(CONF[town][str(rank)]["outline"])
-    area = [k for k, v in MAPS["hexes"].items()
-            if outline.contains(Point(sum(c[0] for c in v[:6]) / 6, sum(c[1] for c in v[:6]) / 6))]
-    home = {k for k in area if m["index"]["0"].get(k, 0) >= 100}
+    area = travel_core(town, rank)
+    home = set(area) & HOME_HEX[town]                 # home flagged explicitly, never read from a tie of 100
     for scope in ("with home town", "outside home town"):
         hs = [k for k in area if scope == "with home town" or k not in home]
         mass = {k: 1.0 for k in hs}
         tot = len(hs)
-        row = {"area": f"{town} {'I' * rank}", "scope": scope, "hexagons": len(hs)}
+        row = {"area": f"{town} {'I' * rank}", "scope": scope, "hexagons": len(hs), "km2": round(km2_of(hs)),
+               "people_inside": round(sum(hex_pop.get(k, 0) for k in hs)), "residents_allocated": m["residents"]}
         for kind in ("all", "local"):
             cv = {k: sum(cov[kind][o].get(k, 0) for o in cov[kind]) for k in hs}
             row[f"{kind}: any"] = round(sum(1 for k in hs if cv[k] > 0) / tot, 2)
@@ -279,13 +309,20 @@ for r in plc.drop_duplicates(["article_id", "geoid"]).itertuples():
         ll = _ll(r.geoid_level, r.geoid, None, float("nan"))
         if ll:
             STORY_PTS[o].append((*ll, 0.5 * (0.5 if CIN.get(r.article_id) == "Sports" else 1.0)))
-_reg = pd.read_csv(Path.home() / "VSCode/NewsCrawler/MizzouNewsCrawler/src/lookups/mo_outlet_registry.csv", dtype=str)
+sys.path.insert(0, str(root / "analysis"))
+from excluded_outlets import registry  # noqa: E402
+
+_reg = registry()                      # pinned (data/registry)
 _reg = _reg[_reg.state == "MO"].dropna(subset=["lat", "lon"]).drop_duplicates("outlet")
 REG_LL = {r.outlet: (float(r.lon), float(r.lat)) for r in _reg.itertuples()}
+# an outlet homed in the county it covers (excluded_outlets.HOME_COUNTY) is centred on that county's seat
+# (market_patterns.HOME_TOWN: St. Charles city, Springfield), not on its office in another county
+for o_, g_ in ns["HOME_TOWN"].items():
+    if g_ in pl_shapes:
+        c_ = pl_shapes[g_][1].representative_point()
+        REG_LL[o_] = (c_.x, c_.y)
 for town, rank in AREAS:
-    outline = shape(CONF[town][str(rank)]["outline"])
-    area = [k for k, v in MAPS["hexes"].items()
-            if outline.contains(Point(sum(c[0] for c in v[:6]) / 6, sum(c[1] for c in v[:6]) / 6))]
+    area = travel_core(town, rank)
     layer.setdefault(town, {})[rank] = {kind: {k: round(sum(cov[kind][o].get(k, 0) for o in cov[kind]), 2) for k in area}
                                         for kind in ("all", "local")}
     layer[town][rank]["pop"] = {k: round(hex_pop.get(k, 0)) for k in area}
@@ -325,9 +362,7 @@ if os.environ.get("SYNDCHECK") == "1":
                "STL Public Radio", "The Kansas City Star", "KC Magazine", "KMBC News 9", "KHQA 7", "KTVO CBS", "North West Missourian"}
     allarea = set()
     for town, rank in AREAS:
-        outline = shape(CONF[town][str(rank)]["outline"])
-        allarea |= {k for k, v in MAPS["hexes"].items()
-                    if outline.contains(Point(sum(c[0] for c in v[:6]) / 6, sum(c[1] for c in v[:6]) / 6))}
+        allarea |= set(travel_core(town, rank))
     out_rows = []
     for aid, hs in story_hexes.items():
         o = art_out[aid]

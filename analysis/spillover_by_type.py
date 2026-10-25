@@ -35,14 +35,16 @@ data = json.load(open(root / "coverage/storymap/statewide_2026_03_articles.json"
 by_name = {n.lower(): f for f, n in cov.name.items()}
 by_name.update({"st. louis": "29189", "st louis": "29189", "st. louis city": "29510"})
 fips_of = lambda n: by_name.get((n or "").lower().replace(" county", "").strip())
-EXCLUDE = {"The Maneater", "CoMoBuzz"}   # out of Boone's coverage, as on the maps
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+from spillover_common import NOT_LOCAL as EXCLUDE, home_fips  # one outlet set (EXCLUDE + CAMPUS) and HOME_COUNTY for every count
 HOME = {"Audrain": "29007", "Boone": "29019", "Osage": "29151"}
 print("types:", cov.type.value_counts().to_dict(), "| the three:", {n: cov.type[f] for n, f in HOME.items()})
 
 for version, keep in (("all outlets", lambda a: True), ("print and digital", lambda a: "broadcast" not in (a["publisher_type"] or ""))):
     n = defaultdict(lambda: [0, 0])
     for a in data["articles"]:
-        i = fips_of(a["publisher_county"])
+        i = home_fips(a["publisher"], fips_of(a["publisher_county"]))
         if a["publisher"] in EXCLUDE or not i or not a["counties"] or not keep(a):
             continue
         n[i][0] += 1

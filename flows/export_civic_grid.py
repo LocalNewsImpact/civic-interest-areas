@@ -14,6 +14,9 @@ Public Census geography only -- no Advan data -- so it ships inside datadesk bes
            neighbouring state's county borders for context (user, 2026-10-22)
   markets  region: [TV market name, outline] (flows/reach/**/market_pattern_maps.json)
   landmarks  [name, lon, lat] from flows/regions.json, for naming an unlabelled cluster
+  areas_p  "region|town|area": {"p": {hexagon: p}, "area": {hexagon: part}}: each hexagon's likelihood of being
+           part of the area (the ensemble's 1,728 versions weighted equally), and the multi-part area (flows/area_core.py)
+           (flows/area_ensemble.py; derived from Advan travel at the hexagon level -- check the licence before shipping)
 
 Every number is the one today's coverage maps were computed from (analysis/area_coverage_alignment.py), so the
 builder's coverage density can be checked against them.
@@ -73,7 +76,16 @@ for reg, cfg in regions.items():
         mk = json.load(open(f))["market"]
         markets_out[reg] = [mk["name"], {"type": mk["outline"]["type"], "coordinates": rnd(mk["outline"]["coordinates"])}]
 landmarks_out = [[l["name"], l["lon"], l["lat"]] for cfg in regions.values() for l in cfg.get("landmarks", [])]
+# AREA PROBABILITY (2026-10-24, flows/area_ensemble.py): per built area, each hexagon's share of the settings ensemble's
+# members that draw it -- "region|town|area": {hexagon: p}
+areas_p = {}
+for reg, cfg in regions.items():
+    f = root / ("flows/reach/probability_columbia.json" if reg == "columbia" else f"{cfg['out']}/probability.json")
+    if f.exists():
+        for t_, ranks in json.load(open(f)).items():
+            for r_, rec in ranks.items():
+                areas_p[f"{reg}|{t_}|{r_}"] = {"p": rec["p"], "area": rec.get("core50_part_hexes", {})}
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text(json.dumps({"grid": grid, "hexes": hexes_out, "places": places_out, "counties": counties_out,
-                               "markets": markets_out, "landmarks": landmarks_out}, separators=(",", ":")))
+                               "markets": markets_out, "landmarks": landmarks_out, "areas_p": areas_p}, separators=(",", ":")))
 print(f"{out}: {len(hexes_out):,} hexagons, {len(places_out):,} towns, {len(counties_out)} counties, {len(markets_out)} markets, {out.stat().st_size // 1024} KB")

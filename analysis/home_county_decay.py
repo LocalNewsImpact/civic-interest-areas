@@ -36,7 +36,8 @@ for region in ("columbia", "springfield", "cape", "kirksville", "joplin", "kansa
         if OWN_TOWN and not own:
             continue
         for o, al in by_outlet.items():
-            if (o not in own) if OWN_TOWN else (ns["fips_of"](al[0]["publisher_county"]) != home or o in ns["EXCLUDE"]):
+            # home_of: excluded_outlets.home_fips -- a HOME_COUNTY outlet counts with the county it covers
+            if (o not in own) if OWN_TOWN else (ns["home_of"](al[0]) != home or o in ns["EXCLUDE"]):
                 continue
             for a in al:
                 sw = 0.5 if ns["cin"].get(a["id"]) == "Sports" else 1

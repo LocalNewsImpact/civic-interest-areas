@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
-FREE = Path.home() / "VSCode/advan/free"
+FREE = Path(__file__).resolve().parents[1] / "free"   # this repository's free/ (was ~/VSCode/advan/free)
 
 COUNTIES = {  # FIPS: (name, primary?) -- the map places each at its county's centre
     "29007": ("Audrain", True),

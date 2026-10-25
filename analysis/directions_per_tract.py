@@ -1,8 +1,9 @@
 """How many directions does a home area's regular travel go beyond its home county? Missouri tracts.
 
-Observed: Advan Neighborhood Patterns Plus, home tract -> destination county (od_tract_mo_2026.csv), January-September
-2026; regular travel = destinations visited in at least 7 of the 9 months; home county excluded (Measurement
-corrections). Directions: destination counties grouped into eight 45-degree sectors by bearing from the tract's centre
+Observed: Advan Neighborhood Patterns Plus, home tract -> destination county (od_tract_mo_2026.csv), January-July 2026
+(2020 block groups; August-September are 2010 block groups and are not in the tract file); regular travel = destinations
+visited in at least 6 of the 7 months (the 2026-10-16 rule was 7 of 9: the same share, 78%, rounded up); home county
+excluded (Measurement corrections). Directions: destination counties grouped into eight 45-degree sectors by bearing from the tract's centre
 of population to the county's. Count = fewest directions covering 80% of the tract's regular out-of-county visits;
 effective number = 1 / sum of squared direction shares.
 Predicted: the public model with Missouri segment corrections (public_adjusted_pairs_trnear.csv, adjusted_C; each
@@ -41,8 +42,11 @@ def summary(s):
 
 
 od = pd.read_csv(A / "od_tract_mo_2026.csv", dtype={"home_tract": str, "dest_county": str})
+assert od.month.max() <= "2026-07", "od_tract_mo_2026.csv must hold 2020 block-group months only (build_tract_od.py)"
+MIN_MONTHS = int(np.ceil(7 / 9 * od.month.nunique()))
 months = od.groupby(["home_tract", "dest_county"]).month.nunique()
-v = od.groupby(["home_tract", "dest_county"]).all_day.sum()[lambda x: months.reindex(x.index) >= 7]
+v = od.groupby(["home_tract", "dest_county"]).all_day.sum()[lambda x: months.reindex(x.index) >= MIN_MONTHS]
+print(f"regular travel: destinations seen in at least {MIN_MONTHS} of {od.month.nunique()} months")
 obs = summary(directions(v.reset_index().set_axis(["t", "j", "v"], axis=1)))
 Q = pd.read_csv(A / "public_adjusted_pairs_trnear.csv", dtype={"tract": str, "j": str, "home": str})
 Q = Q[Q.j.str[:2] == "29"]
