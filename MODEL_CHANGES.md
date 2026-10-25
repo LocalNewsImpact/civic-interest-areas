@@ -37,8 +37,7 @@ the gain.
 
 1. Core terms by theory, tested as blocks (distance, border, commuting), never one term at a time; kept by theory.
 2. Hypothesis terms stated in advance and reported whatever the result: spillover, broadcaster and print and digital
-   outlets in the county; coverage, the metro / nonmetro split (log visits × nonmetro newsroom county). Travel has
-   none.
+   outlets in the county; coverage, the urban / rural split (log visits × rural newsroom county). Travel has none.
 3. Exploratory additions only through the nested guard: the search repeated inside each training set and scored on
    the held-out counties; adopted only if the nested gain has an interval excluding zero. None passes in any model.
 4. One declared primary metric per model: travel, share-weighted error over all Missouri destinations; coverage,
@@ -67,44 +66,53 @@ out less); the second biases b upward as a phantom share, the opposite direction
 removes.
 
 **Travel** — doubly-constrained gravity, PPML; home and destination fixed effects + 8 core pair terms in three blocks
-(`gravity_terms.FACTORS`):
+(`gravity_terms.FACTORS`); rural home county = under 50% of its 2020 population in Census urban areas (Rural flag,
+below):
 
 | Measure | Value | Script |
 |---|---|---|
-| Held-out share-weighted error, all Missouri destinations (primary) | 3.28 [2.94, 3.61] | `travel_model.py` |
-| — small rural (56) / independent towns (32) / commuter (18) / hubs (9) | 3.54 / 2.86 / 3.70 / 2.39 | `travel_model.py` |
-| Held-out R² of shares | 93.7% [92.4, 94.9] (fixed effects only: error 16.04, R² 0.9%) | `travel_model.py` |
-| Big flows (forecast 5%+, 483 pairs): error; within 0.8–1.25× | 3.44 [3.16, 3.72]; 49% [45, 54] | `travel_model.py` |
-| Top forecast destination, actual ÷ forecast | 1.03× (middle half 0.87–1.20) | `travel_model.py` |
-| Block gains: distance / border / commuting | +1.043 [+0.652, +1.426] / +0.199 [−0.033, +0.426] / +0.465 [+0.262, +0.706] | `travel_model_dc_test.py selection` |
-| Nested guard, 24 exploratory candidates | gain +0.062 [−0.097, +0.203]: none adopted | `combined_marginal_test.py travel_nested_all` |
-| Distance elasticity at 25 mi, mean-size home county: metro / nonmetro | −0.98 (s.e. 0.11) / −0.48 (0.17) | `travel_model.py` |
-| Commuting out / in | +0.284 [+0.197, +0.371] / +0.197 [+0.125, +0.269] | `travel_model.py` |
-| Stability, Jul–Sep from Jan–Jun: model / persistence error | 2.94 / 1.46 | `travel_model.py` |
-| Moran's I of held-out error by home county / signed residual by destination (115 counties, 999 permutations) | +0.057 (p 0.266) / +0.175 (p 0.005: under-predicted destinations cluster) | `residual_autocorrelation.py` |
-| Distance form: restricted cubic spline, change in held-out error (knots at pair / visit-weighted quantiles) | +0.175 [−0.007, +0.384] / +0.000 [−0.154, +0.209]: quadratic kept | `travel_distance_spline.py` |
+| Held-out share-weighted error, all Missouri destinations (primary) | 3.28 [2.96, 3.59] | `travel_model.py` |
+| — small rural (56) / independent towns (32) / commuter (18) / hubs (9) | 3.41 / 2.84 / 4.28 / 2.06 | `travel_model.py` |
+| Held-out R² of shares | 93.7% [92.4, 94.8] (fixed effects only: error 16.04, R² 0.9%) | `travel_model.py` |
+| Big flows (forecast 5%+, 485 pairs): error; within 0.8–1.25× | 3.44 [3.19, 3.71]; 49% [45, 53] | `travel_model.py` |
+| Top forecast destination, actual ÷ forecast | 1.00× (middle half 0.86–1.19) | `travel_model.py` |
+| Block gains: distance / border / commuting | +1.047 [+0.653, +1.433] / +0.125 [−0.105, +0.347] / +0.457 [+0.245, +0.676] | `travel_model_dc_test.py selection` |
+| Nested guard, 24 exploratory candidates | gain +0.106 [−0.045, +0.263]: none adopted | `combined_marginal_test.py travel_nested_all` |
+| Distance elasticity at 25 mi, mean-size home county: urban / rural | −0.88 (s.e. 0.13) / −0.70 (0.15) | `travel_model.py` |
+| Rural × log distance / rural × log distance² | +0.177 (s.e. 0.120, p = 0.14) / −0.210 (0.054, p < 0.001); the first is not distinguishable from zero alone and is tested only within the distance block | `travel_model.py` |
+| Commuting out / in | +0.277 (s.e. 0.045) / +0.189 (0.036) | `travel_model.py` |
+| Stability, Jul–Sep from Jan–Jun: model / persistence error | 2.96 / 1.46 | `travel_model.py` |
+| Moran's I of held-out error by home county / signed residual by destination (115 counties, 999 permutations); RUCC flag, before 2026-10-25 | +0.057 (p 0.266) / +0.175 (p 0.005: under-predicted destinations cluster) | `residual_autocorrelation.py` |
+| Distance form: restricted cubic spline, change in held-out error (knots at pair / visit-weighted quantiles) | +0.150 [−0.084, +0.392] / −0.012 [−0.129, +0.123]: quadratic kept | `travel_distance_spline.py` |
 
-The border block's held-out gain interval includes zero; it is kept as a core term by theory (coefficient +0.464
-[+0.335, +0.592]).
+The border block's held-out gain interval includes zero; it is kept as a core term by theory (coefficient +0.440
+[+0.309, +0.572], `travel_model_dc_test.py selection`).
 
 **Coverage** — PPML of March story-county pairs; core gravity blocks, newsroom-county and covered-county fixed
-effects, log visits (where > 0), zero-visit indicator; hypothesis term log visits × nonmetro newsroom county (RUCC
-4–9); errors clustered by newsroom county:
+effects, log visits (where > 0), zero-visit indicator; hypothesis term log visits × rural newsroom county (under 50%
+of 2020 population in Census urban areas); errors clustered by newsroom county:
 
 | Measure | All outlets | Print and digital | Script |
 |---|---|---|---|
 | Stories / newsroom counties / out-of-county story-county pairs | 14,877 / 88 / 10,282 | 8,301 / 88 / 6,674 | `coverage_model.py` |
-| Elasticity of stories to visits, metro newsroom counties (27) | 0.50 (s.e. 0.067; 0.37–0.63) | 0.52 (0.083; 0.36–0.69) | `coverage_model.py` |
-| Elasticity, nonmetro newsroom counties (61) | 0.26 (s.e. 0.061; 0.14–0.38) | 0.26 (0.060; 0.14–0.38) | `coverage_model.py` |
-| Hypothesis term, nonmetro − metro | −0.244 (s.e. 0.040, p < 0.001) | −0.262 (0.059, p < 0.001) | `coverage_model.py` |
-| Hypothesis term, gain on the primary metric | +0.125 [+0.048, +0.203] | +0.088 [+0.004, +0.170] | `coverage_model.py` |
-| Twice the visits, metro / nonmetro | 1.42× / 1.19× the stories | 1.44× / 1.20× | `coverage_model.py` |
-| Commuting in / out | +0.41 (s.e. 0.072) / −0.04 (0.085, n.s.) | +0.36 (0.070) / −0.05 (0.081, n.s.) | `coverage_model.py` |
-| Held-out error, destinations with 1%+ of visits (primary; per-county mean, 8 folds) | 4.46 [4.02, 4.93] | 4.56 [4.11, 5.02] | `coverage_model.py` |
-| Held-out error, all destinations (beside) | 0.915 [0.846, 0.982] | 0.942 [0.875, 1.004] | `coverage_model.py` |
-| Saturation, nested guard | gain −0.010 [−0.024, +0.004]: not supported | +0.001 [−0.025, +0.030] | `coverage_saturation_test.py` |
-| Moran's I of in-sample error by newsroom county (88 counties) | −0.093 (p 0.265) | −0.116 (p 0.147; no broadcasters) | `residual_autocorrelation.py` |
-| Pooled elasticity, no hypothesis term (sensitivity) | 0.37 (s.e. 0.061) | 0.35 (0.066) | `coverage_model.py` |
+| Elasticity of stories to visits, urban newsroom counties (23) | 0.47 (s.e. 0.069; 0.33–0.60) | 0.48 (0.086; 0.31–0.64) | `coverage_model.py` |
+| Elasticity, rural newsroom counties (65) | 0.24 (s.e. 0.059; 0.13–0.36) | 0.26 (0.058; 0.14–0.37) | `coverage_model.py` |
+| Hypothesis term, rural − urban | −0.225 (s.e. 0.047, p < 0.001) | −0.220 (0.067, p < 0.001) | `coverage_model.py` |
+| Hypothesis term, gain on the primary metric | +0.128 [+0.045, +0.213] | +0.081 [+0.004, +0.161] | `coverage_model.py` |
+| Twice the visits, urban / rural | 1.38× / 1.18× the stories | 1.39× / 1.19× | `coverage_model.py` |
+| Commuting in / out | +0.42 (s.e. 0.069) / −0.02 (0.087, n.s.) | +0.36 (0.064) / −0.03 (0.084, n.s.) | `coverage_model.py` |
+| Distance block, gain on the primary metric (kept by theory) | −0.125 [−0.255, −0.001] | −0.188 [−0.381, −0.010] | `coverage_model.py` |
+| Held-out error, destinations with 1%+ of visits (primary; per-county mean, 8 folds) | 4.54 [4.09, 5.04] | 4.63 [4.18, 5.12] | `coverage_model.py` |
+| Held-out error, all destinations (beside) | 0.922 [0.852, 0.988] | 0.947 [0.881, 1.009] | `coverage_model.py` |
+| Rurality and newsroom size: × rural beside × outlets, daily and TV; that model against the adopted, held out | −0.166 (s.e. 0.043); change −0.017 [−0.072, +0.039] | — | `coverage_newsroom_size_test.py` |
+| Saturation, nested guard | gain +0.001 [−0.016, +0.021]: not supported | −0.001 [−0.030, +0.032] | `coverage_saturation_test.py` |
+| Moran's I of in-sample error by newsroom county (88 counties); RUCC flag, before 2026-10-25 | −0.093 (p 0.265) | −0.116 (p 0.147; no broadcasters) | `residual_autocorrelation.py` |
+| Pooled elasticity, no hypothesis term (sensitivity) | 0.38 (s.e. 0.060) | 0.37 (0.066) | `coverage_model.py` |
+
+The distance block's held-out gain interval lies below zero: leaving it out would lower primary held-out error. It is
+kept as a core term by theory (Wald χ² 115.3, df 5, p < 0.001). Rurality is the main explanation of the urban–rural
+coverage gap; newsroom size contributes; held-out prediction cannot separate the two (Coverage model, Rurality and
+newsroom size).
 
 **Spillover** — outlet-level logistic: spillover ~ broadcaster + log(1 + print and digital outlets in the county),
 both hypothesis terms (`spillover_common.FINAL`); mention 0.5 and Sports 0.5 are definitions:
@@ -196,6 +204,62 @@ Tie markets, 36 towns in all seven markets: accuracy median 0.58 (mean 0.580), m
 travel alone 0.59; by market Columbia 0.50, Springfield 0.56, Joplin 0.75, Kirksville 0.60, Cape Girardeau 0.38, Kansas
 City 0.95, St. Joseph 0.59 (`analysis/tie_footprint.py SUMMARY=1`, from the settings each run recorded, identical in
 all seven). Supply (coverage density, balanced diet) is not a result of this paper: see Supply (QA only; next paper).
+
+### Rural flag: Census settlement replaces RUCC (2026-10-25)
+
+**Adopted (authors' decision, 2026-10-25):** a county is rural when under 50% of its 2020 population lives in Census
+urban areas (`analysis/county_urban_share.csv`, `pct_urban` < 0.5, Census "mostly or completely rural"; St. Louis city
+takes St. Louis County's value; `gravity_terms.cov.rural`). 89 counties are rural and 26 urban; of the 88 newsroom
+counties in the coverage model, 65 are rural and 23 urban. Audrain (45% urban) and Osage (0%) are rural; Boone (77%)
+is urban. The flag replaces USDA RUCC nonmetro (codes 4–9) in the travel model's distance terms
+(`rural_i_x_log_dist`, `rural_i_x_log_dist_sq`) and in the coverage model's hypothesis term (`log_visits_x_rural`).
+
+Why: RUCC classes a county by commuting to a metro core, not by settlement. Osage was RUCC metro because it is in the
+Jefferson City metro area by commuting, and it has no urban population. Of the 89 rural counties, 20 were RUCC metro;
+of the 26 urban counties, 11 were RUCC nonmetro (`gravity_terms.py`). Disclosure: the flag was changed after the
+RUCC-flag results had been seen; both sets of figures are reported.
+
+| Figure | RUCC flag (audit round 3) | Rural flag (adopted) | Script |
+|---|---:|---:|---|
+| **Travel coefficients** (two-way s.e.) | | | `travel_model.py` |
+| log distance (elasticity at 25 mi, metro / urban home) | −0.983 (0.110) | −0.875 (0.126) | `travel_model.py` |
+| log distance² | −0.265 (0.031) | −0.259 (0.032) | `travel_model.py` |
+| flag × log distance (nonmetro / rural) | +0.505 (0.115) | +0.177 (0.120; p = 0.14) | `travel_model.py` |
+| flag × log distance² | −0.261 (0.069) | −0.210 (0.054) | `travel_model.py` |
+| log home population × log distance | +0.181 (0.027) | +0.133 (0.031) | `travel_model.py` |
+| shared border | +0.464 (0.066) | +0.440 (0.067) | `travel_model.py` |
+| commuting out | +0.284 (0.045) | +0.277 (0.045) | `travel_model.py` |
+| commuting in | +0.197 (0.037) | +0.189 (0.036) | `travel_model.py` |
+| Elasticity at 25 mi, mean-size home county: metro / nonmetro → urban / rural | −0.98 (0.11) / −0.48 (0.17) | −0.88 (0.13) / −0.70 (0.15) | `travel_model.py` |
+| Held-out error (primary) | 3.28 [2.94, 3.61] | 3.28 [2.96, 3.59] | `travel_model.py` |
+| Held-out R² of shares | 93.7% [92.4, 94.9] | 93.7% [92.4, 94.8] | `travel_model.py` |
+| Block gain: distance | +1.043 [+0.652, +1.426] | +1.047 [+0.653, +1.433] | `travel_model_dc_test.py selection` |
+| Block gain: border | +0.199 [−0.033, +0.426] | +0.125 [−0.105, +0.347] | `travel_model_dc_test.py selection` |
+| Block gain: commuting | +0.465 [+0.262, +0.706] | +0.457 [+0.245, +0.676] | `travel_model_dc_test.py selection` |
+| Nested guard gain, 24 exploratory candidates | +0.062 [−0.097, +0.203] | +0.106 [−0.045, +0.263] | `combined_marginal_test.py travel_nested_all` |
+| **Coverage** (all outlets; print and digital) | | | `coverage_model.py` |
+| Elasticity, metro → urban newsroom counties | 0.50 (0.067), 27 counties; 0.52 (0.083) | 0.47 (0.069), 23 counties; 0.48 (0.086) | `coverage_model.py` |
+| Elasticity, nonmetro → rural newsroom counties | 0.26 (0.061), 61 counties; 0.26 (0.060) | 0.24 (0.059), 65 counties; 0.26 (0.058) | `coverage_model.py` |
+| Hypothesis term (log visits × flag) | −0.244 (0.040); −0.262 (0.059) | −0.225 (0.047); −0.220 (0.067) | `coverage_model.py` |
+| Hypothesis term, held-out gain (primary) | +0.125 [+0.048, +0.203]; +0.088 [+0.004, +0.170] | +0.128 [+0.045, +0.213]; +0.081 [+0.004, +0.161] | `coverage_model.py` |
+| Held-out error, primary | 4.46 [4.02, 4.93]; 4.56 [4.11, 5.02] | 4.54 [4.09, 5.04]; 4.63 [4.18, 5.12] | `coverage_model.py` |
+| Distance block, held-out gain (primary) | +0.004 [−0.115, +0.125]; −0.082 [−0.243, +0.070] | −0.125 [−0.255, −0.001]; −0.188 [−0.381, −0.010] | `coverage_model.py` |
+
+- Travel: rural × log distance alone is no longer distinguishable from zero (+0.177, s.e. 0.120, p = 0.14). It sits
+  in the distance block, which passes as a block (gain +1.047 [+0.653, +1.433]); terms in a block are never tested
+  one at a time. Rural × log distance² is clearly non-zero (−0.210, s.e. 0.054).
+- Travel: held-out error and R² are unchanged at the stated precision. The urban–rural gap in the 25-mile elasticity
+  narrows from 0.50 to 0.18: Osage and the 19 other RUCC-metro rural counties had been in the metro group.
+- Coverage: the hypothesis term is little changed (−0.244 → −0.225) and still lowers held-out error by about 0.13
+  points (print 0.08), both intervals excluding zero. The adopted model's held-out error is 0.08 points higher (4.54
+  against 4.46; no paired interval computed). The distance block's held-out gain is now below zero with an interval
+  excluding zero (all outlets and print); it stays by theory.
+- Rerun under the rural flag: `travel_model.py`, `travel_model_dc_test.py selection`, `travel_distance_spline.py`,
+  `combined_marginal_test.py travel_nested_all`, `coverage_model.py`, `coverage_saturation_test.py`,
+  `border_coverage_test.py` (no flag term; unchanged), `coverage_newsroom_size_test.py`. Not rerun, labelled "RUCC
+  flag, before 2026-10-25" in place: the travel steps table, rejected terms, small counties, main-destination ratios,
+  residual autocorrelation, All marginal factors together, and the County characteristics travel and hospital rows.
+  The Limitation test's nonmetro indicator is RUCC by its own definition. Replaced figures: Superseded figures.
 
 ## Measurement corrections
 
@@ -334,14 +398,17 @@ scoring in `gravity_terms.py`).
 - A fixed effect for every home county (its total travel) and every destination (its overall draw: capital,
   university, hospitals, shopping — measured from the data, not proxied)
 - Pair terms (8, `gravity_terms.FACTORS`), core gravity terms by theory in three blocks: **distance** (log distance
-  and its square; both again for nonmetropolitan home counties; log home population × log distance), **border**,
+  and its square; both again for rural home counties; log home population × log distance), **border**,
   **commuting** (out and in)
+- Rural home county (2026-10-25): under 50% of its 2020 population in Census urban areas (`county_urban_share.csv`):
+  89 rural, 26 urban. It replaces USDA RUCC nonmetro, a commuting definition under which Osage (0% urban) was metro.
+  Audrain (45% urban) and Osage are rural; Boone (77%) is urban (Rural flag, under Current results)
 - Commuting: LODES 2023 primary jobs (JT01) of Missouri residents (`free/mo_residents_od_JT01_2023.csv.gz`: Missouri
   main + the Missouri-home rows of the KS, IL, IA, AR, OK, NE, TN, KY aux files). The pair terms are Missouri pairs; the
   denominator, workers living in the county, includes out-of-state jobs
 - Distance centred at 25 miles (the visit-weighted geometric mean out-of-county trip is 26 miles), home log population
-  at its mean (geometric mean 21,980): the log-distance coefficient is the distance elasticity at 25 miles for a
-  metropolitan home county of mean size. Centring changes no prediction
+  at its mean (geometric mean 21,980): the log-distance coefficient is the distance elasticity at 25 miles for an
+  urban home county of mean size. Centring changes no prediction
 - Outcome, every travel script: `visits_statewide` × (1 − `discount`) (Pass-through discount), which removes 1.81% of
   out-of-county visits. `od_predicted.csv`: `visits_recorded` renamed `visits_undiscounted` (statewide scale, before
   the discount; not Advan's recorded units)
@@ -356,35 +423,42 @@ scoring in `gravity_terms.py`).
 
 | Measure | Value |
 |---|---|
-| Held-out share-weighted error (points), primary | 3.28 [2.94, 3.61] |
-| — small rural (56) / independent towns (32) / commuter (18) / hubs (9) | 3.54 [3.10, 4.03] / 2.86 [2.34, 3.38] / 3.70 [2.88, 4.57] / 2.39 [1.55, 3.41] |
-| Held-out R², uniform reference / against fixed effects only | 93.7% [92.4, 94.9] / 93.7% (fixed effects only: error 16.04, R² 0.9%) |
-| Big flows (forecast 5%+; 483 pairs): error; within 0.8–1.25×; actual ÷ forecast 10th–90th percentile | 3.44 [3.16, 3.72]; 49% [45, 54]; 0.60×–1.51× |
-| Top FORECAST destination, actual ÷ forecast | 1.03× (middle half 0.87–1.20); 1.13× if selected on the observed share |
-| Reference: destination effects + log distance only | 5.63 [5.09, 6.16]; adopted lower by 2.35 [1.86, 2.83] |
-| In-sample: R² of shares; deviance | 94.7%; 62.0M |
-| Stability, Jul–Sep from Jan–Jun: model / persistence | R² 93.9% / 98.7%; error 2.94 / 1.46; model − persistence +1.47 [+1.16, +1.77] |
+| Held-out share-weighted error (points), primary | 3.28 [2.96, 3.59] |
+| — small rural (56) / independent towns (32) / commuter (18) / hubs (9) | 3.41 [2.99, 3.87] / 2.84 [2.41, 3.28] / 4.28 [3.37, 5.19] / 2.06 [1.34, 2.91] |
+| Held-out R², uniform reference / against fixed effects only | 93.7% [92.4, 94.8] / 93.7% (fixed effects only: error 16.04, R² 0.9%) |
+| Big flows (forecast 5%+; 485 pairs): error; within 0.8–1.25×; actual ÷ forecast 10th–90th percentile | 3.44 [3.19, 3.71]; 49% [45, 53]; 0.60×–1.50× |
+| Top FORECAST destination, actual ÷ forecast | 1.00× (middle half 0.86–1.19); 1.13× if selected on the observed share |
+| Reference: destination effects + log distance only | 5.63 [5.09, 6.16]; adopted lower by 2.35 [1.85, 2.87] |
+| In-sample: R² of shares; deviance | 94.8%; 62.3M |
+| Stability, Jul–Sep from Jan–Jun: model / persistence | R² 93.8% / 98.7%; error 2.96 / 1.46; model − persistence +1.50 [+1.22, +1.78] |
 
-Coefficients, Jan–Sep (two-way clustered):
+All rows: `travel_model.py`.
 
-| Term | Coef [95%] |
-|---|---:|
-| log distance (elasticity at 25 mi, metro home) | −0.983 [−1.199, −0.767] |
-| log distance² | −0.265 [−0.326, −0.205] |
-| nonmetro × log distance | +0.505 [+0.280, +0.731] |
-| nonmetro × log distance² | −0.261 [−0.396, −0.127] |
-| log home population × log distance | +0.181 [+0.129, +0.234] |
-| shared border | +0.464 [+0.335, +0.592] |
-| commuting out | +0.284 [+0.197, +0.371] |
-| commuting in | +0.197 [+0.125, +0.269] |
+Coefficients, Jan–Sep (two-way clustered; coefficient and interval `travel_model_dc_test.py selection`, s.e. and p
+`travel_model.py`):
 
-Distance elasticity, home county of mean population (two-way s.e.): metro −0.50 (0.14) at 10 mi, −0.98 (0.11) at 25,
-−1.35 (0.10) at 50, −1.72 (0.10) at 100; nonmetro +0.49 (0.24), −0.48 (0.17), −1.21 (0.14), −1.94 (0.16). Travel from
-nonmetropolitan counties barely falls off over the first 25 miles and falls off faster than metro travel beyond about
-50. The positive nonmetro value at 10 miles is the quadratic's end point (closest pair 7.5 miles), not a finding.
+| Term | Coef [95%] | s.e. (p) |
+|---|---:|---:|
+| log distance (elasticity at 25 mi, urban home) | −0.875 [−1.123, −0.628] | 0.126 (< 0.001) |
+| log distance² | −0.259 [−0.322, −0.196] | 0.032 (< 0.001) |
+| rural × log distance | +0.177 [−0.060, +0.413] | 0.120 (0.14) |
+| rural × log distance² | −0.210 [−0.316, −0.104] | 0.054 (< 0.001) |
+| log home population × log distance | +0.133 [+0.072, +0.194] | 0.031 (< 0.001) |
+| shared border | +0.440 [+0.309, +0.572] | 0.067 (< 0.001) |
+| commuting out | +0.277 [+0.189, +0.366] | 0.045 (< 0.001) |
+| commuting in | +0.189 [+0.118, +0.260] | 0.036 (< 0.001) |
+
+Rural × log distance alone is not distinguishable from zero. It belongs to the distance block, which is tested as a
+block (Selection) and passes; no term of a block is tested alone.
+
+Distance elasticity, home county of mean population (two-way s.e.): urban −0.40 (0.15) at 10 mi, −0.88 (0.13) at 25,
+−1.23 (0.13) at 50, −1.59 (0.14) at 100; rural +0.16 (0.21), −0.70 (0.15), −1.35 (0.12), −2.00 (0.11). By the point
+estimates, rural travel falls off less steeply than urban travel within 25 miles and more steeply beyond 50 (the
+curvature term, rural × log distance², −0.210, s.e. 0.054); at 25 miles the two do not differ distinguishably. The rural value
+at 10 miles is the quadratic's end point (closest pair 7.5 miles), not a finding.
 
 With no travel data for a county, the model places its destination shares to within 3.3 points (share-weighted) and
-its top destination without bias (1.03×). For a county whose own travel is observed, the observed shares are the
+its top destination without bias (1.00×). For a county whose own travel is observed, the observed shares are the
 better figure: the model is not a forecasting improvement on them.
 
 ### Selection
@@ -393,14 +467,15 @@ Blocks, each removed from the adopted model (`travel_model_dc_test.py selection`
 
 | Block removed | Held-out error | Gain from the block [95%] |
 |---|---:|---:|
-| none (adopted) | 3.283 | |
-| distance (five terms) | 4.326 | +1.043 [+0.652, +1.426] |
-| border | 3.482 | +0.199 [−0.033, +0.426] |
-| commuting (out and in) | 3.748 | +0.465 [+0.262, +0.706] |
-| all pair terms (fixed effects only) | 16.039 | +12.756 [+11.025, +14.368] |
+| none (adopted) | 3.279 | |
+| distance (five terms) | 4.326 | +1.047 [+0.653, +1.433] |
+| border | 3.404 | +0.125 [−0.105, +0.347] |
+| commuting (out and in) | 3.737 | +0.457 [+0.245, +0.676] |
+| all pair terms (fixed effects only) | 16.039 | +12.760 [+11.072, +14.329] |
 
-The border block's gain interval includes zero (coefficient +0.464 [+0.335, +0.592]); it is kept as a core term by
-theory and is the one block whose predictive contribution is not established.
+The border block's gain interval includes zero (coefficient +0.440 [+0.309, +0.572]); it is kept as a core term by
+theory and is the one block whose predictive contribution is not established. The distance block passes as a block
+although rural × log distance alone is not distinguishable from zero (p = 0.14).
 
 Exploratory additions, nested guard (`combined_marginal_test.py travel_nested_all`; 24 candidates — eight route and
 area terms alone and together, three competing-destination terms, ten home-county ACS measures × distance, two
@@ -408,32 +483,33 @@ hospital terms — chosen inside each outer training set on 7 inner folds):
 
 | Procedure | Held-out error | Gain vs adopted [95%] |
 |---|---:|---:|
-| Adopted (same folds) | 3.283 | |
-| **Nested, lowest inner error (deciding)** | 3.221 | +0.062 [−0.097, +0.203] |
-| Nested, interval rule applied inside the training counties | 3.252 | +0.031 [−0.125, +0.155] |
-| One at a time, not nested (reference only): nearest comparable alternative | 3.238 | +0.045 [+0.010, +0.081] |
+| Adopted (same folds) | 3.279 | |
+| **Nested, lowest inner error (deciding)** | 3.173 | +0.106 [−0.045, +0.263] |
+| Nested, interval rule applied inside the training counties | 3.175 | +0.104 [−0.036, +0.239] |
+| One at a time, not nested (reference only): nearest comparable alternative | 3.222 | +0.057 [+0.022, +0.092] |
 
-**No addition adopted.** The one-at-a-time result is not a criterion; the nearest-alternative term is rejected by the
+Inner choices: "on the way to a bigger centre" in 4 of 8 outer folds, all eight route/area terms 3, "on-the-way
+weight" 1. **No addition adopted.** The one-at-a-time result is not a criterion; the nearest-alternative term is rejected by the
 nested guard like every other candidate.
 
 ### Sensitivities
 
 `travel_model.py`; distance elasticity at 25 mi, mean-size home county (two-way s.e.); held out:
 
-| Outcome | Metro | Nonmetro | Error | R² | R² vs fixed effects |
+| Outcome | Urban | Rural | Error | R² | R² vs fixed effects |
 |---|---:|---:|---:|---:|---:|
-| **Adopted: `visits_statewide`, shrunken highway discount** | −0.983 (0.110) | −0.478 (0.166) | 3.28 | 93.7% | 93.7% |
-| Undiscounted (primary sensitivity) | −0.972 (0.108) | −0.482 (0.165) | 3.21 | 93.8% | 93.7% |
-| Unshrunk discount (`discount_unshrunk`) | −0.979 (0.111) | −0.471 (0.167) | 3.31 | 93.7% | 93.7% |
-| Old discount (`discount_old`) | −0.964 (0.111) | −0.461 (0.168) | 3.30 | 93.9% | 93.8% |
-| County factor (`visits`, 2026-10-16) | −0.906 (0.083) | −0.477 (0.135) | 3.25 | 93.7% | 94.8% |
-| Uncapped destinations only | −1.057 (0.117) | −0.639 (0.156) | 3.13 | 94.6% | 94.6% |
-| Distinct people (`people_lower`; St. Louis one unit; undiscounted) | −0.670 (0.104) | −0.619 (0.140) | 1.77 | 88.7% | 88.4% |
+| **Adopted: `visits_statewide`, shrunken highway discount** | −0.875 (0.126) | −0.699 (0.147) | 3.28 | 93.7% | 93.7% |
+| Undiscounted (primary sensitivity) | −0.872 (0.123) | −0.690 (0.144) | 3.21 | 93.8% | 93.7% |
+| Unshrunk discount (`discount_unshrunk`) | −0.870 (0.127) | −0.692 (0.148) | 3.31 | 93.7% | 93.6% |
+| Old discount (`discount_old`) | −0.859 (0.127) | −0.690 (0.147) | 3.30 | 93.8% | 93.8% |
+| County factor (`visits`, 2026-10-16) | −0.855 (0.087) | −0.703 (0.128) | 3.30 | 93.5% | 94.6% |
+| Uncapped destinations only | −0.953 (0.140) | −0.799 (0.128) | 3.04 | 94.6% | 94.6% |
+| Distinct people (`people_lower`; St. Louis one unit; undiscounted) | −0.662 (0.109) | −0.622 (0.138) | 1.80 | 88.5% | 88.2% |
 
 - The elasticity moves by less than one standard error across scales and discount definitions.
-- Uncapped destinations: decay steeper (nonmetro −0.64). Capped destination block groups (Advan keeps 2,000 home block
+- Uncapped destinations: decay steeper (rural −0.80). Capped destination block groups (Advan keeps 2,000 home block
   groups per row) are the busiest, reached from far away; capping drops distant homes.
-- Distinct people: metro decay flatter (−0.67): a visit count weights frequent nearby trips, a person count does not.
+- Distinct people: urban decay flatter (−0.66): a visit count weights frequent nearby trips, a person count does not.
   The lower error is on a different, smoother outcome, not a better model.
 - Discount definitions (`travel_model_stop_discount_test.py`, each against its own outcome): undiscounted 3.21; old
   3.30 (removes 3.04%); codes fixed 3.38 (4.38%); highway at the statewide norm 3.38 (3.86%); unshrunk 3.31 (2.23%);
@@ -443,19 +519,19 @@ Distance form against a restricted cubic spline in log distance, 4 knots, the re
 (`travel_distance_spline.py`; held out, county-paired; knots in miles: pair quantiles 38.8, 112.5, 175.5, 279.4;
 visit-weighted quantiles 7.5, 21.5, 37.4, 152.6):
 
-| Distance form | Held-out error [95%] | Change vs adopted [95%] | R² | Elasticity at 25 mi, metro / nonmetro (s.e.) | At 50 mi, metro / nonmetro | In-sample deviance |
+| Distance form | Held-out error [95%] | Change vs adopted [95%] | R² | Elasticity at 25 mi, urban / rural (s.e.) | At 50 mi, urban / rural | In-sample deviance |
 |---|---:|---:|---:|---:|---:|---:|
-| **Adopted: quadratic in log distance** | 3.283 [2.94, 3.61] | | 93.7% | −0.98 (0.110) / −0.48 (0.166) | −1.35 / −1.21 | 62.0M |
-| Spline, knots at pair quantiles | 3.458 [3.09, 3.83] | +0.175 [−0.007, +0.384] | 92.8% | −0.83 (0.151) / −0.66 (0.179) | −0.90 / −0.75 | 65.5M |
-| Spline, knots at visit-weighted quantiles | 3.283 [2.93, 3.65] | +0.000 [−0.154, +0.209] | 93.7% | −0.77 (0.127) / −0.24 (0.160) | −1.37 / −1.38 | 60.4M |
+| **Adopted: quadratic in log distance** | 3.279 [2.96, 3.59] | | 93.7% | −0.88 (0.126) / −0.70 (0.147) | −1.23 / −1.35 | 62.3M |
+| Spline, knots at pair quantiles | 3.429 [3.05, 3.82] | +0.150 [−0.084, +0.392] | 92.8% | −0.73 (0.153) / −0.77 (0.153) | −0.79 / −0.86 | 65.3M |
+| Spline, knots at visit-weighted quantiles | 3.267 [2.92, 3.60] | −0.012 [−0.129, +0.123] | 93.8% | −0.64 (0.142) / −0.53 (0.153) | −1.24 / −1.45 | 61.7M |
 
-Neither spline lowers held-out error; the quadratic is kept. The elasticity at 25 miles depends on the form (metro
-−0.98 / −0.83 / −0.77, nonmetro −0.48 / −0.66 / −0.24), so the 25-mile elasticity is quoted with its form; the
+Neither spline lowers held-out error; the quadratic is kept. The elasticity at 25 miles depends on the form (urban
+−0.88 / −0.73 / −0.64, rural −0.70 / −0.77 / −0.53), so the 25-mile elasticity is quoted with its form; the
 held-out shares, the primary metric, do not depend on it.
 
-### Residual spatial autocorrelation
+### Residual spatial autocorrelation (RUCC flag, before 2026-10-25)
 
-`residual_autocorrelation.py`: Moran's I on Missouri counties, queen contiguity (gravity_terms adjacency), row-
+Not rerun under the rural flag. `residual_autocorrelation.py`: Moran's I on Missouri counties, queen contiguity (gravity_terms adjacency), row-
 standardised; p from 999 permutations, two-sided. With both sets of fixed effects raw residuals sum to zero for every
 home and destination county, so the measures are the held-out error per home county, the held-out signed residual per
 destination (observed minus forecast share summed over held-out home counties) and coverage's in-sample error per
@@ -476,9 +552,8 @@ travel intervals cluster by home and by destination county but not by region.
 
 ### Out-of-state travel: Kansas
 
-Missouri residents' visits to Kansas block groups (`neighborhood/raw_ks/`) enter crossover. The share of Audrain,
-Boone and Osage residents' out-of-county visits that go to Kansas is not printed by `travel_model.py`, which lists
-border counties only.
+Missouri residents' visits to Kansas block groups (`neighborhood/raw_ks/`) enter crossover. Share of out-of-county
+visits that go to Kansas (`travel_model.py`): Audrain 1.2%, Boone 5.2%, Osage 1.1%.
 
 - Every travel share in this log is a share of out-of-county visits to **Missouri** counties. Illinois, Iowa,
   Arkansas, Oklahoma and Nebraska are not in the data.
@@ -486,9 +561,9 @@ border counties only.
   constant. Comparisons of a share's size across counties use the Kansas-inclusive denominator or say they exclude
   Kansas.
 
-### Steps that led there
+### Steps that led there (RUCC flag, before 2026-10-25)
 
-Held out (`travel_model_compare.py`, `travel_model_dc_test.py`):
+Held out (`travel_model_compare.py`, `travel_model_dc_test.py`; not rerun under the rural flag):
 
 | Version | In-sample deviance | Held-out R² | Held-out error [95%] | Top forecast destination | Big flows within 0.8–1.25× |
 |---|---:|---:|---:|---:|---:|
@@ -502,14 +577,14 @@ Held out (`travel_model_compare.py`, `travel_model_dc_test.py`):
 
 The singly-constrained model was abandoned on held-out error (6.40 against 3.28; R² 80.6% against 93.7%); the 1.6×
 under-prediction once given as the reason is superseded (appendix). The "Osage residents go to Jefferson City twice as
-often as expected" figure came from that model and stays withdrawn: under the adopted model Osage → Cole is 1.05
-in-sample, 1.13 held out. In the singly-constrained model, metro destination and jobs per resident add nothing and
+often as expected" figure came from that model and stays withdrawn: under the adopted model (RUCC flag) Osage → Cole is
+1.05 in-sample, 1.13 held out. In the singly-constrained model, metro destination and jobs per resident add nothing and
 stores per resident is significant (audit round 2: −0.08, p = 0.57; p = 0.71; +0.73, p = 0.002; not restated in
 round 3); the doubly-constrained model absorbs all destination attributes.
 
-### Rejected
+### Rejected (RUCC flag, before 2026-10-25)
 
-Each added to the adopted model; change in held-out error [95%] (= −gain); coefficient (two-way p). All are also inside
+Not rerun under the rural flag. Each added to the adopted model; change in held-out error [95%] (= −gain); coefficient (two-way p). All are also inside
 the nested guard above, which is the deciding test.
 
 | Tested | Result | Script |
@@ -529,16 +604,17 @@ the nested guard above, which is the deciding test.
 | Work and non-work apart: non-work with / without commuting | −0.00 [−0.01, +0.01] / +0.43 [+0.23, +0.66] | `travel_purpose_split_test.py` |
 | All eight route/area terms together | −0.12 [−0.31, +0.09] | `combined_marginal_test.py` |
 
-Main destinations, actual ÷ expected share, adopted (in-sample / held out; `travel_competing_test.py`): Osage → Cole
-1.05 / 1.13, Osage → Boone 1.65 / 1.56, Audrain → Boone 1.02 / 1.03, Audrain → Callaway 1.45 / 1.35, Audrain → Marion
-2.20 / 2.13, Boone → Cole 0.71 / 0.67, Boone → St. Louis County 1.29 / 1.29.
+Main destinations, actual ÷ expected share, adopted (RUCC flag, before 2026-10-25; in-sample / held out;
+`travel_competing_test.py`): Osage → Cole 1.05 / 1.13, Osage → Boone 1.65 / 1.56, Audrain → Boone 1.02 / 1.03,
+Audrain → Callaway 1.45 / 1.35, Audrain → Marion 2.20 / 2.13, Boone → Cole 0.71 / 0.67, Boone → St. Louis County
+1.29 / 1.29.
 
 The routing (`build_drive_routes.py` → `drive_od.csv`) is kept: it confirms, for example, that Mexico → Columbia
 (38 minutes) runs through Callaway County. Half of Audrain residents' Callaway visits are in Kingdom City; the share of
 that pair's visits the discount removes was 20% under the 2026-10-16 definition (not rerun); the rest (Fulton is 22
 minutes from Mexico) is ordinary local travel.
 
-### Small counties and pair-level commuting
+### Small counties and pair-level commuting (tables: RUCC flag, before 2026-10-25)
 
 The pooled travel model fits large counties best: Poisson weights by count, so big flows drive the fit. Tested for the
 counties it serves worst, public data only. Tiers: k-means on log population (ACS 2020–2024) and commuting outflow
@@ -570,13 +646,15 @@ three largest forecast destinations; 320 fits from full-data start values, all c
 
 Pair-level commuting is the first public measure that predicts a county's travel markedly better without its own
 travel data; it is a core block in the shared gravity terms (`gravity_terms.py`), so the travel and coverage models
-both carry it. Travel: out +0.284 [+0.197, +0.371], in +0.197 [+0.125, +0.269] (two-way). The gain is clear for all
-counties together, small rural counties and independent towns; for commuter counties and hubs (18 and 9 counties) the
-intervals include zero. Coverage: commute in +0.41 (s.e. 0.072, clustered by newsroom county), out −0.04 (n.s.):
-newsrooms cover the counties whose workers commute into theirs; the block is a core control kept by theory (gain
-−0.017 [−0.122, +0.085]; Wald χ² 37.0, p < 0.001). Commuting explains Osage's travel to Jefferson City (Osage → Cole
-1.05 in-sample); travel to Columbia, where few Osage residents work, is for shopping, health care and the university
-and stands out (Osage → Boone 1.65). Spillover does not use the travel model.
+both carry it. Travel (rural flag, `travel_model.py`): out +0.277 (s.e. 0.045), in +0.189 (0.036) (two-way); block
+gain +0.457 [+0.245, +0.676] (`travel_model_dc_test.py selection`). By tier (table above, RUCC flag) the gain is clear
+for all counties together, small rural counties and independent towns; for commuter counties and hubs (18 and 9
+counties) the intervals include zero. Coverage (rural flag, `coverage_model.py`): commute in +0.42 (s.e. 0.069,
+clustered by newsroom county), out −0.02 (n.s.): newsrooms cover the counties whose workers commute into theirs; the
+block is a core control kept by theory (gain −0.007 [−0.106, +0.087]; Wald χ² 46.0, p < 0.001). Commuting explains
+Osage's travel to Jefferson City (Osage → Cole 1.05 in-sample, RUCC flag); travel to Columbia, where few Osage
+residents work, is for shopping, health care and the university and stands out (Osage → Boone 1.65, RUCC flag).
+Spillover does not use the travel model.
 
 ### Public-data travel model (Stage 1) and Advan-learned corrections (Stage 2), 2026-10-18; revised 2026-10-24/25
 
@@ -796,11 +874,11 @@ test pending (school-level: MSHSAA conference and class, NCES locations, TIGER s
 
 | Change | Why |
 |---|---|
-| Primary validation is each home county held out (8 folds, seed 7), in `travel_model.py` and every travel script | The Jan–Jun → Jul–Sep split is beaten by persistence (R² 98.7% against 93.9%; error 1.46 against 2.94): it measures stability, not prediction |
+| Primary validation is each home county held out (8 folds, seed 7), in `travel_model.py` and every travel script | The Jan–Jun → Jul–Sep split is beaten by persistence (R² 98.7% against 93.8%; error 1.46 against 2.96): it measures stability, not prediction |
 | Persistence printed beside every Jul–Sep score | As above |
 | R² = 1 − SSE/SST of shares, also against fixed effects only; the old "% predicted" was a squared correlation | A squared correlation ignores bias and scale; the fixed-effects-only model is no better than uniform shares (R² 0.9%) |
 | Deviance labelled in-sample; top-destination ratio and big-flow scores computed on held-out predictions | The old table columns were in-sample |
-| Big flows and each county's top destination selected on the FORECAST share | Selecting on the observed share biases the ratio upward (held out: 1.13× observed-selected, 1.03× forecast-selected) |
+| Big flows and each county's top destination selected on the FORECAST share | Selecting on the observed share biases the ratio upward (held out: 1.13× observed-selected, 1.00× forecast-selected) |
 | Two-way clustered errors (home, destination) for every travel coefficient; naive Poisson and HC1 p-values removed | Pairs sharing a home or destination county are not independent |
 | Distance terms centred at 25 miles, home log population at its mean | The uncentred log-distance coefficient was not an elasticity at any stated point |
 | 95% bootstrap intervals over home counties for every held-out error and every difference | Differences such as 3.58 against 3.39 had no interval |
@@ -809,10 +887,11 @@ test pending (school-level: MSHSAA conference and class, NCES locations, TIGER s
 | Pass-through discount `road_stop_share.discount`: highway stops above the destination's own store mix, empirical-Bayes shrunken (2026-10-25) | The old code list missed convenience stores and counted every road stop as a highway stop; unshrunk pair shares are noisy where store-level samples are small |
 | Commuting from LODES JT01 (primary jobs), Missouri residents' jobs in and out of state in the denominator (2026-10-25) | JT00 counts a worker once per job; Missouri-only denominators left out residents working in Kansas or Illinois |
 | `od_predicted.csv`: `visits_recorded` → `visits_undiscounted` | The column was statewide-scaled, not Advan's recorded units |
+| Rural home county: under 50% of 2020 population in Census urban areas, in place of RUCC nonmetro (`rural_i_x_log_dist`, `rural_i_x_log_dist_sq`; 2026-10-25) | RUCC is a commuting definition: Osage, with no urban population, was metro (Rural flag, under Current results) |
 | Every travel script uses the adopted outcome and the 8 adopted terms | Several scripts used undiscounted visits, uncalibrated visits or the 6 pre-commuting terms |
 | Kansas destinations quantified | Missouri-only shares understate border counties' out-of-county travel |
 | Singly-constrained reference defined explicitly (`gravity_terms.SINGLY`) | Two scripts' "singly constrained" or "current" rows had become the doubly-constrained pair terms without destination effects |
-| Coverage rows of the all-factors test: newsroom counties held out in 8 folds, per-county mean error on destinations with 1%+ of visits, from repository code | Matches `coverage_model.py`'s primary metric (4.46); the 2+ stories rule selected on the outcome; the earlier tables came from a scratch run or pooled scoring |
+| Coverage rows of the all-factors test: newsroom counties held out in 8 folds, per-county mean error on destinations with 1%+ of visits, from repository code | Matches `coverage_model.py`'s primary metric (4.46 under the RUCC flag); the 2+ stories rule selected on the outcome; the earlier tables came from a scratch run or pooled scoring |
 
 ### Activity spaces and tie markets: the footprint of potential local news interest (2026-10-18; tie markets rescored 2026-10-24)
 
@@ -965,9 +1044,9 @@ commuting from residents' JT01 jobs in and out of state, 8 terms centred at 25 m
 
 | Role | Terms | Selection |
 |---|---|---|
-| Core (theory) | distance block: log_dist, log_dist_sq, nonmetro × log_dist, nonmetro × log_dist_sq, log population × log_dist; border: adjacent; commuting block: commute_out, commute_in (`gravity_terms.FACTORS`) | Tested only as blocks, never one term at a time. Hierarchy: log_dist is kept with its square and its interactions, and the distance block enters or leaves whole |
+| Core (theory) | distance block: log_dist, log_dist_sq, rural × log_dist, rural × log_dist_sq, log population × log_dist; border: adjacent; commuting block: commute_out, commute_in (`gravity_terms.FACTORS`) | Tested only as blocks, never one term at a time. Hierarchy: log_dist is kept with its square and its interactions, and the distance block enters or leaves whole |
 | Travel | log visits i → j (`gravity_terms.travel_visits`, Jan–Sep 2026) where visits > 0; indicator for no recorded visits | — |
-| Hypothesis term (stated in advance) | log visits × nonmetropolitan newsroom county (USDA RUCC 4–9) | Reported whatever the result |
+| Hypothesis term (stated in advance) | log visits × rural newsroom county (`log_visits_x_rural`; under 50% of 2020 population in Census urban areas; USDA RUCC 4–9 until 2026-10-25) | Reported whatever the result |
 | Exploratory | saturation terms (`coverage_saturation_test.py`) | Adopted only if the nested guard's gain has an interval excluding zero: none adopted |
 
 - Newsroom county: `excluded_outlets.home_fips`. Mid Rivers Newsmagazine counts with St. Charles and Greene County
@@ -991,43 +1070,46 @@ commuting from residents' JT01 jobs in and out of state, 8 terms centred at 25 m
 | | All outlets | Print and digital |
 |---|---:|---:|
 | Stories / newsroom counties / out-of-county story-county pairs | 14,877 / 88 / 10,282 | 8,301 / 88 / 6,674 |
-| **Elasticity, metro newsroom counties (27)** | **0.50** (s.e. 0.067; 95% CI 0.37–0.63) | **0.52** (0.083; 0.36–0.69) |
-| **Elasticity, nonmetro newsroom counties (61)** | **0.26** (s.e. 0.061; 95% CI 0.14–0.38) | **0.26** (0.060; 0.14–0.38) |
-| Hypothesis term, nonmetro − metro | −0.244 (s.e. 0.040, p < 0.001) | −0.262 (0.059, p < 0.001) |
-| Twice the visits, metro / nonmetro | 1.42 / 1.19 × the stories | 1.44 / 1.20 × |
-| s.e., clustered by county pair, metro / nonmetro (sensitivity) | 0.049 / 0.049 | 0.054 / 0.050 |
-| s.e., two-way newsroom county × county covered (sensitivity) | 0.079 / 0.069 | 0.095 / 0.068 |
-| s.e., HC1, pairs independent (reference only) | 0.048 / 0.047 | 0.053 / 0.048 |
-| Leave one newsroom county out, metro (88 fits) | 0.47 to 0.54 | 0.47 to 0.57 |
-| Leave one newsroom county out, nonmetro | 0.23 to 0.29 | 0.21 to 0.29 |
-| Pooled elasticity, no hypothesis term (sensitivity) | 0.37 (s.e. 0.061) | 0.35 (0.066) |
-| Commuting in / out | +0.41 (s.e. 0.072) / −0.04 (s.e. 0.085, n.s.) | +0.36 (0.070) / −0.05 (0.081, n.s.) |
-| Held-out error, primary (1%+ of visits) | 4.46 [4.02, 4.93] | 4.56 [4.11, 5.02] |
-| Held-out error, all destinations | 0.915 [0.846, 0.982] | 0.942 [0.875, 1.004] |
-| Fitted vs observed pairs, r² | 0.97 | 0.95 |
+| **Elasticity, urban newsroom counties (23)** | **0.47** (s.e. 0.069; 95% CI 0.33–0.60) | **0.48** (0.086; 0.31–0.64) |
+| **Elasticity, rural newsroom counties (65)** | **0.24** (s.e. 0.059; 95% CI 0.13–0.36) | **0.26** (0.058; 0.14–0.37) |
+| Hypothesis term, rural − urban | −0.225 (s.e. 0.047, p < 0.001) | −0.220 (0.067, p < 0.001) |
+| Twice the visits, urban / rural | 1.38 / 1.18 × the stories | 1.39 / 1.19 × |
+| s.e., clustered by county pair, urban / rural (sensitivity) | 0.052 / 0.049 | 0.056 / 0.051 |
+| s.e., two-way newsroom county × county covered (sensitivity) | 0.076 / 0.068 | 0.093 / 0.067 |
+| s.e., HC1, pairs independent (reference only) | 0.050 / 0.047 | 0.055 / 0.049 |
+| Leave one newsroom county out, urban (88 fits) | 0.417 to 0.505 | 0.405 to 0.520 |
+| Leave one newsroom county out, rural | 0.209 to 0.278 | 0.202 to 0.290 |
+| Pooled elasticity, no hypothesis term (sensitivity) | 0.38 (s.e. 0.060) | 0.37 (0.066) |
+| Commuting in / out | +0.42 (s.e. 0.069) / −0.02 (s.e. 0.087, n.s.) | +0.36 (0.064) / −0.03 (0.084, n.s.) |
+| Held-out error, primary (1%+ of visits) | 4.54 [4.09, 5.04] | 4.63 [4.18, 5.12] |
+| Held-out error, all destinations | 0.922 [0.852, 0.988] | 0.947 [0.881, 1.009] |
+| Fitted vs observed pairs, r² | 0.97 | 0.94 |
+
+All rows: `coverage_model.py`.
 
 Blocks and the hypothesis term, each left out of the adopted model (gain = error without it − adopted):
 
 | Left out | Role | Primary: gain [95%] | All destinations: gain | Wald, clustered |
 |---|---|---:|---:|---|
-| Distance block (5 terms) | core | +0.004 [−0.115, +0.125] | +0.007 [−0.006, +0.020] | χ² 77.3, df 5, p < 0.001 |
-| Border | core | −0.012 [−0.045, +0.020] | +0.000 [−0.003, +0.003] | χ² 9.0, df 1, p 0.003 |
-| Commuting block (out + in) | core | −0.017 [−0.122, +0.085] | −0.001 [−0.013, +0.009] | χ² 37.0, df 2, p < 0.001 |
-| **Log visits × nonmetro (hypothesis)** | hypothesis | **+0.125 [+0.048, +0.203]** | −0.002 [−0.010, +0.006] | χ² 36.9, df 1, p < 0.001 |
+| Distance block (5 terms) | core | −0.125 [−0.255, −0.001] | +0.004 [−0.007, +0.016] | χ² 115.3, df 5, p < 0.001 |
+| Border | core | −0.010 [−0.031, +0.011] | +0.000 [−0.002, +0.002] | χ² 3.5, df 1, p 0.061 |
+| Commuting block (out + in) | core | −0.007 [−0.106, +0.087] | +0.003 [−0.008, +0.014] | χ² 46.0, df 2, p < 0.001 |
+| **Log visits × rural (hypothesis)** | hypothesis | **+0.128 [+0.045, +0.213]** | −0.001 [−0.009, +0.008] | χ² 23.1, df 1, p < 0.001 |
 
-Print and digital: distance −0.082 [−0.243, +0.070]; border −0.007 [−0.021, +0.007] (Wald p 0.22); commuting −0.030
-[−0.137, +0.069]; hypothesis term +0.088 [+0.004, +0.170], all destinations −0.001 [−0.010, +0.008].
+Print and digital: distance −0.188 [−0.381, −0.010]; border −0.003 [−0.010, +0.003] (Wald p 0.79); commuting −0.009
+[−0.105, +0.081]; hypothesis term +0.081 [+0.004, +0.161], all destinations −0.002 [−0.010, +0.006].
 
-- The core terms stay in by theory. None of the three blocks changes held-out share error detectably, because the
-  destination effects and visits carry the same geography, but each is jointly significant in the fit (border not
-  significant for print).
-- The hypothesis term lowers primary held-out error by 0.13 points (print 0.09), and both intervals exclude zero. On
-  all destinations the gain is −0.002, a tie. Stories from nonmetro newsroom counties are associated with visits
-  about half as strongly as stories from metro ones.
-- Zero-visit pairs (137, 1 story-county pair on them), metro / nonmetro: adopted 0.501 / 0.257. With zeros at
-  log(1e-3), 0.497 / 0.252; with log(visits + 1 / 10 / 100), 0.497–0.503 / 0.259–0.261; dropped, 0.501 / 0.257.
+- The core terms stay in by theory. Border and commuting do not change held-out share error detectably, because the
+  destination effects and visits carry the same geography. The distance block raises primary held-out error (gain
+  −0.125 [−0.255, −0.001]; print −0.188 [−0.381, −0.010]) although it is jointly significant in the fit. Commuting
+  is jointly significant; border is not at the 5% level (p 0.061; print 0.79).
+- The hypothesis term lowers primary held-out error by 0.13 points (print 0.08), and both intervals exclude zero. On
+  all destinations the gain is −0.001, a tie. Stories from rural newsroom counties are associated with visits about
+  half as strongly as stories from urban ones.
+- Zero-visit pairs (137, 1 story-county pair on them), urban / rural: adopted 0.466 / 0.241. With zeros at
+  log(1e-3), 0.461 / 0.235; with log(visits + 1 / 10 / 100), 0.467–0.471 / 0.243–0.249; dropped, 0.465 / 0.241.
 - "Travel beyond gravity", log(visits ÷ travel-model prediction), is the same quantity as log visits given the same
-  terms and fixed effects (pooled 0.362 against 0.359). It is replaced by log visits.
+  terms and fixed effects (pooled 0.381 against 0.373). It is replaced by log visits.
 
 Specifications not adopted (`coverage_model.py` prints them so earlier figures can be traced; not to be quoted).
 Without the core terms, distance loads onto visits (pooled):
@@ -1036,8 +1118,8 @@ Without the core terms, distance loads onto visits (pooled):
 |---|---:|---:|
 | Fixed effects + log(1 + visits), no distance terms (`border_coverage_test.py` family) | 0.74 (s.e. 0.015) | 0.71 |
 | Fixed effects + log(1 + visits) + log distance + border | 0.53 (s.e. 0.066) | 0.51 |
-| Pooled, without the commuting block | 0.43 | 0.40 |
-| Pooled, all core terms (sensitivity) | 0.37 | 0.35 |
+| Pooled, without the commuting block | 0.46 | 0.43 |
+| Pooled, all core terms (sensitivity) | 0.38 | 0.37 |
 
 ### Exploratory additions: saturation (`coverage_saturation_test.py`), none adopted
 
@@ -1047,17 +1129,62 @@ and each addition on the primary metric, and the chosen candidate scores the out
 
 | Procedure / addition, all outlets | Primary: gain [95%] | All destinations: gain | Coefficient (clustered s.e., p) |
 |---|---:|---:|---|
-| **Nested guard, lowest inner error** | **−0.010 [−0.024, +0.004]** | −0.001 | — |
-| Nested, interval rule inside the folds | **−0.001 [−0.010, +0.005]** | +0.000 | — |
-| One at a time: × destination's own stories | +0.000 [−0.019, +0.020] | +0.001 | −0.006 (0.008, p 0.48) |
-| One at a time: × destination's newsrooms | −0.019 [−0.033, −0.008] | −0.002 | +0.001 (0.022, p 0.97) |
-| One at a time: × destination has broadcaster | −0.005 [−0.023, +0.011] | −0.000 | −0.022 (0.033, p 0.50) |
-| One at a time: × own stories, × own stories × nonmetro home | −0.003 [−0.021, +0.017] | +0.000 | own × nonmetro −0.000 (0.004, p 0.92) |
-| One at a time: × own stories, × broadcaster | −0.007 [−0.029, +0.014] | −0.000 | — |
+| **Nested guard, lowest inner error** | **+0.001 [−0.016, +0.021]** | +0.001 | — |
+| Nested, interval rule inside the folds | **−0.007 [−0.018, +0.002]** | −0.000 | — |
+| One at a time: × destination's own stories | +0.006 [−0.013, +0.028] | +0.002 | −0.007 (0.008, p 0.38) |
+| One at a time: × destination's newsrooms | −0.014 [−0.026, −0.004] | −0.001 | −0.001 (0.021, p 0.96) |
+| One at a time: × destination has broadcaster | −0.002 [−0.020, +0.013] | +0.000 | −0.025 (0.030, p 0.42) |
+| One at a time: × own stories, × own stories × rural home | −0.004 [−0.027, +0.022] | +0.001 | own × rural +0.000 (0.004, p 0.95) |
+| One at a time: × own stories, × broadcaster | −0.001 [−0.023, +0.020] | +0.001 | — |
 
-Print and digital: nested lowest inner error +0.001 [−0.025, +0.030]; selection rule −0.005 [−0.020, +0.004];
-own stories −0.011 (p 0.20). Neither nested interval excludes zero: saturation is not supported. The level version
+Print and digital: nested lowest inner error −0.001 [−0.030, +0.032]; selection rule −0.009 [−0.021, +0.002];
+own stories −0.013 (p 0.12). Neither nested interval excludes zero: saturation is not supported. The level version
 (rural newsrooms cover saturated centres less regardless of travel) was tested only within the all-factors model.
+
+### Rurality and newsroom size (`coverage_newsroom_size_test.py`)
+
+**Result: rurality is the main explanation of the coverage gap; newsroom size contributes; held-out prediction cannot
+separate the two.** Rural newsroom counties have fewer and smaller newsrooms, so log visits × rural could measure
+newsroom size or type instead of rurality. Newsroom-county measures, each interacted with log visits (levels absorbed
+by the newsroom-county effects): log(1 + active registry outlets), has a daily, has a TV station, and, secondary
+because it is built from the outcome, log(1 + March stories). Data, controls, fixed effects, clustering and held-out
+scoring are `coverage_model.py`'s; all outlets.
+
+Rural (65) / urban (23) newsroom counties: median active outlets 1 / 2; has a daily 23% / 70%; has TV 2% / 35%;
+median out-of-county story pairs 33 / 170. Correlation with rural: log outlets −0.49, daily −0.43, TV −0.48, log
+stories −0.54.
+
+Interactions with log visits (clustered s.e.); held-out change = model − adopted on the primary metric, county-paired
+(negative = lower error than adopted):
+
+| Model | × rural | × log outlets | × daily | × TV | Primary | Change [95%] |
+|---|---:|---:|---:|---:|---:|---:|
+| **Adopted: × rural** | −0.225 (0.047) | | | | 4.543 | — |
+| × log outlets | | +0.135 (0.036) | | | 4.567 | +0.024 [−0.074, +0.116] |
+| × has daily | | | +0.080 (0.040) | | 4.636 | +0.093 [+0.004, +0.181] |
+| × has TV | | | | +0.138 (0.043) | 4.563 | +0.021 [−0.076, +0.118] |
+| × outlets + daily + TV (no rural) | | +0.111 (0.041) | +0.008 (0.038) | +0.040 (0.045) | 4.571 | +0.028 [−0.076, +0.124] |
+| × rural + outlets + daily + TV | −0.166 (0.043) | +0.082 (0.033) | −0.027 (0.036) | +0.030 (0.040) | 4.525 | −0.017 [−0.072, +0.039] |
+
+Secondary, × log stories in place of rural: +0.065 (0.014), primary 4.451, change −0.092 [−0.215, +0.013]; not used in
+the combined model.
+
+- Beside size and type, × rural keeps about three quarters of its value (−0.225 → −0.166, s.e. 0.043) and outlets
+  stays (+0.082, s.e. 0.033); daily and TV add nothing once both are in. Rurality carries most of the gap; size
+  contributes.
+- Held out, size in place of rural (+0.028 [−0.076, +0.124]) and size beside rural (−0.017 [−0.072, +0.039]) are not
+  distinguishable from the adopted model; only a daily in place of rural is worse (+0.093 [+0.004, +0.181]).
+  Prediction cannot separate rurality from newsroom size.
+- Full model, implied elasticity for a county with one weekly only (4 urban, 38 rural counties): urban 0.40 (0.07),
+  rural 0.23 (0.06).
+- Outlet as the source unit (146 outlets with out-of-county stories; outlet and destination fixed effects), rural −
+  urban within type: non-daily print −0.23 (0.06), daily print −0.22 (0.06), broadcast −0.27 (0.05), each p < 0.001.
+  The gap holds within outlet type.
+- Matched on output (adopted model refitted on the overlap): out-of-county story pairs 5–469 (19 urban / 52 rural),
+  × rural −0.142 (0.050, p 0.004); registry outlets 1–3 (16 / 65), −0.118 (0.050, p 0.017). Among counties of
+  comparable output the gap is smaller and remains.
+- Target counties, implied elasticity (adopted / size and type / full model): Audrain 0.24 / 0.34 / 0.24; Boone 0.47 /
+  0.48 / 0.51; Osage 0.24 / 0.28 / 0.23.
 
 ### Rejected or not supported
 
@@ -1073,7 +1200,8 @@ own stories −0.011 (p 0.20). Neither nested interval excludes zero: saturation
 |---|---|---|
 | Visits | `od_predicted.csv` visits (county factor) | `gravity_terms.travel_visits`, the travel model's adopted outcome |
 | Travel term | log(visits ÷ travel-model prediction) | log visits; identical given the same terms and fixed effects |
-| Hypothesis term | — | log visits × nonmetro newsroom county: metro 0.50, nonmetro 0.26; primary held-out −0.13 |
+| Hypothesis term | — | log visits × nonmetro newsroom county (RUCC): metro 0.50, nonmetro 0.26; primary held-out gain +0.13 |
+| Rural flag (2026-10-25) | USDA RUCC nonmetro (4–9) | under 50% of 2020 population in Census urban areas: log visits × rural newsroom county, urban 0.47, rural 0.24; primary held-out gain +0.13 |
 | Selection | terms one at a time, in-sample p | core terms as blocks; hypothesis term reported; exploratory terms through the nested procedure only |
 | Held-out scoring | 88 single-county folds; destinations with 1%+ of visits **or 2+ held-out stories**; no interval; then pooled scoring in the all-factors script (4.25) | `gravity_terms.loco` folds; per-county mean; primary = 1%+ of visits; all destinations beside; county-paired bootstrap intervals; one scoring in every script |
 | Zero-visit pairs (137 fitted) | log(1e-3) = −6.9, high leverage | indicator + log visits where > 0; elasticities move ≤ 0.006 |
@@ -1124,15 +1252,19 @@ Leave-one-county-out error (predicting a county's outlets from all others):
 | "Beyond gravity" maps | Category colours carried four model-based outcomes; unreadable as maps. The model comparison is a table (`three_counties_table.csv`) |
 | Alignment maps with the home county compared | Replaced by out-of-county comparison with home and away story counts for reference |
 
-## All marginal factors together
+## All marginal factors together (RUCC flag, before 2026-10-25)
+
+Travel and coverage rows are not rerun under the rural flag; spillover rows do not use the flag. The travel nested
+guard rerun under the rural flag is in Travel model, Selection (gain +0.106 [−0.045, +0.263]).
 
 Each factor above was first tested alone. To check whether many small effects add up, every factor that showed any
 effect was added at once and scored only on counties the model was not fitted on (`combined_marginal_test.py`,
-`combined_all_factors_test.py`; each model's primary metric; change = with − without). Coverage: the final `coverage_model.py`
-specification (gravity terms + log visits + zero-visit indicator + log visits × nonmetro newsroom county;
-`excluded_outlets.EXCLUDE` incl. CAMPUS; `home_fips`); newsroom counties held out in 8 folds (seed 7); error = mean
-absolute share error on the destinations with 1%+ of the county's visits, per newsroom county, averaged over counties
-(the declared primary metric). Spillover: `spillover_common.FINAL`, fitted on 85 outlets, scored on 94.
+`combined_all_factors_test.py`; each model's primary metric; change = with − without). Coverage: the
+`coverage_model.py` specification under the RUCC flag (gravity terms + log visits + zero-visit indicator + log visits
+× nonmetro newsroom county; `excluded_outlets.EXCLUDE` incl. CAMPUS; `home_fips`); newsroom counties held out in 8
+folds (seed 7); error = mean absolute share error on the destinations with 1%+ of the county's visits, per newsroom
+county, averaged over counties (the declared primary metric). Spillover: `spillover_common.FINAL`, fitted on 85
+outlets, scored on 94.
 
 | Model | Travel error | Change [95%] | Coverage, all / no broadcast | Change [95%] | Spillover | Change [95%] |
 |---|---:|---:|---:|---:|---:|---:|
@@ -1535,14 +1667,14 @@ error, coefficients with CRV3 p:
 Confirmed by the rerun of 2026-10-25 (`collection_quality_robustness.py`, after commit 8aad9c4): the subset figures
 are unchanged by the crossover rebuild, because the spillover model has no crossover term.
 Outlets in well-collected counties (40) are too few to estimate the model. Coverage, pooled specification (travel
-beyond gravity; not the adopted metro / nonmetro form), all newsroom counties → well-collected counties: 0.36 → 0.25
+beyond gravity; not the adopted urban / rural form), all newsroom counties → well-collected counties: 0.36 → 0.25
 (all outlets), 0.35 → 0.26 (print and digital).
 
 ## County characteristics tested
 
 Crossover and spillover columns: leave one county out, 2026-10-16 measure and models (spillover figures not comparable
 with the current 5.98). Coverage column: 2026-10-16 specification, outcome-selected destination set (not rerun).
-Travel: table below (2026-10-25, audit round 3).
+Travel: table below (audit round 3; RUCC flag, before 2026-10-25; not rerun under the rural flag).
 
 | Source | Crossover (12.9 points baseline) | Spillover (15.6) | Coverage (4.00) |
 |---|---|---|---|
@@ -1563,7 +1695,8 @@ apparent effect (spillover 13.4 points with four indicators) was an artifact. Wi
 without seeing the held-out county, adding several indicators makes spillover predictions worse (15.3 against 15.0 for
 all outlets; 15.4 against 14.1 for well-collected outlets).
 
-Travel, adopted model held out (each home county left out): share-weighted error 3.28, big-flow error 3.44. Each
+Travel (RUCC flag, before 2026-10-25), adopted model held out (each home county left out): share-weighted error 3.28,
+big-flow error 3.44. Each
 candidate added to the adopted set; change in held-out error [95%] (= −gain), coefficient (two-way p). All are also in the nested guard, which adopts none.
 
 | Candidate | Weighted share error | Big-flow error | Coefficient | Script |
@@ -1584,14 +1717,15 @@ candidate added to the adopted set; change in held-out error [95%] (= −gain), 
 
 Several coefficients are clearly non-zero (degree, broadband, home without a hospital) and improve nothing held out:
 they describe the fit, not a transferable pattern.
-Coverage with the hospital terms (`hospital_test.py`, coverage primary metric): all outlets 4.46 → 4.45 (change −0.01
+Coverage with the hospital terms (`hospital_test.py`, coverage primary metric; RUCC flag, before 2026-10-25): all
+outlets 4.46 → 4.45 (change −0.01
 [−0.06, +0.04]); no broadcasters 4.56 → 4.54 (change −0.01 [−0.08, +0.05]).
 
 Hospitals: CMS Hospital General Information, general acute, critical access, children's, VA and DoD hospitals (no
 psychiatric hospitals, no clinics), with Capital Region Medical Center added (it reports under MU Health Care's CMS
 number since 2024): 107 hospitals in 67 counties (`build_hospitals.py`). Counties without a hospital have more
 residents leaving; hospital terms do not improve held-out travel once each county's overall draw is measured
-(coverage: `hospital_test.py` 4.46 → 4.45).
+(coverage: `hospital_test.py` 4.46 → 4.45, RUCC flag).
 
 ## Revealed media market by travel pattern (2026-10-17; K rule 2026-10-24; multi-part ensemble core 2026-10-25)
 
@@ -2074,11 +2208,16 @@ size.
   density, ×1.08 per +10 points aged 65+): the crossover and travel shares lean toward older, higher-income,
   lower-density block groups within each county (Audrain's oldest block groups are seen at more than twice the rate of
   its youngest).
-- Travel: destination residuals cluster spatially (Moran's I +0.175, p 0.005): neighbouring destinations are under- or
-  over-predicted together, a regional component the destination effects do not absorb; intervals do not cluster by
-  region. The 25-mile elasticity depends on the distance form (quadratic −0.98, splines −0.83 and −0.77 for metro
-  homes) although held-out error does not.
-- Travel: the border block's held-out gain is not established (+0.199 [−0.033, +0.426]); kept by theory. Unemployment
+- Travel: destination residuals cluster spatially (Moran's I +0.175, p 0.005; RUCC flag, before 2026-10-25, not
+  rerun): neighbouring destinations are under- or over-predicted together, a regional component the destination
+  effects do not absorb; intervals do not cluster by region. The 25-mile elasticity depends on the distance form
+  (quadratic −0.88, splines −0.73 and −0.64 for urban homes) although held-out error does not.
+- Travel: the border block's held-out gain is not established (+0.125 [−0.105, +0.347]); kept by theory. Rural × log
+  distance alone is not distinguishable from zero (p = 0.14); the distance block passes as a block.
+- Coverage: the distance block's held-out gain is below zero (−0.125 [−0.255, −0.001]; print −0.188 [−0.381,
+  −0.010]); kept by theory.
+- Not rerun under the rural flag: travel steps, rejected terms, small counties, main-destination ratios, residual
+  autocorrelation, All marginal factors together, County characteristics (travel and hospital rows). Unemployment
   rate × distance not tested (no estimates in `mo_county_acs_2024.csv`). Athletic conferences: statewide test pending;
   the three-county figure is against the 2026-10-18 model, not rerun.
 - Spillover: the Centralia Fireside Guard and
@@ -2174,14 +2313,15 @@ size.
 
 Every replaced figure, with what replaced it and why. "Was" gives the earlier values in order: 2026-10-16 to 10-18,
 then "audit round 1" and "audit round 2" (2026-10-24; civic-interest-area rows still say "first review" and "second
-review"). "Now" is the current value (2026-10-25, after audit round 3). "Not rerun" = no replacement figure; the old one
-stands only as dated history. Figures for counties other than Audrain, Boone and Osage are kept outside the repository.
+review"). "Now" is the current value (2026-10-25, after audit round 3 and the rural flag); "round 3 (RUCC flag)" in "Was" is
+the value just before the rural flag replaced RUCC nonmetro. "Not rerun" = no replacement figure; the old one stands
+only as dated history. Figures for counties other than Audrain, Boone and Osage are kept outside the repository.
 
 | Model | Figure (where) | Was | Now | Why |
 |---|---|---|---|---|
 | Data | Calibration factor as the device → person scale | Median 1.94, middle 80% 1.09–3.18; Audrain 1.19–2.54, Boone 1.58–2.52, Osage 2.19–4.26; monthly medians Jan 1.78 … Sep 1.65 (audit round 1) | Kept as `factor`, not adopted; adopted `factor_statewide` 1.70–2.32 by month; trimmed Audrain 1.19–2.40, Boone 1.50–2.44, Osage 2.19–3.72 | The county factor measures home detection (county medians 0.24–10.78) |
-| Data | Calibration effect on the travel model | Log-distance term −2.14 → −1.58; "still predicts 93%"; audit round 1: elasticity at 25 mi metro −0.95 → −0.89, nonmetro −0.45 → −0.46; held-out 3.29 → 3.26; audit round 2 county factor −0.904 / −0.475, error 3.28; statewide −0.978 / −0.473, error 3.31 | County factor −0.906 / −0.477, error 3.25; adopted statewide scale −0.983 / −0.478, error 3.28 (Travel model, Sensitivities) | Statewide scale; centred terms |
-| Data | Calibration, other models | "Outlet model unchanged (broadcaster 0.70, crossover 1.47)"; "coverage's response to travel 0.52" | Adopted spillover model has no travel term; coverage metro 0.49, nonmetro 0.25 | Models replaced |
+| Data | Calibration effect on the travel model | Log-distance term −2.14 → −1.58; "still predicts 93%"; audit round 1: elasticity at 25 mi metro −0.95 → −0.89, nonmetro −0.45 → −0.46; held-out 3.29 → 3.26; audit round 2 county factor −0.904 / −0.475, error 3.28; statewide −0.978 / −0.473, error 3.31; round 3 (RUCC flag) county factor −0.906 / −0.477, error 3.25; statewide −0.983 / −0.478, error 3.28 | Urban / rural: county factor −0.855 / −0.703, error 3.30; adopted statewide scale −0.875 / −0.699, error 3.28 (Travel model, Sensitivities) | Statewide scale; centred terms; rural flag (2026-10-25) |
+| Data | Calibration, other models | "Outlet model unchanged (broadcaster 0.70, crossover 1.47)"; "coverage's response to travel 0.52"; coverage metro 0.49, nonmetro 0.25 (audit round 1); metro 0.50, nonmetro 0.26 (round 3, RUCC flag) | Adopted spillover model has no travel term; coverage urban 0.47, rural 0.24 | Models replaced; rural flag (2026-10-25) |
 | Data | Estimated town residents | Columbia ~107,000 / ~106,900; Mexico ~7,100 / ~7,130; Linn ~1,800 / ~1,790 | ACS population of the block groups 111,055; 6,619; 1,381 (statewide factor 102,803; 6,742; 2,802); allocated to the area 103,086; 5,685; 1,172 | The county factor carried home over-detection |
 | Data | Device IDs "stable at least week to week" | 424 block groups, monthly lower in 71, 62 passing the same-scale check | Withdrawn: 376 block groups, lower in 55, 48 passing; 7 show the products' scales differ | Places merged by `PERSISTENT_ID`; cross-product scales unknown; no within-product test |
 | Data | Pass-through discount | Removes 3.0% (2026-10-16); 2.3% (audit round 1); audit round 2 1.74% (county-factor weighting; 2.2% on the statewide scale; old codes 2.32%, codes fixed 3.35%, highway at the statewide norm 2.98%) | 1.81%, empirical-Bayes shrunken, `visits_statewide`-weighted (same weights: old codes 3.04%, codes fixed 4.38%, highway at the statewide norm 3.86%, own store mix unshrunk 2.23%); signed mean excess −0.02% | Convenience stores missing (2017 NAICS); every road stop counted as a highway stop; small pairs unshrunk; weights not the adopted outcome (round 3) |
@@ -2196,17 +2336,17 @@ stands only as dated history. Figures for counties other than Audrain, Boone and
 | Crossover | Employed residents working in another county ÷ population (LODES) | Audrain 23%, Boone 11%, Osage 33% | 21%, 11%, 31% | JT01; JT00 counted multiple jobholders twice |
 | Crossover | Tract floors, population-weighted conservative | Audrain 43%, Boone 28%, Osage 50%; audit round 2 44%, 27%, 57% | 44%, 26%, 59% | January–July tracts only; calibrated denominator; JT01 |
 | Data | Regular travel per tract (`directions_per_tract.py`): 1 / 2 / 3+ directions; count right, public / corrected | 8 / 29 / 63%; 77% / 78% | 8 / 30 / 63%; 78% / 77% (first direction 78% / 83%, unchanged) | January–July tracts only; 6 of 7 months |
-| Travel | Share of July–September shares predicted | 93%; 94% with commuting; audit round 1: held-out R² 93.8% [92.4, 94.9], Jul–Sep stability 93.8% vs persistence 98.6% | Held-out R² 93.7% [92.4, 94.9]; stability R² 93.9% vs persistence 98.7% | Squared correlation, not R²; the Jul–Sep split is beaten by persistence |
-| Travel | Held-out error | Audit round 1 3.26 [2.93, 3.59]; classes 3.44 / 2.83 / 3.85 / 2.47; audit round 2 3.31 [2.96, 3.64]; 3.57 / 2.87 / 3.68 / 2.45 | 3.28 [2.94, 3.61]; 3.54 / 2.86 / 3.70 / 2.39 | Statewide scale; shrunken highway discount; JT01 residents' jobs in and out of state |
+| Travel | Share of July–September shares predicted | 93%; 94% with commuting; audit round 1: held-out R² 93.8% [92.4, 94.9], Jul–Sep stability 93.8% vs persistence 98.6%; round 3 (RUCC flag) held-out R² 93.7% [92.4, 94.9]; stability R² 93.9% vs persistence 98.7% | Held-out R² 93.7% [92.4, 94.8]; stability R² 93.8% vs persistence 98.7% | Squared correlation, not R²; the Jul–Sep split is beaten by persistence; rural flag (2026-10-25) |
+| Travel | Held-out error | Audit round 1 3.26 [2.93, 3.59]; classes 3.44 / 2.83 / 3.85 / 2.47; audit round 2 3.31 [2.96, 3.64]; 3.57 / 2.87 / 3.68 / 2.45; round 3 (RUCC flag) 3.28 [2.94, 3.61]; 3.54 / 2.86 / 3.70 / 2.39 | 3.28 [2.96, 3.59]; 3.41 / 2.84 / 4.28 / 2.06 | Statewide scale; shrunken highway discount; JT01 residents' jobs in and out of state; rural flag (2026-10-25) |
 | Travel | Steps table | Deviance 480M / 359M / 275M / 165M / 137M; 76% / 81% / 86% / 92% / 93%; top destination 1.63× / 1.42× / 1.22× / 1.15×; audit round 1: deviance 358.2M … 68.8M, held-out R² 64.8% … 93.8%, errors 9.62 / 7.25 / 5.79 / 5.03 / 4.24 / 3.71 / 3.26, top destination 1.15× … 1.02×, within 15% … 49%; audit round 2 246.3M … 62.0M, 72.3% … 93.7%, 8.13 … 3.31, 1.26× … 1.03×, 18% … 51% | Steps table (246.1M … 62.0M; 72.4% … 93.7%; 8.06 … 3.28; 1.23× … 1.03×; 18% … 49%) | In-sample, observed-selected; then the second-round outcome |
 | Travel | Singly-constrained model's main destinations | Under-predicted by 1.6× (also Comparisons withdrawn); audit round 1 1.19×, held-out error 7.25; audit round 2 held-out error 6.46 against 3.31 | 1.15× held out, forecast-selected; held-out error 6.40 against 3.28 | Selected on the outcome; in-sample |
-| Travel | Top destination, actual ÷ forecast | 1.15–1.2×; audit round 1 1.02× (1.11× observed-selected) | 1.03× (1.13× observed-selected) | Held out, forecast-selected |
-| Travel | Big flows | Middle 80% 0.73×–1.88×; audit round 1 483 pairs, error 3.45 [3.17, 3.74], 49% within, 0.57×–1.51×; audit round 2 484 pairs, 3.44 [3.16, 3.73], 51% [46, 55], 0.61×–1.51× | 483 pairs, 3.44 [3.16, 3.72], 49% [45, 54], 0.60×–1.51× | In-sample, observed-selected; second-round outcome |
+| Travel | Top destination, actual ÷ forecast | 1.15–1.2×; audit round 1 1.02× (1.11× observed-selected); round 3 (RUCC flag) 1.03× (1.13× observed-selected) | 1.00× (1.13× observed-selected) | Held out, forecast-selected; rural flag (2026-10-25) |
+| Travel | Big flows | Middle 80% 0.73×–1.88×; audit round 1 483 pairs, error 3.45 [3.17, 3.74], 49% within, 0.57×–1.51×; audit round 2 484 pairs, 3.44 [3.16, 3.73], 51% [46, 55], 0.61×–1.51×; round 3 (RUCC flag) 483 pairs, 3.44 [3.16, 3.72], 49% [45, 54], 0.60×–1.51× | 485 pairs, 3.44 [3.19, 3.71], 49% [45, 53], 0.60×–1.50× | In-sample, observed-selected; second-round outcome; rural flag (2026-10-25) |
 | Travel | Main destinations, actual ÷ expected | Osage → Cole 2× (singly constrained), 1.15–1.2×, 1.28 → 1.09 with commuting; Osage → Boone 1.30 → 1.64; Audrain → Boone 0.99 → 0.97; Audrain → Callaway 1.68 → 1.39; Audrain → Marion 1.83 → 2.40; Boone → Cole 0.73 → 0.70; Boone → St. Louis 1.47 → 1.33; audit round 1 held out 1.14, 1.59, 1.01, 1.30, 2.21, 0.68, 1.29; audit round 2 in-sample 1.04, 1.64, 1.02, 1.44, 2.21, 0.71, 1.28 | In-sample / held out: 1.05 / 1.13, 1.65 / 1.56, 1.02 / 1.03, 1.45 / 1.35, 2.20 / 2.13, 0.71 / 0.67, 1.29 / 1.29 | Commuting; held out; second-round outcome |
-| Travel | Coefficients and elasticities | Audit round 1: −0.887, −0.282, +0.427, −0.273, +0.160, +0.501, +0.284, +0.192; metro −0.37 / −0.89 / −1.28 / −1.67, nonmetro +0.56 / −0.46 / −1.23 / −2.00 at 10 / 25 / 50 / 100 mi; audit round 2 −0.978, −0.265, +0.505, −0.258, +0.182, +0.465, +0.284, +0.200; metro −0.49 / −0.98 / −1.35 / −1.71, nonmetro +0.49 / −0.47 / −1.20 / −1.92 | −0.983, −0.265, +0.505, −0.261, +0.181, +0.464, +0.284, +0.197; metro −0.50 / −0.98 / −1.35 / −1.72, nonmetro +0.49 / −0.48 / −1.21 / −1.94 | Second-round outcome; JT01 |
-| Travel | Selection | Audit round 1 joint test: adopted vs fixed effects 16.76 → 3.26 (−13.50); drop-one gains +0.056 to +0.377; candidates same metro +0.003, nearest centre −0.014, adjacent +0.003, size × distance +0.011; nested −0.050 / −0.041, one at a time −0.051 [−0.100, −0.002]; audit round 2 blocks distance +0.994, border +0.185 [−0.048, +0.411], commuting +0.474, all +12.852; nested guard reported as change −0.061 [−0.205, +0.096] / −0.031; one at a time change −0.047 | Block gains: distance +1.043, border +0.199 [−0.033, +0.426], commuting +0.465, all pair terms +12.756; nested guard gain +0.062 [−0.097, +0.203] / +0.031; one at a time gain +0.045 [+0.010, +0.081] (reference only) | Selection procedure (authors); one gain convention (round 3) |
+| Travel | Coefficients and elasticities | Audit round 1: −0.887, −0.282, +0.427, −0.273, +0.160, +0.501, +0.284, +0.192; metro −0.37 / −0.89 / −1.28 / −1.67, nonmetro +0.56 / −0.46 / −1.23 / −2.00 at 10 / 25 / 50 / 100 mi; audit round 2 −0.978, −0.265, +0.505, −0.258, +0.182, +0.465, +0.284, +0.200; metro −0.49 / −0.98 / −1.35 / −1.71, nonmetro +0.49 / −0.47 / −1.20 / −1.92; round 3 (RUCC flag) −0.983, −0.265, +0.505, −0.261, +0.181, +0.464, +0.284, +0.197; metro −0.50 / −0.98 / −1.35 / −1.72, nonmetro +0.49 / −0.48 / −1.21 / −1.94 | −0.875, −0.259, +0.177 (p = 0.14), −0.210, +0.133, +0.440, +0.277, +0.189; urban −0.40 / −0.88 / −1.23 / −1.59, rural +0.16 / −0.70 / −1.35 / −2.00 at 10 / 25 / 50 / 100 mi | Second-round outcome; JT01; rural flag (2026-10-25) |
+| Travel | Selection | Audit round 1 joint test: adopted vs fixed effects 16.76 → 3.26 (−13.50); drop-one gains +0.056 to +0.377; candidates same metro +0.003, nearest centre −0.014, adjacent +0.003, size × distance +0.011; nested −0.050 / −0.041, one at a time −0.051 [−0.100, −0.002]; audit round 2 blocks distance +0.994, border +0.185 [−0.048, +0.411], commuting +0.474, all +12.852; nested guard reported as change −0.061 [−0.205, +0.096] / −0.031; one at a time change −0.047; round 3 (RUCC flag) block gains distance +1.043, border +0.199 [−0.033, +0.426], commuting +0.465, all pair terms +12.756; nested guard gain +0.062 [−0.097, +0.203] / +0.031; one at a time gain +0.045 [+0.010, +0.081] | Block gains: distance +1.047, border +0.125 [−0.105, +0.347], commuting +0.457, all pair terms +12.760; nested guard gain +0.106 [−0.045, +0.263] / +0.104; one at a time gain +0.057 [+0.022, +0.092] (reference only) | Selection procedure (authors); one gain convention (round 3); rural flag (2026-10-25) |
 | Travel | Commuting gains | Small rural 3.76 → 3.28, top-3 4.81 → 4.25, independent towns 3.05 → 2.79, commuter 4.13 → 3.82, hubs 2.43 → 2.11; audit round 1 all 3.71 → 3.26 (−0.45 [−0.70, −0.21]), 3.94 → 3.44, 4.86 → 4.31, 3.18 → 2.83, 4.28 → 3.85, 3.04 → 2.47; audit round 2 all 3.78 → 3.31 (−0.47 [−0.72, −0.27]); 4.06 → 3.57; top-3 4.97 → 4.36; 3.33 → 2.87; 4.22 → 3.68; 2.78 → 2.45 | All 3.75 → 3.28 (−0.46 [−0.71, −0.26]); 4.02 → 3.54; top-3 4.92 → 4.34; 3.30 → 2.86; 4.21 → 3.70; 2.73 → 2.39 | Second-round outcome; JT01; forecast-ranked top-3 |
-| Travel | Commuting coefficients | +0.28 / +0.19; audit round 1 +0.284 (0.051) / +0.192 (0.036); audit round 2 +0.284 [+0.194, +0.373] / +0.200 [+0.127, +0.273] | +0.284 [+0.197, +0.371] / +0.197 [+0.125, +0.269] | JT01; out-of-state jobs in the denominator |
+| Travel | Commuting coefficients | +0.28 / +0.19; audit round 1 +0.284 (0.051) / +0.192 (0.036); audit round 2 +0.284 [+0.194, +0.373] / +0.200 [+0.127, +0.273]; round 3 (RUCC flag) +0.284 [+0.197, +0.371] / +0.197 [+0.125, +0.269] | +0.277 [+0.189, +0.366] / +0.189 [+0.118, +0.260] | JT01; out-of-state jobs in the denominator; rural flag (2026-10-25) |
 | Travel | Driving time | Deviance 137M → 136M; Jul–Sep 93.0% → 92.3%; audit round 1 +0.07 [−0.14, +0.31]; audit round 2 +0.079 [−0.113, +0.310] | +0.078 [−0.115, +0.309] | Held out; second-round outcome |
 | Travel | "On the way" factor | Deviance 134M; audit round 1 −0.05 [−0.27, +0.22], weighted −0.06 [−0.31, +0.19]; audit round 2 −0.055 [−0.268, +0.209]; weighted −0.075 [−0.320, +0.184] | −0.052 [−0.265, +0.204]; weighted −0.079 [−0.321, +0.177] | As above |
 | Travel | Competing destinations | −0.05 and 0.00, deviance 80.0M → 79.5M / 80.0M; audit round 1 nearest alternative −0.051 [−0.100, −0.002], −0.065 (p 0.04), "passes one at a time"; other directions −0.01 [−0.04, +0.02]; audit round 2 −0.047 [−0.085, −0.009]; other direction −0.035 [−0.069, +0.001] | −0.045 [−0.081, −0.010], rejected by the nested guard; other direction −0.033 [−0.066, +0.001] | Nested guard; second-round outcome |
@@ -2219,21 +2359,25 @@ stands only as dated history. Figures for counties other than Audrain, Boone and
 | Travel | Small origins; measured draw; shrinkage | Audit round 1 3.76 vs 3.32; +0.94 / +1.33; 3.11 vs 3.05; audit round 2 3.77 vs 3.46; +0.60 / +1.18; 3.20 vs 3.14 | 3.73 vs 3.43; +0.58 / +1.13; 3.16 vs 3.10 | Second-round outcome |
 | Travel | Job-hub distances | "All worse (3.93–4.60)"; audit round 1 3.40–3.48 vs 3.35; audit round 2 3.48–3.51 vs 3.47 | 3.45–3.47 vs 3.44 | As above; JT01 |
 | Travel | Blend with own shares; pass-through as recorded | Audit round 1 1.51 (−0.00); 3.18 against 3.26; audit round 2 1.46; undiscounted 3.21 against 3.31 | 1.45 (−0.01 [−0.03, +0.02]); undiscounted 3.21 against 3.28 | As above |
-| Travel | Sensitivities table | — | Audit round 2: county factor −0.904 / −0.475, 3.28; undiscounted −0.971 / −0.484, 3.21; old discount −0.963 / −0.462, 3.30; uncapped −1.051 / −0.634, 3.15 (94.5%); distinct people −0.658 / −0.567, 1.74 (89.2%) → −0.906 / −0.477, 3.25; −0.972 / −0.482, 3.21; −0.964 / −0.461, 3.30; −1.057 / −0.639, 3.13 (94.6%); −0.670 / −0.619, 1.77 (88.7%); unshrunk discount −0.979 / −0.471, 3.31 | Shrunken discount; JT01 residents |
-| Travel | Stability and references | Audit round 1: Jul–Sep error 3.01, persistence 1.51, big flows 3.20 / 55% and 1.43 / 92%, model − persistence +1.49 [+1.20, +1.78]; destination effects + log distance 6.13 (−2.87); in-sample deviance 68.8M; audit round 2 2.95, model − persistence +1.49 [+1.17, +1.79]; 5.66 | 2.94, 1.46, model − persistence +1.47 [+1.16, +1.77]; 5.63 (adopted lower by 2.35 [1.86, 2.83]); 62.0M | Second-round outcome |
+| Travel | Sensitivities table | Audit round 2: county factor −0.904 / −0.475, 3.28; undiscounted −0.971 / −0.484, 3.21; old discount −0.963 / −0.462, 3.30; uncapped −1.051 / −0.634, 3.15 (94.5%); distinct people −0.658 / −0.567, 1.74 (89.2%); round 3 (RUCC flag) −0.906 / −0.477, 3.25; −0.972 / −0.482, 3.21; −0.964 / −0.461, 3.30; −1.057 / −0.639, 3.13 (94.6%); −0.670 / −0.619, 1.77 (88.7%); unshrunk discount −0.979 / −0.471, 3.31 | Urban / rural: county factor −0.855 / −0.703, 3.30; undiscounted −0.872 / −0.690, 3.21; old discount −0.859 / −0.690, 3.30; uncapped −0.953 / −0.799, 3.04 (94.6%); distinct people −0.662 / −0.622, 1.80 (88.5%); unshrunk discount −0.870 / −0.692, 3.31 | Shrunken discount; JT01 residents; rural flag (2026-10-25) |
+| Travel | Stability and references | Audit round 1: Jul–Sep error 3.01, persistence 1.51, big flows 3.20 / 55% and 1.43 / 92%, model − persistence +1.49 [+1.20, +1.78]; destination effects + log distance 6.13 (−2.87); in-sample deviance 68.8M; audit round 2 2.95, model − persistence +1.49 [+1.17, +1.79]; 5.66; round 3 (RUCC flag) 2.94, 1.46, model − persistence +1.47 [+1.16, +1.77]; 5.63 (adopted lower by 2.35 [1.86, 2.83]); 62.0M | 2.96, 1.46, model − persistence +1.50 [+1.22, +1.78]; 5.63 (adopted lower by 2.35 [1.85, 2.87]); 62.3M | Second-round outcome; rural flag (2026-10-25) |
+| Travel, coverage | Rural flag | USDA RUCC nonmetro (codes 4–9): 61 nonmetro of the 88 newsroom counties | Under 50% of 2020 population in Census urban areas: 89 rural, 26 urban counties; 65 rural, 23 urban newsroom counties (Rural flag, under Current results) | RUCC is a commuting definition: Osage (0% urban) was metro |
+| Travel | Distance form (restricted cubic spline) | Round 3 (RUCC flag): change in held-out error +0.175 [−0.007, +0.384] / +0.000 [−0.154, +0.209]; 25-mile elasticity metro −0.98 / −0.83 / −0.77, nonmetro −0.48 / −0.66 / −0.24 | +0.150 [−0.084, +0.392] / −0.012 [−0.129, +0.123]; urban −0.88 / −0.73 / −0.64, rural −0.70 / −0.77 / −0.53 | Rural flag (2026-10-25) |
 | Travel | All marginal factors | 3.58 / 3.39 / 4.04, 93.1% / 93.6% / 90.4%, within 49% / 49% / 42%, "about 5% gain with all eight"; audit round 1 3.26 / 3.15 / 3.21 / 3.84, −0.11 [−0.31, +0.10], −0.05, +0.58; audit round 2 3.31 / 3.19 / 3.25 / 3.83; −0.11 [−0.31, +0.09]; +0.53 [+0.09, +0.97] | 3.28 / 3.17 / 3.22 / 3.79; −0.12 [−0.31, +0.09]; −0.06 [−0.20, +0.10]; +0.51 [+0.09, +0.95] | Held out; intervals; second-round outcome |
 | Travel | County characteristics, travel column | Baseline 3.51; degree × distance 3.43; hospitals 3.48; audit round 1 baseline 3.26 / 3.45; audit round 2 baseline 3.31 / 3.44 | Baseline 3.28 / 3.44; County characteristics table | Jul–Sep big-flow error selected on the outcome; second-round outcome |
 | Travel | Tier sizes | Hubs 8 | Hubs 8 in `county_class_k4.csv` (114 counties); scored, 9 with St. Louis city (115 homes) | St. Louis city and county scored apart |
-| Coverage | Headline elasticity | "About 0.7–0.8% more stories per 1% more visits" | Metro 0.49, nonmetro 0.25 | No distance terms: distance loaded onto visits |
-| Coverage | Response to travel (calibration; commuting) | 0.52; "falls from 0.52 to 0.36"; twice the travel → 1.4×, then 1.3× | Metro 0.49 (1.41×), nonmetro 0.25 (1.19×); pooled 0.36 | Log distance + border only; log visits; hypothesis term |
-| Coverage | Elasticities | Audit round 1: metro 0.49 (0.066; 0.36–0.62), nonmetro 0.25 (0.061; 0.13–0.37); print 0.51 / 0.25; difference −0.235 (0.039); 1.40× / 1.19×; leave-one-out 0.45–0.53; pooled 0.36 (0.060); audit round 2 0.49 (0.070; 0.36–0.63), 0.25 (0.063; 0.13–0.38); print 0.52 / 0.26; −0.241 (0.040); 1.41× / 1.19×; 0.46–0.54; pooled 0.36 (0.064) | 0.50 (0.067; 0.37–0.63), 0.26 (0.061; 0.14–0.38); print 0.52 / 0.26; −0.244 (0.040); 1.42× / 1.19×; leave one out 0.47–0.54; pooled 0.37 (0.061) | Second-round outcome |
-| Coverage | Commuting terms | In +0.51 (p < 0.001), out +0.04; audit round 1 in +0.42 (0.073), out −0.02; audit round 2 in +0.41 (0.073), out −0.03 | In +0.41 (0.072), out −0.04 (0.085) | Adopted specification; JT01 |
-| Coverage | Held-out error | 4.15 → 4.12; audit round 1 0.913 [0.844, 0.982] / 4.42 [4.00, 4.91] (print 0.939 / 4.53); audit round 2 4.49 [4.04, 4.98] (print 4.59); all destinations 0.915 (print 0.941) | Primary 4.46 [4.02, 4.93] (print 4.56), per-county mean over 8 folds; all destinations 0.915 (print 0.942) | Destination set chosen partly by the held-out stories; loco folds; second-round outcome |
+| Coverage | Headline elasticity | "About 0.7–0.8% more stories per 1% more visits"; metro 0.49, nonmetro 0.25 (audit round 1); metro 0.50, nonmetro 0.26 (round 3, RUCC flag) | Urban 0.47, rural 0.24 | No distance terms: distance loaded onto visits; rural flag (2026-10-25) |
+| Coverage | Response to travel (calibration; commuting) | 0.52; "falls from 0.52 to 0.36"; twice the travel → 1.4×, then 1.3×; round 3 (RUCC flag) metro 0.50 (1.42×), nonmetro 0.26 (1.19×); pooled 0.37 | Urban 0.47 (1.38×), rural 0.24 (1.18×); pooled 0.38 | Log distance + border only; log visits; hypothesis term; rural flag (2026-10-25) |
+| Coverage | Elasticities | Audit round 1: metro 0.49 (0.066; 0.36–0.62), nonmetro 0.25 (0.061; 0.13–0.37); print 0.51 / 0.25; difference −0.235 (0.039); 1.40× / 1.19×; leave-one-out 0.45–0.53; pooled 0.36 (0.060); audit round 2 0.49 (0.070; 0.36–0.63), 0.25 (0.063; 0.13–0.38); print 0.52 / 0.26; −0.241 (0.040); 1.41× / 1.19×; 0.46–0.54; pooled 0.36 (0.064); round 3 (RUCC flag) 0.50 (0.067; 0.37–0.63), 0.26 (0.061; 0.14–0.38); print 0.52 / 0.26; −0.244 (0.040); 1.42× / 1.19×; leave one out 0.47–0.54; pooled 0.37 (0.061) | Urban 0.47 (0.069; 0.33–0.60), rural 0.24 (0.059; 0.13–0.36); print 0.48 / 0.26; −0.225 (0.047); 1.38× / 1.18×; leave one out 0.417–0.505; pooled 0.38 (0.060) | Second-round outcome; rural flag (2026-10-25) |
+| Coverage | Commuting terms | In +0.51 (p < 0.001), out +0.04; audit round 1 in +0.42 (0.073), out −0.02; audit round 2 in +0.41 (0.073), out −0.03; round 3 (RUCC flag) in +0.41 (0.072), out −0.04 (0.085) | In +0.42 (0.069), out −0.02 (0.087) | Adopted specification; JT01; rural flag (2026-10-25) |
+| Coverage | Held-out error | 4.15 → 4.12; audit round 1 0.913 [0.844, 0.982] / 4.42 [4.00, 4.91] (print 0.939 / 4.53); audit round 2 4.49 [4.04, 4.98] (print 4.59); all destinations 0.915 (print 0.941); round 3 (RUCC flag) primary 4.46 [4.02, 4.93] (print 4.56); all destinations 0.915 (print 0.942) | Primary 4.54 [4.09, 5.04] (print 4.63), per-county mean over 8 folds; all destinations 0.922 (print 0.947) | Destination set chosen partly by the held-out stories; loco folds; second-round outcome; rural flag (2026-10-25) |
 | Coverage | Primary destination set; excluded stories | — | Audit round 2 1,174 pairs; 498 stories in `EXCLUDE` → 1,185 pairs; 547 stories (Dos Mundos and KHQA 7 added) | Outcome; exclusions |
-| Coverage | Nonmetro interaction | Audit round 1: adopted on held-out error, change −0.143 [−0.221, −0.068] vs pooled; audit round 2 gain +0.125 [+0.048, +0.202] (print +0.090) | Hypothesis term, gain +0.125 [+0.048, +0.203] (print +0.088) | Selection procedure |
-| Coverage | Saturation | Response 0.67 → 0.50, p 0.004 / < 0.001, "real and in the predicted direction"; audit round 1 own stories −0.007 (p 0.34), changes ≤ 0.021; audit round 2 nested guard reported as change +0.011 [−0.005, +0.027]; own stories −0.006 (p 0.43) | Nested guard gain −0.010 [−0.024, +0.004]: not supported; own stories −0.006 (p 0.48) | Separate non-adopted model; HC1; nested guard |
+| Coverage | Hypothesis term (nonmetro → rural interaction) | Audit round 1: adopted on held-out error, change −0.143 [−0.221, −0.068] vs pooled; audit round 2 gain +0.125 [+0.048, +0.202] (print +0.090); round 3 (RUCC flag) gain +0.125 [+0.048, +0.203] (print +0.088) | Hypothesis term log visits × rural, gain +0.128 [+0.045, +0.213] (print +0.081) | Selection procedure; rural flag (2026-10-25) |
+| Coverage | Saturation | Response 0.67 → 0.50, p 0.004 / < 0.001, "real and in the predicted direction"; audit round 1 own stories −0.007 (p 0.34), changes ≤ 0.021; audit round 2 nested guard reported as change +0.011 [−0.005, +0.027]; own stories −0.006 (p 0.43); round 3 (RUCC flag) nested guard gain −0.010 [−0.024, +0.004]; own stories −0.006 (p 0.48) | Nested guard gain +0.001 [−0.016, +0.021]: not supported; own stories −0.007 (p 0.38) | Separate non-adopted model; HC1; nested guard; rural flag (2026-10-25) |
 | Coverage | Border test | "±60% at 95%"; raw "about half"; audit round 1 +0.04 [−0.04, +0.12] (print +0.06), raw 6.7% / 7.8% / 15.8%, ring −1.16 (0.52); audit round 2 6.7% / 7.7% / 15.9%, ring −1.22 (0.54) | +0.04 [−0.04, +0.13] (print +0.07); 6.8% / 7.7% / 16.0%; ring −1.23 (0.55) | HC1; specification labelled; second-round outcome |
-| Coverage | Zero-visit treatment | Audit round 1 adopted 0.486 / 0.252, at log(1e-3) 0.482 / 0.246; audit round 2 0.494 / 0.254; at log(1e-3) 0.490 / 0.248 | 0.501 / 0.257; at log(1e-3) 0.497 / 0.252 | Second-round outcome |
+| Coverage | Zero-visit treatment | Audit round 1 adopted 0.486 / 0.252, at log(1e-3) 0.482 / 0.246; audit round 2 0.494 / 0.254; at log(1e-3) 0.490 / 0.248; round 3 (RUCC flag) metro / nonmetro 0.501 / 0.257; at log(1e-3) 0.497 / 0.252 | Urban / rural 0.466 / 0.241; at log(1e-3) 0.461 / 0.235 | Second-round outcome; rural flag (2026-10-25) |
+| Coverage | Core blocks left out (gain, primary) | Round 3 (RUCC flag): distance +0.004 [−0.115, +0.125] (print −0.082), border −0.012 [−0.045, +0.020], commuting −0.017 [−0.122, +0.085]; Wald χ² 77.3 / 9.0 (p 0.003) / 37.0 | Distance −0.125 [−0.255, −0.001] (print −0.188 [−0.381, −0.010]), border −0.010 [−0.031, +0.011], commuting −0.007 [−0.106, +0.087]; Wald χ² 115.3 / 3.5 (p 0.061) / 46.0 | Rural flag (2026-10-25) |
+| Coverage | Not-adopted specifications, pooled | Round 3 (RUCC flag): without the commuting block 0.43 (print 0.40); all core terms 0.37 (print 0.35); travel beyond gravity 0.362 against 0.359 | 0.46 (0.43); 0.38 (0.37); 0.381 against 0.373 | Rural flag (2026-10-25) |
 | Coverage | All marginal factors | 4.15 / 4.14 / 4.18; print 4.50 / 4.58 / 4.52; audit round 1 scratch 0.91 / 0.91, 4.42 / 4.39 (print 0.94 / 0.93, 4.53 / 4.50); scripts on outcome-selected destinations 3.47 / 3.78; audit round 2 pooled over pairs: 4.25 / 4.24 / 4.23 / 4.34 (no broadcast 4.37 / 4.38 / 4.36 / 4.41) | Per-county mean over 8 folds on 1%+ of visits: 4.46 / 4.46 / 4.44 / 4.51 (no broadcast 4.56 / 4.54 / 4.57 / 4.58) | Outcome-selected destinations; scratch table; then pooled scoring, not `coverage_model.py`'s per-county mean (round 3) |
 | Coverage | Collection quality | 0.52 → 0.48 (all), 0.50 → 0.42 (print); audit round 1 0.36 → 0.26, 0.34 → 0.25 | Pooled specification 0.36 → 0.25 (all), 0.35 → 0.25 (print and digital); 88 → 33 newsroom counties (rerun 2026-10-25) | Old specification; rerun |
 | Coverage | County characteristics column; hospitals | 4.00; 4.01; audit round 2 `hospital_test.py` 4.25 → 4.26 (no broadcasters 4.37 → 4.36), pooled | Not rerun; `hospital_test.py` 4.46 → 4.45 (no broadcasters 4.56 → 4.54) | Outcome-selected destinations; old specification |
