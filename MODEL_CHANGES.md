@@ -243,6 +243,7 @@ RUCC-flag results had been seen; both sets of figures are reported.
 | Hypothesis term (log visits × flag) | −0.244 (0.040); −0.262 (0.059) | −0.225 (0.047); −0.220 (0.067) | `coverage_model.py` |
 | Hypothesis term, held-out gain (primary) | +0.125 [+0.048, +0.203]; +0.088 [+0.004, +0.170] | +0.128 [+0.045, +0.213]; +0.081 [+0.004, +0.161] | `coverage_model.py` |
 | Held-out error, primary | 4.46 [4.02, 4.93]; 4.56 [4.11, 5.02] | 4.54 [4.09, 5.04]; 4.63 [4.18, 5.12] | `coverage_model.py` |
+| Held-out error, primary: change, county-paired | — | +0.085 [−0.024, +0.197]; +0.078 [−0.029, +0.198] | `coverage_flag_compare.py` |
 | Distance block, held-out gain (primary) | +0.004 [−0.115, +0.125]; −0.082 [−0.243, +0.070] | −0.125 [−0.255, −0.001]; −0.188 [−0.381, −0.010] | `coverage_model.py` |
 
 - Travel: rural × log distance alone is no longer distinguishable from zero (+0.177, s.e. 0.120, p = 0.14). It sits
@@ -251,8 +252,11 @@ RUCC-flag results had been seen; both sets of figures are reported.
 - Travel: held-out error and R² are unchanged at the stated precision. The urban–rural gap in the 25-mile elasticity
   narrows from 0.50 to 0.18: Osage and the 19 other RUCC-metro rural counties had been in the metro group.
 - Coverage: the hypothesis term is little changed (−0.244 → −0.225) and still lowers held-out error by about 0.13
-  points (print 0.08), both intervals excluding zero. The adopted model's held-out error is 0.08 points higher (4.54
-  against 4.46; no paired interval computed). The distance block's held-out gain is now below zero with an interval
+  points (print 0.08), both intervals excluding zero. The adopted model's held-out error is 0.085 points higher
+  (4.543 against 4.458), county-paired +0.085 [−0.024, +0.197], 48 counties worse and 40 better; print +0.078
+  [−0.029, +0.198] (`coverage_flag_compare.py`). The flag does not measurably change prediction. The 14 newsroom
+  counties RUCC metro and settlement rural are predicted better (mean −0.217; Osage 5.77 → 5.06), the others
+  slightly worse (+0.142). The distance block's held-out gain is now below zero with an interval
   excluding zero (all outlets and print); it stays by theory.
 - Rerun under the rural flag: `travel_model.py`, `travel_model_dc_test.py selection`, `travel_distance_spline.py`,
   `combined_marginal_test.py travel_nested_all`, `coverage_model.py`, `coverage_saturation_test.py`,
