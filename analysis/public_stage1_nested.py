@@ -1,7 +1,7 @@
 """Stage 1, the public model's setting per county class, chosen without the county it is scored on.
 
 Candidates: every Missouri build of public_travel_tiers.py (analysis/public_model_pairs_tiers<TAG>.csv) other than the
-assembled by-class files, the Kansas builds (_20_) and the regular-travel builds (_r*): 53 settings, each built from
+assembled by-class files and the regular-travel builds (_r*): 53 settings, each built from
 public data only. For each class (score_segments.py's five: small rural, independent towns, commuter rings of the
 Kansas City and St. Louis metros, commuter rings of regional hubs, hubs) the setting is the one with the lowest mean
 share-weighted error against Advan over all Advan destinations (the primary metric; outside the public model's
@@ -11,8 +11,8 @@ share-weighted error against Advan over all Advan destinations (the primary metr
 Advan therefore chooses among settings but sets no parameter. The table printed here is on all Advan destinations;
 score_segments.py adds the common destination set.
 
-Outputs: analysis/public_stage1_choice.csv (the setting chosen on all counties of each class -- the one Kansas takes;
-and each county's nested choice), analysis/public_stage1_nested_pairs.csv (county shares, nested and in-sample).
+Outputs: analysis/public_stage1_choice.csv (the setting chosen on all counties of each class, and each county's
+nested choice), analysis/public_stage1_nested_pairs.csv (county shares, nested and in-sample).
 """
 import glob
 import os

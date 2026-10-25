@@ -7,15 +7,13 @@ file (census_dl/acs_tract/acsdt5y2024-*.dat, no API key), Missouri 2020 tracts.
   renter       B25003 share of occupied housing units renter-occupied (3) -- survey HOMEOWN 2
   wfh          B08006 share of workers 16+ who worked from home (17)
 Output analysis/tract_acs_2024.csv."""
-import os
 from pathlib import Path
 
 import pandas as pd
 
 root = Path(__file__).resolve().parents[1]
 D = root / "census_dl/acs_tract"
-ST = os.environ.get("STATE", "29")                 # state FIPS; outputs for other states carry a suffix
-SUF = "" if ST == "29" else f"_{ST}"
+ST = "29"                                          # Missouri
 
 
 def read(t):
@@ -36,6 +34,6 @@ out["inc_ge100"] = sum(E(b, "B19001", n) for n in range(14, 18)) / tot
 out["ba_plus"] = sum(E(e, "B15003", n) for n in range(22, 26)) / E(e, "B15003", 1)
 out["renter"] = E(h, "B25003", 3) / E(h, "B25003", 1)
 out["wfh"] = E(m, "B08006", 17) / E(m, "B08006", 1)
-out.rename_axis("tract").reset_index().to_csv(root / f"analysis/tract_acs_2024{SUF}.csv", index=False)
+out.rename_axis("tract").reset_index().to_csv(root / "analysis/tract_acs_2024.csv", index=False)
 print(out.describe().round(3).to_string())
 print("missing:", out.isna().sum().to_dict())

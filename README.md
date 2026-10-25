@@ -1,8 +1,10 @@
 # Civic interest areas
 
 Code for the Missouri School of Journalism analysis of local news in Missouri. The analysis measures where county
-residents travel, where local news outlets report, and how the two align. Results cover January–September 2026 for
-travel and March 2026 for news stories.
+residents travel, where local news outlets report, and how the two align. The travel, coverage and spillover models
+are fitted on all Missouri counties; results are reported for Audrain, Boone and Osage counties. Civic interest areas
+cover the Columbia–Jefferson City television market. Results cover January–September 2026 for travel and March 2026
+for news stories.
 
 ## Measures
 
@@ -40,11 +42,11 @@ excludes every one of these folders' data files.
 
 | Input | Place in folder (not committed) | Source |
 |---|---|---|
-| Advan Neighborhood Patterns Plus, Missouri and Kansas destinations, January–September 2026 | `neighborhood/raw/`, `neighborhood/raw_ks/` | Dewey Data, academic licence |
+| Advan Neighborhood Patterns Plus, Missouri destinations and Kansas destinations of Missouri residents, January–September 2026 | `neighborhood/raw/`, `neighborhood/raw_ks/` | Dewey Data, academic licence |
 | Advan Weekly Patterns Plus, Missouri, March 2026 | `weekly/raw/` | Dewey Data, academic licence |
 | Census boundary, population, American Community Survey (ACS), County Business Patterns, Business Dynamics Statistics and National Household Travel Survey (NHTS) files; state taxable sales | `census_dl/` | Public; cited in `CITATIONS.md` |
 | LEHD Origin-Destination Employment Statistics (LODES), 2023 | `free/` | Public; cited in `CITATIONS.md` |
-| OpenStreetMap extracts, Missouri and Kansas | `osm/` | Geofabrik |
+| OpenStreetMap extract, Missouri | `osm/` | Geofabrik |
 | Outlet registry and television market assignments | `data/registry/` | Missouri School of Journalism outlet registry; checksums committed in `data/registry/README.md` |
 | News stories and their places, March 2026 | `coverage/`, `flows/reach/` | Missouri School of Journalism local news database; exported by `coverage/storymap/export_statewide_2026_03.sh` and `coverage/export_source_quality.sh` (database credentials required) |
 | Story data, Audrain, Boone and Osage counties | `data/stories/` (committed) | Missouri School of Journalism (CC BY 4.0); described in `data/stories/README.md` |
@@ -65,7 +67,7 @@ STAGES="travel coverage" zsh scripts/reproduce.sh
 | `travel` | Gravity model, block tests, nested test of exploratory terms | `data` |
 | `coverage` | Coverage model, saturation test, border test | `travel`, story data |
 | `spillover` | Outlet model, nested selection, television-market and regional holdouts, collection-quality subsets | `data`, story data |
-| `public` | Public-data travel model, Advan-learned corrections, Kansas transfer test (`scripts/public_model.sh`) | `travel`, public data |
+| `public` | Public-data travel model and its Advan-learned corrections (`scripts/public_model.sh`) | `travel`, public data |
 | `areas` | Travel patterns, network tie, 1,728-version drawing ensemble, multi-part areas, tie-market accuracy | Advan files, story data, `public` |
 | `qa` | Coverage density and balanced diet on the travel-only footprint (diagnostics for later work) | `areas` |
 | `figures` | Area table, calculation diagram, area maps for Columbia, Mexico and Linn (`flows/print/`) | `areas` |

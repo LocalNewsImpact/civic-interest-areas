@@ -2,10 +2,10 @@
 eight neighbouring states. No Advan, no destination fixed effects -- every destination's pull is a public measure, so
 the model applies to any place.
 
-Outcome   LODES 2023 primary jobs (JT01; JT=JT00 all jobs), home tract -> work county: the Missouri main OD file
-          (mo_od_main_JT01_2023.csv.gz) plus the auxiliary OD files of IL, KS, IA, AR, OK, NE, TN, KY (Missouri residents
-          working in those states); STATE=20: the Kansas main file and the MO, NE, OK, CO auxiliary files.
-Builds    DIST=pop TAG=_v1 (Missouri) and STATE=20 DIST=pop TAG=_v1 (Kansas): the files public_travel_tiers.py reads.
+Outcome   LODES 2023 primary jobs (JT01; JT=JT00 all jobs), home tract -> work county: Missouri residents,
+          free/mo_residents_od_JT01_2023.csv.gz (the Missouri main OD file plus the Missouri-home rows of the IL, KS,
+          IA, AR, OK, NE, TN, KY auxiliary files: Missouri residents working in those states).
+Builds    DIST=pop TAG=_v1: the file public_travel_tiers.py reads.
 Inputs    distance: miles between the tract's 2020 centre of population (CenPop2020_Mean_TR29) and the destination
             county's job centre (county_public_geo.csv, build_public_geography.py), log and log squared
           destination employment: County Business Patterns 2022 total employment (cbp22co.txt), log
@@ -30,15 +30,14 @@ from scipy.optimize import minimize
 
 root = Path(__file__).resolve().parents[1]
 REF = root / "census_dl/ref"
-ST = os.environ.get("STATE", "29")                 # home state FIPS (29 Missouri, 20 Kansas)
-SUF = "" if ST == "29" else f"_{ST}"
-tr = pd.read_csv(REF / f"CenPop2020_Mean_TR{ST}.txt", dtype=str, encoding="utf-8-sig")
+ST = "29"                                          # home state: Missouri
+tr = pd.read_csv(REF / "CenPop2020_Mean_TR29.txt", dtype=str, encoding="utf-8-sig")
 tr["tract"] = tr.STATEFP + tr.COUNTYFP + tr.TRACTCE
 tr[["lat", "lon", "pop"]] = tr[["LATITUDE", "LONGITUDE", "POPULATION"]].astype(float)
 co = pd.read_csv(REF / "CenPop2020_Mean_CO.txt", dtype=str, encoding="utf-8-sig")
 co["fips"] = co.STATEFP + co.COUNTYFP
 co[["lat", "lon", "pop"]] = co[["LATITUDE", "LONGITUDE", "POPULATION"]].astype(float)
-STATES = {"29": {"29", "17", "20", "19", "05", "40", "31", "47", "21"}, "20": {"20", "29", "31", "40", "08"}}[ST]
+STATES = {"29", "17", "20", "19", "05", "40", "31", "47", "21"}       # Missouri + 8 neighbours
 co = co[co.STATEFP.isin(STATES)].set_index("fips")
 geo = pd.read_csv(root / "analysis/county_public_geo.csv", dtype={"fips": str}).set_index("fips")
 if os.environ.get("DIST", "hub") == "hub":
@@ -56,9 +55,8 @@ flow = defaultdict(float)
 JT = os.environ.get("JT", "JT01")
 # Missouri JT01: free/mo_residents_od_JT01_2023.csv.gz = the Missouri main file + the Missouri-home rows of the eight
 # neighbouring states' aux files (the same rows as reading them one by one); out-of-state jobs enter as destinations
-files = ([root / "free/mo_residents_od_JT01_2023.csv.gz"] if JT == "JT01" and ST == "29" else
-         [root / ("free/od_2023.csv.gz" if JT == "JT00" else f"free/mo_od_main_{JT}_2023.csv.gz")] + [root / f"free/{s}_od_aux_{JT}_2023.csv.gz" for s in ("il", "ks", "ia", "ar", "ok", "ne", "tn", "ky")]
-         if ST == "29" else [root / f"free/ks/ks_od_main_{JT}_2023.csv.gz"] + [root / f"free/ks/{s}_od_aux_{JT}_2023.csv.gz" for s in ("mo", "ne", "ok", "co")])
+files = ([root / "free/mo_residents_od_JT01_2023.csv.gz"] if JT == "JT01" else
+         [root / "free/od_2023.csv.gz"] + [root / f"free/{s}_od_aux_JT00_2023.csv.gz" for s in ("il", "ks", "ia", "ar", "ok", "ne", "tn", "ky")])
 for f in files:
     with gzip.open(f, "rt") as fh:
         for r in csv.DictReader(fh):
@@ -86,7 +84,7 @@ P["ld2"] = P.ld ** 2
 P["log_emp"] = np.log([max(emp.get(j, 1.0), 1.0) for j in P.j])
 P["log_pop_j"] = np.log(co.loc[P.j, "pop"].clip(lower=1).values)
 P["rural_ld"] = np.array([rural.get(h, False) for h in P.home], float) * P.ld
-acs = pd.read_csv(root / f"analysis/tract_acs_2024{SUF}.csv", dtype={"tract": str}).set_index("tract")
+acs = pd.read_csv(root / "analysis/tract_acs_2024.csv", dtype={"tract": str}).set_index("tract")
 acs["log_income"] = np.log(acs.med_income)
 for c in ("log_income", "ba_plus", "renter"):                   # tract measure (standardised) x log distance
     v = acs[c].fillna(acs[c].median()); v = (v - v.mean()) / v.std()
@@ -136,4 +134,4 @@ print(f"held-out tracts: share-weighted error {100 * np.sum(w * np.abs(pred - ac
       f"R^2 of shares {np.corrcoef(pred, act)[0, 1] ** 2:.3f}")
 out = P.state_line.values == 1
 print(f"outside the home state: actual {act[out].sum() / act.sum():.2%} of workers' destinations, predicted {pred[out].sum() / pred.sum():.2%}")
-P.assign(pred_share=pred, act_share=act).to_csv(root / f"analysis/public_work_model_pairs{SUF}{os.environ.get('TAG', '')}.csv", index=False)
+P.assign(pred_share=pred, act_share=act).to_csv(root / f"analysis/public_work_model_pairs{os.environ.get('TAG', '')}.csv", index=False)

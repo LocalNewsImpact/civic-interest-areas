@@ -21,8 +21,7 @@ class) = 240, plus the five rejected variants on the adopted structure (+ rank x
 band, pooled hub factor, hub distance bands, metro-core factor): 245.
 
 Also reported: the structure chosen the old way (lowest 8-fold score on all counties, Stage 1 chosen on all
-counties) -- the in-sample selection -- and the transferable structure (TRANSFER=1 only) chosen on all Missouri
-counties, exported for the Kansas test (segment_corrections_mo.pkl, transfer_adjustments.py).
+counties) -- the in-sample selection.
 Outputs: analysis/public_adjusted_nested_pairs.csv (county shares), public_adjusted_nested_choices.csv (structure per
 outer fold and mode), public_adjusted_nested_configs.csv (every structure's inner and all-county scores).
 Scored by score_segments.py.
@@ -163,11 +162,6 @@ def main():
     pd.DataFrame(ch).to_csv(M.A_ / "public_adjusted_nested_choices.csv", index=False)
     cfdf = pd.DataFrame(cf).sort_values("C_allcounty_cv")
     cfdf.to_csv(M.A_ / "public_adjusted_nested_configs.csv", index=False)
-    # transferable structure for Kansas: chosen on all Missouri counties (Kansas is held out entirely)
-    tn = min((n for n, c in enumerate(CFGS) if c["TRANSFER"]), key=lambda n: R[n]["C"][3])
-    print("transferable structure chosen on all Missouri counties (mode C):", name(CFGS[tn]), f"{R[tn]['C'][3]:.2f}")
-    M.export(M.keys(CFGS[tn]), P_FULL, "segment_corrections_mo.pkl")
-    pd.Series({"structure": name(CFGS[tn]), **{s: NAMES[v] for s, v in BASE_FULL[1].items()}}).to_csv(M.A_ / "public_transfer_choice.csv")
     print(pd.DataFrame(ch).to_string())
     print("\nBest 10 structures by the all-county score (mode C):\n" + cfdf.head(10)[["structure", "C_allcounty_cv", "C_inner_mean"]].round(3).to_string())
     print(f"done in {time.time() - t0:.0f}s")

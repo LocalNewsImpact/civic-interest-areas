@@ -1,22 +1,20 @@
-"""Travel-only activity-space markets, every tract of a state: accuracy of the public model against Advan, and Advan's
-replicability. Same settings in Missouri and Kansas, so the Kansas run is a transfer test of the method.
+"""Travel-only activity-space markets, every Missouri tract: accuracy of the public model against Advan, and Advan's
+replicability.
 
-Observed   Advan regular tract -> block group visits, January-July 2026 (od_tract_bg_<st>_2026_janjul.parquet;
-           >= 4 of 7 months; odd and even months >= 2 of theirs). Frame: Missouri destinations for Missouri homes;
-           Kansas and Missouri destinations for Kansas homes.
-Public     regular-travel public model by class (public_model_pairs_tiers[_20]_byclass_regular.csv, no corrections),
+Observed   Advan regular tract -> block group visits, January-July 2026 (od_tract_bg_mo_2026_janjul.parquet;
+           >= 4 of 7 months; odd and even months >= 2 of theirs). Frame: Missouri destinations.
+Public     regular-travel public model by class (public_model_pairs_tiers_byclass_regular.csv, no corrections),
            out-of-county shares; home-county share = the tract's workers working in their home county (LODES 2023);
            within a county: a third each of jobs (LODES WAC: half total, half retail/health/arts/food), OpenStreetMap
-           destinations (destinations_mo/ks.csv) and 2020 block group population, at distance^-0.5; Advan's
+           destinations (destinations_mo.csv) and 2020 block group population, at distance^-0.5; Advan's
            regularity rule (regularity_rule.csv, fitted in Missouri).
 Market     80% footprint on 3 km hexagons, closed over gaps of 2 hexagons, holes filled; separate markets = parts of
            5%+ of its area.
-Usage: activity_market_score.py 29|20
+Output analysis/activity_market_score_29.csv.
 """
 import csv
 import gzip
 import math
-import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -28,15 +26,13 @@ from shapely.geometry import shape
 
 root = Path(__file__).resolve().parents[1]
 A = root / "analysis"; REF = root / "census_dl/ref"
-ST = sys.argv[1] if len(sys.argv) > 1 else "29"
-SUF = "" if ST == "29" else "_20"
-FRAME = {"29": ["29"], "20": ["20", "29"]}[ST]
-monthly = pq.read_table(A / ("od_tract_bg_mo_2026_janjul.parquet" if ST == "29" else "od_tract_bg_ks_2026_janjul.parquet")).to_pandas()
+ST, SUF, FRAME = "29", "", ["29"]                  # Missouri homes, Missouri destinations
+monthly = pq.read_table(A / "od_tract_bg_mo_2026_janjul.parquet").to_pandas()
 monthly = monthly[monthly.bg.str[:2].isin(FRAME)]
 ALLM = sorted(monthly.month.unique())
 
 # block groups of the frame: points, county, attraction
-SHP = {"29": root / "census_dl/bg/cb_2020_29_bg_500k", "20": root / "census_dl/bg_ks/cb_2020_20_bg_500k"}
+SHP = {"29": root / "census_dl/bg/cb_2020_29_bg_500k"}
 bgpt = {}
 for s in FRAME:
     sf = shapefile.Reader(str(SHP[s])); fl = [f[0] for f in sf.fields[1:]]
@@ -45,12 +41,12 @@ for s in FRAME:
 BG = sorted(bgpt); bix = {b: i for i, b in enumerate(BG)}
 blon = np.array([bgpt[b][0] for b in BG]); blat = np.array([bgpt[b][1] for b in BG]); bcty = np.array([b[:5] for b in BG])
 jobs, cons = defaultdict(float), defaultdict(float)
-for f in [root / "free/mo_wac_S000_JT00_2023.csv.gz"] + ([root / "free/ks/ks_wac_S000_JT00_2023.csv.gz"] if "20" in FRAME else []):
+for f in [root / "free/mo_wac_S000_JT00_2023.csv.gz"]:
     with gzip.open(f, "rt") as fh:
         for r in csv.DictReader(fh):
             b = r["w_geocode"][:12]
             jobs[b] += float(r["C000"]); cons[b] += sum(float(r[c]) for c in ("CNS07", "CNS16", "CNS17", "CNS18"))
-osm = pd.concat([pd.read_csv(root / f"flows/reach/destinations_{'mo' if s == '29' else 'ks'}.csv", dtype={"block_group": str}) for s in FRAME]).block_group.value_counts()
+osm = pd.concat([pd.read_csv(root / "flows/reach/destinations_mo.csv", dtype={"block_group": str})]).block_group.value_counts()
 bgpop = {}
 for s in FRAME:
     x = pd.read_csv(REF / f"CenPop2020_Mean_BG{s}.txt", dtype=str, encoding="utf-8-sig")
@@ -205,7 +201,7 @@ for lab, k in (("Advan itself, odd vs even months (ceiling)", None), ("public mo
         print(f"| {lab} | {R.replicability.median():.2f} | -- | -- |"); continue
     j = R["accuracy" if k == "" else k]; rc = R["recall" if k == "" else k + "_recall"]; pr = R["precision" if k == "" else k + "_precision"]
     print(f"| {lab} | {j.median():.2f} | {100 * rc.median():.0f}% | {100 * pr.median():.0f}% |")
-name = {"29": "Missouri", "20": "Kansas"}[ST]
+name = "Missouri"
 print(f"| {name} ({len(R)} tracts) | Replicability (Advan, odd vs even) | Accuracy (public vs Advan) | Same number of markets | Within one | Area ratio |")
 print("|---|---:|---:|---:|---:|---:|")
 for c in list(L.values()) + ["all"]:

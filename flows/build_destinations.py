@@ -1,4 +1,4 @@
-"""Destinations: the places people go, from OpenStreetMap, for the market maps' rural shading. ALL OF MISSOURI (STATE=20: Kansas, destinations_ks.csv).
+"""Destinations: the places people go, from OpenStreetMap, for the market maps' rural shading. ALL OF MISSOURI.
 
 Every node or way in Missouri tagged as a destination -- amenity, shop,
 leisure, tourism, office, healthcare, craft, or a commercial, retail, industrial, school, church or civic building, and
@@ -18,9 +18,7 @@ from shapely.strtree import STRtree
 
 here = Path(__file__).parent
 R = here / "reach"
-import os
-ST = os.environ.get("STATE", "29")                     # 29 Missouri, 20 Kansas
-BOX = {"29": (-95.8, 35.9, -89.0, 40.7), "20": (-102.1, 36.9, -94.5, 40.1)}[ST]
+BOX = (-95.8, 35.9, -89.0, 40.7)                       # Missouri
 KEYS = ("amenity", "shop", "leisure", "tourism", "office", "healthcare", "craft")
 BUILDINGS = {"commercial", "retail", "industrial", "school", "church", "civic", "public", "warehouse", "supermarket",
              "hospital", "college", "university", "kindergarten", "hotel", "office", "sports_centre", "stadium"}
@@ -56,10 +54,10 @@ class Dest(osmium.SimpleHandler):
 
 
 h = Dest()
-h.apply_file(str(here.parent / ("osm/missouri-latest.osm.pbf" if ST == "29" else "osm/kansas-latest.osm.pbf")), locations=True)
+h.apply_file(str(here.parent / "osm/missouri-latest.osm.pbf"), locations=True)
 __file__ = str(here / "build_cousub_shares.py")
 exec(open(here / "build_cousub_shares.py").read().split("\ndef cw(")[0])
-bgs = read_shp(str(DL / "bg/cb_2020_29_bg_500k") if ST == "29" else str(DL / "bg_ks/cb_2020_20_bg_500k"), lambda r: r["GEOID"])
+bgs = read_shp(str(DL / "bg/cb_2020_29_bg_500k"), lambda r: r["GEOID"])
 ids = list(bgs)
 tree = STRtree([bgs[g][1] for g in ids])
 rows = []
@@ -69,6 +67,6 @@ for lon, lat in h.pts:
     if hit:
         rows.append((round(lon, 5), round(lat, 5), hit[0]))
 d = pd.DataFrame(rows, columns=["lon", "lat", "block_group"])
-d.to_csv(R / ("destinations_mo.csv" if ST == "29" else "destinations_ks.csv"), index=False)
+d.to_csv(R / "destinations_mo.csv", index=False)
 print(f"{len(h.pts):,} destinations in the box; {len(d):,} in the state's block groups; "
       f"block groups with none: {len(set(ids) - set(d.block_group))} of {len(ids)}")

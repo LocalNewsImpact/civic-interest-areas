@@ -90,15 +90,13 @@ if os.environ.get("REGULAR") == "1":
                         "recreation": per_month(t[(t.URBRUR == u) & (t.WHYTRP1S == 50) & t.sl.between(20, 50)], u)})
 
 # ---- geography and capacity ----------------------------------------------------------------------------------------
-ST = os.environ.get("STATE", "29")                 # home state FIPS (29 Missouri, 20 Kansas)
-SUF = "" if ST == "29" else f"_{ST}"
-tr = pd.read_csv(REF / f"CenPop2020_Mean_TR{ST}.txt", dtype=str, encoding="utf-8-sig")
+tr = pd.read_csv(REF / "CenPop2020_Mean_TR29.txt", dtype=str, encoding="utf-8-sig")
 tr["tract"] = tr.STATEFP + tr.COUNTYFP + tr.TRACTCE
 tr[["lat", "lon", "pop"]] = tr[["LATITUDE", "LONGITUDE", "POPULATION"]].astype(float)
 co = pd.read_csv(REF / "CenPop2020_Mean_CO.txt", dtype=str, encoding="utf-8-sig")
 co["fips"] = co.STATEFP + co.COUNTYFP
 co[["lat", "lon", "pop"]] = co[["LATITUDE", "LONGITUDE", "POPULATION"]].astype(float)
-co = co[co.STATEFP.isin({"29": {"29", "17", "20", "19", "05", "40", "31", "47", "21"}, "20": {"20", "29", "31", "40", "08"}}[ST])].set_index("fips")
+co = co[co.STATEFP.isin({"29", "17", "20", "19", "05", "40", "31", "47", "21"})].set_index("fips")      # Missouri + 8 neighbours
 cid = np.asarray(co.index, dtype=object)
 cbp = pd.read_csv(root / "census_dl/cbp/cbp22co.txt", dtype=str, usecols=["fipstate", "fipscty", "naics", "emp"])
 cbp["f"] = cbp.fipstate + cbp.fipscty
@@ -121,7 +119,7 @@ CAP = {"grocery": supermarket + supercenter, "boxstore": supercenter,          #
        "specialty": sum(col(c).values for c in ("442///", "443///", "448///", "451///", "4522//"))}
 POP = co["pop"].values
 mo = cid.astype(str).astype(object)
-is_mo = np.array([c[:2] == ST for c in cid])            # the home state (named for Missouri, its first use)
+is_mo = np.array([c[:2] == "29" for c in cid])          # Missouri, the home state
 DRAW, UNMET = {}, {}
 for k, cap in CAP.items():
     cap = np.asarray(cap, float)
@@ -136,18 +134,10 @@ DRAW["recreation"] = sum(col(c).values for c in REC_CODES) + 1
 RETAIL = os.environ.get("RETAIL", "needs")         # needs: grocery and box-store unmet need; tac: trade area capture
 HUFF = os.environ.get("HUFF", "sales")             # retail attraction: sales, or surplus (sales beyond own residents)
 FIXED = {k: float(v) for k, v in (x.split(":") for x in os.environ.get("LAMBDA", "").split(",") if x)}   # e.g. retail:2
-if ST == "29":
-    ts = pd.read_csv(root / "census_dl/mo_dor/cnty/DI60IT15_SLS_CNTY_F_2025.csv", dtype=str, encoding="utf-8-sig")
-    ts = pd.Series(ts.Total.str.replace(r"[$,\s]", "", regex=True).astype(float).values, index="29" + ts.MOID.str.zfill(3).replace("193", "186"))   # DOR keeps Ste. Genevieve's pre-1979 code
-else:    # Kansas: FY2025 state sales tax collections by county (one state rate, so proportional to taxable sales)
-    _k = pd.read_csv(root / "analysis/ks_pull_factors_fy25.csv", dtype={"fips": str})
-    ts = pd.Series(_k.sales_tax.values, index=_k.fips)
+ts = pd.read_csv(root / "census_dl/mo_dor/cnty/DI60IT15_SLS_CNTY_F_2025.csv", dtype=str, encoding="utf-8-sig")
+ts = pd.Series(ts.Total.str.replace(r"[$,\s]", "", regex=True).astype(float).values, index="29" + ts.MOID.str.zfill(3).replace("193", "186"))   # DOR keeps Ste. Genevieve's pre-1979 code
 acs_c = pd.read_csv(root / "free/mo_county_acs_2024.csv", dtype={"fips": str})
 pci = acs_c[acs_c.variable == "per_capita_income"].set_index("fips").estimate
-if ST != "29":   # county per-capita income, ACS 2020-2024 (B19301), from the table-based summary file
-    _b = pd.read_csv(root / "census_dl/acs_tract/b19301.dat", sep="|", dtype=str)
-    _b = _b[_b.GEO_ID.str.startswith("0500000US" + ST)]
-    pci = pd.Series(pd.to_numeric(_b.B19301_E001, errors="coerce").values, index=_b.GEO_ID.str[-5:])
 retail_emp = sum(col(c).values for c in ("44----", "45----")) if "45----" in E else col("44----").values
 TS = ts.reindex(cid).values
 per_emp = np.nansum(TS[is_mo]) / retail_emp[is_mo].sum()
@@ -160,7 +150,7 @@ UNMET["retail"] = (1 - TAC).clip(lower=0, upper=1)
 expected = state_pc * POP * pci.reindex(cid).fillna(pci_mo).values / pci_mo
 DRAW["retail"] = (TS if HUFF == "sales" else np.maximum(TS - expected, 0)) ** HUFF_ALPHA + 1
 if RETAIL == "tac":
-    for c, n in ((("29151", "Osage"), ("29051", "Cole"), ("29019", "Boone"), ("29007", "Audrain"), ("29127", "Marion"), ("29135", "Moniteau")) if ST == "29" else ()):
+    for c, n in (("29151", "Osage"), ("29051", "Cole"), ("29019", "Boone"), ("29007", "Audrain"), ("29127", "Marion"), ("29135", "Moniteau")):
         print(f"{n}: pull factor {PF[c]:.2f}, trade area capture {TAC[c]:.2f}, retail leakage {UNMET['retail'][c]:.2f}")
 DRAW["visiting"] = POP
 home = np.asarray(tr.tract.str[:5], dtype=object)
@@ -168,10 +158,10 @@ rucc = pd.read_csv(REF / "rucc2023.csv", dtype=str, encoding="latin-1")
 rucc = rucc[rucc.Attribute == "RUCC_2023"]
 rural = np.array([{r.FIPS.zfill(5): int(r.Value) >= 4 for r in rucc.itertuples()}.get(h, False) for h in home])
 if os.environ.get("URBAN_CLASSES"):
-    k4 = pd.read_csv(root / f"analysis/county_class_k4{SUF}.csv", dtype={"fips": str}).set_index("fips")["class"]   # the home state's classes
+    k4 = pd.read_csv(root / "analysis/county_class_k4.csv", dtype={"fips": str}).set_index("fips")["class"]
     to_urban = {c.strip() for c in os.environ["URBAN_CLASSES"].split(",")}
     rural &= ~np.array([k4.get("29189" if h == "29510" else h, "class 1") in to_urban for h in home])
-for c, n in ((("29151", "Osage"), ("29051", "Cole"), ("29019", "Boone"), ("29007", "Audrain"), ("29127", "Marion")) if ST == "29" else ()):
+for c, n in (("29151", "Osage"), ("29051", "Cole"), ("29019", "Boone"), ("29007", "Audrain"), ("29127", "Marion")):
     print(f"{n}: unmet grocery {UNMET['grocery'][c]:.2f}, box store {UNMET['boxstore'][c]:.2f}, medical {UNMET['medical'][c]:.2f}, specialty {UNMET['specialty'][c]:.2f}")
 
 R = 3959.0
@@ -215,7 +205,7 @@ for k in KINDS_NW:
     x = np.where(keep, DRAW[k][None, :] * np.maximum(D, 1) ** -bt[:, None], 0)
     SH[k] = x / x.sum(1, keepdims=True)
 
-P = pd.read_csv(root / f"analysis/public_work_model_pairs{SUF}_v1.csv", dtype={"tract": str, "j": str, "home": str})
+P = pd.read_csv(root / "analysis/public_work_model_pairs_v1.csv", dtype={"tract": str, "j": str, "home": str})
 out_workers = P[P.home != P.j].groupby("tract").y.sum()
 P = P[(P.home != P.j) & (P.miles <= 200)].copy()
 # WORK_HYBRID=miles: observed LODES within that distance, the gravity fit beyond it -- long LODES flows are largely
@@ -244,7 +234,7 @@ NEEDS = ["work"] + (["chained"] if CHAIN else []) + KINDS_NW
 popt = P.tract.map(dict(zip(tr.tract, tr["pop"]))).clip(lower=1).values
 u = np.where(rural[ai], 2, 1)
 rt = lambda k: np.array([rate[x][k] for x in u])
-wfh = pd.read_csv(root / f"analysis/tract_acs_2024{SUF}.csv", dtype={"tract": str}).set_index("tract").wfh
+wfh = pd.read_csv(root / "analysis/tract_acs_2024.csv", dtype={"tract": str}).set_index("tract").wfh
 work_days = WORK_DAYS * ((1 - P.tract.map(wfh).fillna(wfh.median()).values) if os.environ.get("WFH") == "1" else 1)
 if LEAK == "huffhome":                           # gross leakage: the Huff share of the home county itself
     lam = float(os.environ.get("LEAK_LAMBDA", "2"))
@@ -264,9 +254,9 @@ V = {"work": P.tract.map(out_workers).fillna(0).values / popt * work_days + rt("
      "specialty": rt("specialty"), "recreation": rt("recreation"), "visiting": rt("visiting")}
 vol = np.column_stack([np.asarray(V[k], float) * MULT.get(k, 1.0) * np.ones(len(P)) for k in NEEDS])
 P["combined_share"] = (P[NEEDS].values * vol).sum(1) / vol.sum(1)
-for c, n in ((("29151", "Osage"), ("29019", "Boone"), ("29007", "Audrain")) if ST == "29" else (("20091", "Johnson KS"), ("20173", "Sedgwick"), ("20001", "Allen"))):
+for c, n in (("29151", "Osage"), ("29019", "Boone"), ("29007", "Audrain")):
     m = (P.home == c).values
     first = ~P[m].tract.duplicated().values
     vv = np.average(vol[m][first], weights=popt[m][first], axis=0)      # population-weighted over tracts
     print(f"{n}: out-of-county visit-days per resident per month: " + ", ".join(f"{k} {v:.2f}" for k, v in zip(NEEDS, vv)))
-P[["tract", "home", "j", "miles"] + NEEDS + ["combined_share"]].to_csv(root / f"analysis/public_model_pairs_tiers{SUF}{TAG}.csv", index=False)
+P[["tract", "home", "j", "miles"] + NEEDS + ["combined_share"]].to_csv(root / f"analysis/public_model_pairs_tiers{TAG}.csv", index=False)
