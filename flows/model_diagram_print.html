@@ -6,142 +6,116 @@
 <link rel="stylesheet" href="dd/css/fonts.css">
 <link rel="stylesheet" href="dd/css/tokens.css">
 <link rel="stylesheet" href="dd/css/datadesk.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <style>
   /* 528 CSS px = 5.5 in; rendered at 3.125x for 300 dpi */
-  html, body { margin: 0; background: #ffffff; }
-  body { width: 528px; }
+  html, body { margin: 0; background: #ffffff; color: #0b0b0b; }
+  body { width: 528px; font-size: 9.5px; line-height: 1.35; }
   .dd-visual { padding: 0; }
-  .dd-subtitle { margin-bottom: var(--s-2); }
-  svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-  .dd-footer { margin-top: var(--s-2); }
+  .dd-subtitle { margin-bottom: 6px; }
+  .panel { background: #fafaf8; border: 1px solid #d9d8d0; padding: 7px 10px 8px; margin: 0 0 7px; }
+  .panel h3 { font-size: 11.5px; font-weight: 650; margin: 0 0 4px; text-transform: none; letter-spacing: 0; }
+  .lab { font-weight: 600; color: #003a56; }
+  .sec { font-size: 9px; font-weight: 600; color: #5b6370; margin: 6px 0 2px; }
+  .eq { margin: 2px 0 2px 4px; font-size: 10px; }
+  .eq .katex { font-size: 1.02em; }
+  .note { color: #5b6370; font-size: 8.8px; margin: 1px 0 0 4px; }
+  table.key { border-collapse: collapse; width: 100%; font-size: 8.8px; }
+  table.key td { padding: 1.5px 4px; vertical-align: top; border-top: 1px solid #ecebe5; }
+  table.key td.s { width: 62px; white-space: nowrap; }
+  table.key td.v { width: 92px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .out { margin-top: 5px; }
 </style>
 </head>
 <body>
 <figure class="dd-visual">
   <h2 class="dd-title">How the study's measures are calculated</h2>
-  <p class="dd-subtitle">For each measure: the question it answers, the calculation, its inputs and its output</p>
+  <p class="dd-subtitle">For each measure: the question it answers, the calculation, its terms with fitted values, and
+    its output</p>
   <div id="d"></div>
-  <figcaption class="dd-footer"><span class="dd-source">Coefficients from models fitted to Missouri, all 115 counties
-    (St. Louis city and county as one), printed by analysis/travel_model.py, coverage_model.py and spillover_outlets.py.
-    Visits: Advan Research, Neighborhood Patterns Plus (Dewey Data), January–September 2026 (areas: January–July).
-    Stories: Missouri School of Journalism analysis, March 2026. Commuting: LODES 2023.</span></figcaption>
+  <figcaption class="dd-footer"><span class="dd-source">Fitted values with standard errors in parentheses or 95% intervals
+    in brackets, as printed by analysis/travel_model.py, build_unique_od.py, coverage_model.py and spillover_outlets.py,
+    and flows/area_ensemble.py. Travel, coverage and spillover are fitted on all Missouri counties; results are reported
+    for Audrain, Boone and Osage counties. Visits: Advan Research, Neighborhood Patterns Plus (Dewey Data),
+    January–September 2026 (areas: January–July). Stories: Missouri School of Journalism analysis, March 2026.
+    Commuting: LODES 2023.</span></figcaption>
 </figure>
-<script src="d3.min.js"></script>
 <script>
-// Coefficients are those printed by analysis/travel_model.py, coverage_model.py, spillover_outlets.py and
-// analysis/build_unique_od.py; the civic interest area by flows/market_patterns.py and flows/area_ensemble.py.
-const C = { ink: "#0b0b0b", mute: "#5b6370", rule: "#d9d8d0", panel: "#fafaf8", accent: "#003a56" };
-const W = 528, svg = d3.select("#d").append("svg").attr("width", W);
-let y = 0;
-const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
-function txt(x, yy, t, o = {}) {
-  const e = svg.append("text").attr("x", x).attr("y", yy).attr("font-size", o.size || 9.5)
-    .attr("font-weight", o.weight || 400).attr("fill", o.fill || C.ink).text(t);
-  if (o.mono) e.style("font-family", MONO).style("white-space", "pre");
-  return e;
-}
-// one panel: title, the question the output answers, the calculation, a key of inputs, the output
-function panel(letter, title, question, calc, key, output) {
-  const top = y; y += 18;
-  const g0 = svg.append("g");
-  txt(10, y, `${letter}  ${title}`, { size: 11.5, weight: 650 }); y += 16;
-  txt(10, y, "Answers:", { size: 9.5, weight: 600, fill: C.accent });
-  question.forEach((q, i) => txt(58, y + i * 12, q, { size: 9.5 })); y += question.length * 12 + 8;
-  txt(10, y, "Calculation", { size: 9, weight: 600, fill: C.mute }); y += 13;
-  calc.forEach((c) => { txt(14, y, c, { size: 9.8 }).style("white-space", "pre"); y += 13; }); y += 6;
-  txt(10, y, "Inputs", { size: 9, weight: 600, fill: C.mute }); y += 13;
-  key.forEach(([sym, lines]) => {
-    txt(14, y, sym, { mono: true, size: 9.2, weight: 600 });
-    lines.forEach((l, i) => txt(78, y + i * 11.5, l, { size: 9 }));
-    y += lines.length * 11.5 + 2.5;
-  });
-  y += 4;
-  txt(10, y, "Output:", { size: 9.5, weight: 600, fill: C.accent });
-  output.forEach((o, i) => txt(58, y + i * 12, o, { size: 9.5 })); y += output.length * 12 + 4;
-  g0.lower();
-  svg.insert("rect", ":first-child").attr("x", 0).attr("y", top + 4).attr("width", W).attr("height", y - top - 4)
-    .attr("fill", C.panel).attr("stroke", C.rule);
-  y += 8;
-}
-
-panel("A", "Travel: where each county's residents go",
-  ["How many visits would residents of county i be expected to make to county j,",
-   "given the distance between them, a shared border and commuting?"],
-  ["V̂ᵢⱼ = exp( αᵢ + γⱼ − 0.98·Dᵢⱼ − 0.27·Dᵢⱼ² + Rᵢ·(0.51·Dᵢⱼ − 0.26·Dᵢⱼ²)",
-   "              + 0.18·Pᵢ·Dᵢⱼ + 0.46·Bᵢⱼ + 0.28·Cᵢⱼ + 0.20·Cⱼᵢ )",
-   "fitted by Poisson regression to Vᵢⱼ, every pair of 115 counties"],
-  [["Vᵢⱼ", ["visits by residents of county i to county j, January–September 2026 (Advan Neighborhood",
-            "Patterns Plus), scaled to people; visits to highway gas, convenience and fast-food stops removed"]],
-   ["αᵢ", ["how much county i's residents travel overall (estimated, one per home county)"]],
-   ["γⱼ", ["how strongly county j draws visitors from everywhere (estimated, one per destination)"]],
-   ["Dᵢⱼ", ["ln(miles between the two counties' 2020 population centres ÷ 25)"]],
-   ["Rᵢ", ["1 if county i is nonmetropolitan (USDA Rural-Urban Continuum codes 4–9), else 0"]],
-   ["Pᵢ", ["ln(county i population) minus its Missouri mean (ACS 2020–2024)"]],
-   ["Bᵢⱼ", ["1 if the two counties share a border, else 0"]],
-   ["Cᵢⱼ", ["ln(1 + workers living in i who work in j, per 1,000 workers living in i) (LODES 2023)"]]],
-  ["V̂ᵢⱼ, expected visits for every county pair. At 25 miles, twice the distance gives about half",
-   "the visits from a metro county, three-quarters from a rural one; a shared border, 1.6 times.",
-   "Each county predicted without its own data: R² 93.7%."]);
-
-panel("B", "Crossover: how many of a county's residents go elsewhere",
-  ["What share of a county's residents is seen outside the county in a month?"],
-  ["crossover(county) = Σₕ min(Lₕ, Dₕ) ÷ Σₕ Dₕ,   where Dₕ = Eₕ^0.62 · Sₕ^0.38",
-   "summed over the county's home block groups h; averaged January–September 2026"],
-  [["Lₕ", ["residents of block group h seen in their single busiest block group outside the county",
-            "(all distinct people, so a lower bound on residents who left) (Advan)"]],
-   ["Sₕ", ["residents of h seen at home (Advan); inflated where Advan over-detects homes"]],
-   ["Eₕ", ["ACS 2020–2024 population of h × the month's statewide phones per resident"]],
-   ["0.62", ["share of the excess phones at home that behave like phantoms rather than residents,",
-             "estimated across months (2SLS; 95% CI 0.53–0.71)"]]],
-  ["share of residents seen outside the county: Audrain 44%, Boone 26%, Osage 59%",
-   "(range over the CI of 0.62: Osage 57–61%)."]);
-
-panel("C", "Coverage: which counties each county's newsrooms cover",
-  ["How many stories would county k's newsrooms be expected to write about county j,",
-   "given the same geography and how much their residents travel there?"],
-  ["Ŝₖⱼ = exp( νₖ + μⱼ + [distance, border and commuting terms of A]",
-   "              + 0.50·ln Vₖⱼ − 0.24·Rₖ·ln Vₖⱼ + ζ·Zₖⱼ )",
-   "fitted by Poisson regression to Sₖⱼ, every newsroom county k and other county j"],
-  [["Sₖⱼ", ["stories by newsrooms based in county k centred in or mentioning county j, March 2026",
-            "(Missouri School of Journalism analysis; a story counts once for each county it names)"]],
-   ["νₖ", ["how much county k's newsrooms publish overall (estimated, one per newsroom county)"]],
-   ["μⱼ", ["how much county j is written about by newsrooms everywhere (estimated)"]],
-   ["Vₖⱼ", ["residents' visits from county k to county j, as in A"]],
-   ["Rₖ", ["1 if the newsroom county is nonmetropolitan, else 0"]],
-   ["Zₖⱼ", ["1 if no visit was recorded (then ln Vₖⱼ = 0), else 0"]]],
-  ["Ŝₖⱼ, expected stories. Twice the visits: 1.41 times the stories from metro newsrooms (2^0.50),",
-   "1.20 times from rural ones (2^0.26)."]);
-
-panel("D", "Spillover: how much of an outlet's news is about another county",
-  ["What share of an outlet's stories would be expected to be about other counties?"],
-  ["ŷₒ = 1 ÷ (1 + e^(−zₒ)),   zₒ = −0.81 + 0.67·Tₒ − 0.39·ln(1 + Nₒ)",
-   "fitted by fractional logistic regression to yₒ, 85 well-collected outlets"],
-  [["yₒ", ["outlet o's spillover, March 2026: stories centred in another county count 1, home stories",
-            "mentioning another county ½, sports stories half that; ÷ all its stories placed in a county"]],
-   ["Tₒ", ["1 if the outlet is a TV or radio broadcaster, else 0"]],
-   ["Nₒ", ["print and digital news outlets active in the outlet's county (outlet registry)"]]],
-  ["ŷₒ, expected share. With 2 print outlets in the county: print 22%, broadcaster 36%; with 5:",
-   "print 18%, broadcaster 30%. A county's expectation: its outlets' ŷ weighted by their stories."]);
-
-panel("E", "Civic interest area: the places a town's residents share",
-  ["Which places are part of a town's residents' civic interest, and how likely is each?"],
-  ["1  Rₕₓ ≈ Σₖ Wₕₖ · Hₖₓ      (travel patterns: non-negative matrix factorization)",
-   "2  tieₓ = Tₓ · (1 + 0.3·Oₓ + 0.3·Iₓ + 0.7·Pₓ + 0.7·Qₓ)      (each 3 km hexagon x)",
-   "3  pₓ = (versions s of 1,728 that draw x) ÷ 1,728",
-   "4  area = home part + every part of 3+ hexagons with pₓ ≥ 0.5"],
-  [["Rₕₓ", ["share of block group h's residents seen at place x, January–July 2026 (Advan)"]],
-   ["Wₕₖ, Hₖₓ", ["h's weight on travel pattern k; pattern k's reach to place x. Patterns kept: each holds",
-                 "10%+ and 1,000+ of some town's residents and 10%+ of its travel, and recurs in odd",
-                 "and even months"]],
-   ["Tₓ", ["the town's residents' travel to x in their pattern (busiest place = 50, home = 100)"]],
-   ["Oₓ, Iₓ", ["the town's news about x; x's news about the town's county (each 0–1, March 2026 stories)"]],
-   ["Pₓ, Qₓ", ["places the town visits that x's outlets cover; places both towns' outlets cover (0–1)"]],
-   ["s", ["one version of the map: hexagon 2/3/4 km, busiest place 50/100, spread within places,",
-          "smoothing, selectivity, distance rule, reach (all 1,728 combinations, weighted equally)"]]],
-  ["pₓ, how likely each place is part of the area; the area outlined. Mexico's includes Columbia",
-   "(39% of Audrain residents' out-of-county visits)."]);
-
-svg.attr("height", y).attr("viewBox", [0, 0, W, y]);
+// Each panel: title, question, equations (TeX), estimation note, key rows [symbol (TeX), meaning, value], output.
+const P = [
+ { t: "A  Travel: where each county's residents go",
+   q: "How many visits would residents of county i be expected to make to county j, given distance, a shared border and commuting?",
+   eq: ["\\mathrm{E}[V_{ij}] = \\exp\\big(\\alpha_i + \\gamma_j + \\beta_1 D_{ij} + \\beta_2 D_{ij}^2 + R_i(\\beta_3 D_{ij} + \\beta_4 D_{ij}^2)",
+        "\\qquad\\qquad + \\beta_5 P_i D_{ij} + \\beta_6 B_{ij} + \\beta_7 C_{ij} + \\beta_8 C_{ji}\\big)"],
+   est: "Poisson pseudo-maximum likelihood (PPML) over all 13,110 ordered pairs of 115 counties, zero pairs kept; errors clustered by home and destination county (robust to overdispersion).",
+   key: [["V_{ij}", "visits by residents of county i to county j, January–September 2026 (Advan), scaled to people; highway pass-through stops removed", ""],
+         ["\\alpha_i,\\ \\gamma_j", "overall travel from county i; overall pull of county j (fixed effects, one per county)", "estimated"],
+         ["D_{ij}", "ln(miles between 2020 population centres ÷ 25)", ""],
+         ["\\beta_1,\\ \\beta_2", "distance and its square (elasticity at 25 miles, metro home)", "−0.98 (0.11), −0.27 (0.03)"],
+         ["R_i;\\ \\beta_3,\\ \\beta_4", "1 if county i is nonmetropolitan (RUCC 4–9); its distance terms", "0.51 (0.12), −0.26 (0.07)"],
+         ["P_i;\\ \\beta_5", "ln population of county i, centred (ACS 2020–2024); × distance", "0.18 (0.03)"],
+         ["B_{ij};\\ \\beta_6", "1 if the counties share a border", "0.46 (0.07)"],
+         ["C_{ij};\\ \\beta_7,\\ \\beta_8", "ln(1 + workers living in i who work in j per 1,000 workers living in i), each direction (LODES)", "0.28 (0.04), 0.20 (0.04)"]],
+   out: "Expected visits for every county pair. Each county predicted without its own data: R² 93.7% [92.4, 94.9], share-weighted error 3.28 points. Twice the distance at 25 miles: about half the visits from a metro county, three-quarters from a rural one." },
+ { t: "B  Crossover: how many of a county's residents go elsewhere",
+   q: "What share of a county's residents is seen outside the county in a month?",
+   eq: ["\\displaystyle \\text{crossover}_c = \\frac{\\sum_{h \\in c} \\min(L_h,\\, D_h)}{\\sum_{h \\in c} D_h}, \\qquad D_h = E_h^{\\,b}\\, S_h^{\\,1-b}"],
+   est: "b estimated by two-stage least squares across months: a block group's log leaving rate on its log detection ratio d = S/E, instrumented by the same ratio in another month (one excluded instrument; just-identified).",
+   key: [["L_h", "residents of home block group h seen in their single busiest block group outside the county (a lower bound on residents who left; Advan)", ""],
+         ["S_h", "residents of h seen at home (Advan); inflated where homes are over-detected", ""],
+         ["E_h", "ACS 2020–2024 population of h × the month's statewide phones per resident", ""],
+         ["b", "share of the excess phones at home that behave like phantoms rather than residents", "0.62 [0.53, 0.71]"]],
+   out: "Share of residents seen outside the county, January–September 2026: Audrain 44%, Boone 26%, Osage 59% (Osage 57–61% over b's interval)." },
+ { t: "C  Coverage: which counties each county's newsrooms cover",
+   q: "How many stories would county k's newsrooms be expected to write about county j, given geography and residents' travel there?",
+   eq: ["\\mathrm{E}[S_{kj}] = \\exp\\big(\\nu_k + \\mu_j + \\boldsymbol{\\theta}^{\\top}\\mathbf{X}_{kj} + \\beta_1 \\ell_{kj} + \\beta_2 R_k \\ell_{kj} + \\beta_3 Z_{kj}\\big)",
+        "\\ell_{kj} = \\begin{cases} \\ln V_{kj} & V_{kj} > 0 \\\\ 0 & V_{kj} = 0 \\end{cases}, \\qquad Z_{kj} = \\mathbf{1}[V_{kj} = 0]"],
+   est: "PPML over every newsroom county k and other county j (zero pairs kept); errors clustered by newsroom county. Associational: one month of stories.",
+   key: [["S_{kj}", "stories by newsrooms in county k centred in or naming county j, March 2026 (Missouri School of Journalism analysis)", ""],
+         ["\\nu_k,\\ \\mu_j", "output of k's newsrooms; how much j is covered by newsrooms everywhere (fixed effects)", "estimated"],
+         ["\\mathbf{X}_{kj}", "the distance, border and commuting terms of A", "estimated"],
+         ["V_{kj};\\ \\beta_1", "residents' visits from k to j (from A); elasticity for metro newsroom counties", "0.50 (0.067)"],
+         ["R_k;\\ \\beta_2", "1 if the newsroom county is nonmetropolitan; difference in elasticity", "−0.24 (0.040)"],
+         ["Z_{kj};\\ \\beta_3", "1 if no visit was recorded", "estimated"]],
+   out: "Expected stories. Twice the visits: 1.42 times the stories from metro newsrooms, 1.19 times from nonmetro ones. Held-out error, destinations with 1%+ of visits: 4.46 [4.02, 4.93]." },
+ { t: "D  Spillover: how much of an outlet's news is about another county",
+   q: "What share of an outlet's stories would be expected to be about other counties?",
+   eq: ["\\displaystyle \\mathrm{E}[y_o] = \\frac{1}{1 + e^{-z_o}}, \\qquad z_o = \\beta_0 + \\beta_1 T_o + \\beta_2 \\ln(1 + N_o)"],
+   est: "Fractional logistic regression (Papke and Wooldridge), 85 well-collected outlets in 48 counties; cluster-jackknife (CRV3) errors by county.",
+   key: [["y_o", "outlet o's spillover, March 2026: stories centred in another county count 1, home stories naming another county ½, sports stories half that; ÷ all its placed stories", ""],
+         ["\\beta_0", "intercept", "−0.81 (0.13)"],
+         ["T_o;\\ \\beta_1", "1 if the outlet is a TV or radio broadcaster", "0.67 (0.15)"],
+         ["N_o;\\ \\beta_2", "print and digital news outlets active in the outlet's county (registry)", "−0.39 (0.12)"]],
+   out: "Expected share for each outlet; a county's expectation weights its outlets by stories. Held-out error with term selection repeated in each fold: 6.57 points (intercept only 7.49)." },
+ { t: "E  Civic interest area: the places a town's residents share",
+   q: "Which places belong to a town's civic interest, and how likely is each?",
+   eq: ["R_{hx} \\approx \\textstyle\\sum_{k=1}^{K} W_{hk} H_{kx}",
+        "\\tau_x = T_x\\big(1 + \\omega\\,(0.3\\,O_x + 0.3\\,I_x + 0.7\\,P_x + 0.7\\,Q_x)\\big)",
+        "\\displaystyle p_x = \\frac{1}{|\\mathcal{S}|}\\textstyle\\sum_{s \\in \\mathcal{S}} \\mathbf{1}[x \\in A_s], \\qquad |\\mathcal{S}| = 6{,}912"],
+   est: "Non-negative matrix factorization of block-group travel (Columbia–Jefferson City television market); 6,912 equally weighted ways of drawing the map (a multiverse analysis).",
+   key: [["R_{hx}", "share of block group h's residents seen at place x, January–July 2026 (Advan)", ""],
+         ["W_{hk},\\ H_{kx}", "h's weight on travel pattern k; pattern k's reach to x. K: the largest number of patterns each holding 10%+ and 1,000+ of some town's residents and 10%+ of its travel, and recurring in odd and even months", "K = 2"],
+         ["T_x", "the town's residents' travel to 3 km hexagon x in their pattern (busiest place 50, home 100)", ""],
+         ["O_x,\\ I_x,\\ P_x,\\ Q_x", "news ties, each 0–1: the town's news about x; x's news about the town's county; places the town visits that x covers; places both cover", ""],
+         ["\\omega", "weight on news ties, varied across the drawings", "0, ½, 1, 2"],
+         ["A_s", "the area drawn by version s: seven drawing choices (hexagon 2–4 km, busiest place 50 or 100, spread within places, smoothing, selectivity, distance rule, reach) and ω", ""]],
+   out: "How likely each place x is to be part of the area. The area: the home part and every other part of 3+ hexagons with p ≥ 0.5 within the town's regular-travel distance." },
+];
+const root = document.getElementById("d");
+const tex = (s, display) => katex.renderToString(s, { displayMode: !!display, throwOnError: true, output: "html" });
+P.forEach((p) => {
+  const el = document.createElement("div"); el.className = "panel";
+  el.innerHTML = `<h3>${p.t}</h3>
+    <div><span class="lab">Answers: </span>${p.q}</div>
+    <div class="sec">Calculation</div>
+    ${p.eq.map((e) => `<div class="eq">${tex(e)}</div>`).join("")}
+    <div class="note">${p.est}</div>
+    <div class="sec">Terms and fitted values</div>
+    <table class="key">${p.key.map(([s, m, v]) => `<tr><td class="s">${tex(s)}</td><td>${m}</td><td class="v">${v}</td></tr>`).join("")}</table>
+    <div class="out"><span class="lab">Output: </span>${p.out}</div>`;
+  root.appendChild(el);
+});
 document.body.dataset.height = Math.ceil(document.querySelector("figure").getBoundingClientRect().height);
 document.body.dataset.ready = "1";
 </script>
