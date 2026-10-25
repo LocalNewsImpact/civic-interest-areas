@@ -1,11 +1,11 @@
 """Does splitting OMB "metro central" into regional hubs and suburban central counties improve the spillover model?
 
 Hub = a metro central county that draws more visits from other Missouri counties than its residents make elsewhere
-(visitors in / residents out, Jan-Sep 2026): > 1.25 hub, < 1 suburban. Cole (1.0) and Clay (1.1) sit between, so
-three variants are tested: A both hubs, B both suburban, C their own "balanced" group.
+(visitors in / residents out, Jan-Sep 2026): > 1.25 hub, < 1 suburban. Cole and Clay sit between the two thresholds,
+so three variants are tested: A both hubs, B both suburban, C their own "balanced" group.
 Model as spillover_by_type.py: quasi-binomial GLM across newsroom counties with 10+ placed stories (March),
 spill ~ type + log population + residents' share of visits outside. Reported: hub - suburban difference (Wald),
-deviance and Pearson dispersion, and actual vs predicted for the hubs.
+deviance and Pearson dispersion, and actual vs predicted for Boone (the one study county that is a hub).
 """
 import json
 from collections import defaultdict
@@ -46,7 +46,7 @@ fips_of = lambda n: by_name.get((n or "").lower().replace(" county", "").strip()
 import sys as _sys
 _sys.path.insert(0, str(Path(__file__).resolve().parent))
 from spillover_common import NOT_LOCAL as EXCLUDE, home_fips  # one outlet set (EXCLUDE + CAMPUS) and HOME_COUNTY for every count
-HUBS = ["29077", "29019", "29097", "29095", "29021", "29189", "29031"]   # Greene Boone Jasper Jackson Buchanan StL Cape
+HUBS = ["29019"]   # Boone
 
 for version, keep in (("all outlets", lambda a: True), ("print and digital", lambda a: "broadcast" not in (a["publisher_type"] or ""))):
     n = defaultdict(lambda: [0, 0])

@@ -81,7 +81,7 @@ FINAL_ALL_BORDER = "rate ~ broadcast + crowded_weekly + log_border_mi + log_prin
 NOT_FITTED = frozenset({"Three Rivers Publishing"})   # three newspapers' stories under one name
 FIT_FLOOR = 20
 SCORE_FLOOR = 10
-STUDY = (("Audrain", "29007"), ("Boone", "29019"), ("Osage", "29151"), ("Cole", "29051"), ("Jackson", "29095"))
+STUDY = (("Audrain", "29007"), ("Boone", "29019"), ("Osage", "29151"))
 TWIN_CITY = {("kansas city", "MO"): frozenset({"20209"})}
 
 

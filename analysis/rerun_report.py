@@ -52,15 +52,16 @@ sc = rd("source_scope.csv")
 allowed = sc.assign(f=sc.state.map(FIPS)).groupby("source_id").f.apply(set)
 groups = {
     "Places re-run, Missouri": set(open(R / "ids_Mizzou-Missouri-State.txt").read().split()),
-    "Places re-run, Washington": set(open(R / "ids_WSU-Washington-State.txt").read().split()),
     "March statewide stories": set(open(R / "statewide_ids.txt").read().split()),
     "March sports stories (home-team rule)": set(open(R / "sports_ids.txt").read().split()),
 }
-aa = aa[aa.index.isin(ba.index)]
+# Missouri only: articles of the Washington State dataset re-run alongside are left out of every table.
+WA = set(open(R / "ids_WSU-Washington-State.txt").read().split())
+aa = aa[aa.index.isin(ba.index) & ~aa.index.isin(WA)]
 x = aa.join(ba[["status", "scope", "point_place", "point_geoid", "point_geoid_level"]], rsuffix="_b")
 n = len(x)
 w("# Re-run of March 2026 enrichment: before and after\n")
-w("Written for: the authors. Enrichment re-run 2026-10-17 on #736-#739; spillover model refitted on the result.\n")
+w("Missouri articles. Enrichment re-run 2026-10-17 on #736-#739; spillover model refitted on the result.\n")
 w("## 1. What was re-run\n")
 w(table(pd.DataFrame([{"Set": k, "Articles": len(v)} for k, v in groups.items()] + [{"Set": "All (deduplicated)", "Articles": n}])))
 w("\nChanges carried by the re-run: the model is told where the publication is (#736); a game is centred on the "
@@ -93,10 +94,6 @@ w(table(pd.DataFrame(rows, columns=["Point", "Articles"])))
 lvl = pd.DataFrame({"before": x.point_geoid_level_b.fillna("none").value_counts(), "after": x.point_geoid_level.fillna("none").value_counts()}).fillna(0).astype(int)
 lvl.index.name = "point level"
 w("\n" + table(lvl.reset_index()))
-cross = x[both & (pa.str[:2] != pb.str[:2])]
-if len(cross):
-    w(f"\nCross-state moves (first 30 of {len(cross)}):\n")
-    w(table(cross[["title", "point_place_b", "point_place"]].head(30).rename(columns={"title": "Story", "point_place_b": "Before", "point_place": "After"})))
 
 w("\n## 5. Place and county codes\n")
 src = x.source_id
@@ -151,21 +148,25 @@ for c in ("rate", "expected", "placed"):
     ob[c], oa[c] = ob[c].astype(float), oa[c].astype(float)
 j = oa[["fips", "placed", "rate", "expected", "good"]].join(ob[["placed", "rate", "expected", "good"]], rsuffix="_b", how="outer")
 j["d_rate"] = 100 * (j.rate - j.rate_b)
-w("\n### The three counties and the Springfield area\n")
+THREE = {"29007", "29019", "29151"}
+j["fips"] = j.fips.fillna(ob.fips.reindex(j.index))
+w("\n### The three counties\n")
 lines = []
-for name, pat in (("Audrain", r"^Audrain:"), ("Boone", r"^Boone:"), ("Osage", r"^Osage:"), ("Greene", r"Greene:"), ("Webster", r"Webster:"), ("Barry", r"Barry:")):
+for name, pat in (("Audrain", r"^Audrain:"), ("Boone", r"^Boone:"), ("Osage", r"^Osage:")):
     gb = re.search(pat + r".*", bm, re.M); ga = re.search(pat + r".*", am, re.M)
     lines.append({"County": name, "Before": gb.group(0).split(":", 1)[1].split(";")[0].strip() if gb else "",
                   "After": ga.group(0).split(":", 1)[1].split(";")[0].strip() if ga else ""})
 w(table(pd.DataFrame(lines)))
-w("\n### Outlets whose spillover moved most (percentage points)\n")
-mv = j.dropna(subset=["d_rate"]).reindex(j.d_rate.abs().sort_values(ascending=False).index).head(20)
+w("\n### Outlets of the three counties, largest change first (percentage points)\n")
+jt = j[j.fips.isin(THREE)]
+mv = jt.dropna(subset=["d_rate"]).reindex(jt.d_rate.abs().sort_values(ascending=False).index).dropna(subset=["d_rate"])
 w(table(mv.reset_index()[["outlet", "placed_b", "placed", "rate_b", "rate", "d_rate"]].assign(
     rate_b=lambda d: (100 * d.rate_b).round(0), rate=lambda d: (100 * d.rate).round(0), d_rate=lambda d: d.d_rate.round(1)).rename(
     columns={"outlet": "Outlet", "placed_b": "Stories before", "placed": "after", "rate_b": "Spillover before %", "rate": "after %", "d_rate": "change"})))
 gin = set(j.index[(j.good == "True") & (j.good_b != "True")]); gout = set(j.index[(j.good_b == "True") & (j.good != "True")])
-w(f"\nQuality set: {len(gin)} outlets newly well collected ({', '.join(sorted(gin)) or 'none'}); "
-  f"{len(gout)} no longer ({', '.join(sorted(gout)) or 'none'}).\n")
+tin, tout = sorted(gin & set(jt.index)), sorted(gout & set(jt.index))
+w(f"\nQuality set: {len(gin)} outlets newly well collected, of them in the three counties: {', '.join(tin) or 'none'}; "
+  f"{len(gout)} no longer, of them in the three counties: {', '.join(tout) or 'none'}.\n")
 
 # volume floor
 d = oa.copy()

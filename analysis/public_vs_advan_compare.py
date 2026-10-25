@@ -72,13 +72,12 @@ for lab, e in E.items():
                                          for c in list(names) + ["all"]) + " |")
 print("(all Advan destinations; share-weighted error / log-ratio error; factor rows: change against the baseline; negative = better)")
 
-for h, n in (("29019", "Boone"), ("29077", "Greene"), ("29151", "Osage")):
+for h, n in (("29019", "Boone"), ("29151", "Osage")):
     far = (pairs.i.values == h) & (pairs.dist.values > 60)
     print(f"{n}: share of out-of-county visits beyond 60 miles: Advan {100 * a[far].sum():.1f}; " + "; ".join(f"{l[:40]} {100 * ps[far].sum():.1f}" for l, ps in rows.items() if not l.startswith("Advan")))
 
 for i, j, n in (("29151", "29051", "Osage -> Cole"), ("29007", "29019", "Audrain -> Boone"), ("29007", "29127", "Audrain -> Marion"),
-                ("29019", "29051", "Boone -> Cole"), ("29019", "29189", "Boone -> St. Louis County"), ("29077", "29043", "Greene -> Christian"),
-                ("29077", "29213", "Greene -> Taney")):
+                ("29019", "29051", "Boone -> Cole"), ("29019", "29189", "Boone -> St. Louis County")):
     print(f"{n}: Advan {100 * a[k[(i, j)]]:.1f}%; " + "; ".join(f"{l[:12]} {100 * ps[k[(i, j)]]:.1f}%" for l, ps in rows.items() if not l.startswith("Advan")))
 
 pd.DataFrame({"i": pairs.i, "j": pairs.j, "dist": pairs.dist, "advan": a, **{l: ps for l, ps in rows.items()}}).to_csv(

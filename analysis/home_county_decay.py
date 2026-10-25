@@ -2,8 +2,11 @@
 Journalism analysis, March 2026, after the grounding gate): for each study town, the stories ITS OWN outlets (based in
 the town; OWN_TOWN=0: every outlet in the home county) locate in each 3 km hexagon of the home county (the market maps' credit: central place 1, other places 0.5, Sports half),
 per hexagon, by distance from the town. Fitted: density ~ (distance)^-beta, Poisson on distance bands, every study town
-of every region pooled (one level per town). Compared with the decay of residents' travel in other counties.
+of every region in flows/regions.json pooled (one level per town). Compared with the decay of residents' travel in other counties.
 Writes analysis/home_county_decay.csv."""
+import contextlib
+import io
+import json
 import math
 import os
 import runpy
@@ -19,9 +22,11 @@ root = Path(__file__).resolve().parents[1]
 os.environ["TIE_LIB"] = "1"
 OWN_TOWN = os.environ.get("OWN_TOWN", "1") == "1"      # 1: the town's own outlets; 0: every outlet in the home county
 rows = []
-for region in ("columbia", "springfield", "cape", "kirksville", "joplin", "kansascity", "stjoseph"):
+REGIONS = list(json.load(open(root / "flows/regions.json")))   # the regions in scope (public repo: columbia only)
+for region in REGIONS:
     sys.argv = ["tie_footprint.py", region]
-    ns = runpy.run_path(str(root / "analysis/tie_footprint.py"), run_name="tie_lib")
+    with contextlib.redirect_stdout(io.StringIO()):      # tie_footprint's own region report is not this script's output
+        ns = runpy.run_path(str(root / "analysis/tie_footprint.py"), run_name="tie_lib")
     centre, hex_county, credit, by_outlet = ns["centre"], ns["hex_county"], ns["credit"], ns["by_outlet"]
     kx = 111.32 * math.cos(math.radians(38.7)); ky = 110.57
     for town, home in ns["STUDY"].items():
@@ -73,7 +78,7 @@ for t, x in list(g.groupby("town")) + [("_pooled", g)]:
 pd.DataFrame(rel).to_csv(root / "analysis/home_county_profiles.csv", index=False)
 print("stories per hexagon by distance band (pooled):", {str(k): round(v, 2) for k, v in prof.items()})
 print(f"relative to 3 km: 10 km {(10 / 3) ** -beta:.2f}, 20 km {(20 / 3) ** -beta:.2f}, 40 km {(40 / 3) ** -beta:.2f}")
-for t in ("Columbia", "Springfield", "Joplin", "Mexico", "Kirksville"):
+for t in ("Columbia", "Mexico"):
     x = g[g.town == t]
     if len(x):
         print(f"  {t}: stories per hexagon by distance", {str(b): round(s_ / h_, 2) for b, s_, h_ in zip(x.band, x.stories, x.hexes)})
