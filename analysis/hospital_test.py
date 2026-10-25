@@ -8,7 +8,8 @@ Scored out of sample: crossover and spillover by leaving out one county (crossov
 by county); travel (outcome: the adopted one, calibrated and pass-through discounted) by leaving out one home county
 (8 folds, seed 7; 95% bootstrap intervals over counties for the change vs adopted), with the Jan-Jun -> Jul-Sep
 stability check (R^2 = 1 - SSE/SST) beside persistence, coefficients with errors clustered by home and destination
-county; coverage by leaving out one newsroom county.
+county; coverage as coverage_model.py: newsroom counties held out in 8 folds (seed 7), per-county mean absolute share
+error on destinations with 1%+ of visits, averaged over counties.
 """
 import json
 import sys
@@ -93,6 +94,13 @@ for lab, extra in (("adopted", []), ("+ nearest hospital county", ["nearest_hosp
     print(f"  {lab}: LOCO weighted share error {r['werr']:.2f}{d}, big-flow error {r['big']:.2f}; Jul-Sep R^2 "
           f"{gt.summary(ev['split'])['r2']:.2%}" + "".join(f"; {e} {ev['m'].params[e]:+.2f} (2-way p {ev['m'].pvalues[e]:.3f})" for e in extra))
 
+def boot_diff(a, b, draws=1000, seed=7):
+    """County-paired bootstrap draws of mean(a - b) over counties."""
+    d = (a - b).dropna().values
+    rng = np.random.default_rng(seed)
+    return [d[rng.integers(0, len(d), len(d))].mean() for _ in range(draws)]
+
+
 # ---- 4 coverage ----------------------------------------------------------------------------------------------------
 tp = pd.read_csv(root / "analysis/od_predicted.csv", dtype={"i": str, "j": str})
 pidx = {k: n for n, k in enumerate(key)}
@@ -109,16 +117,18 @@ for version in ("all", "no_broadcast"):
                                                                 log_visits_x_nonmetro=lv * nonmetro)
     FE = pd.concat([pd.get_dummies(p.i, prefix="o").astype(float), pd.get_dummies(p.j, prefix="d", drop_first=True).astype(float)], axis=1)
     y = p.stories.values.astype(float)
+    E = {}
     for lab, extra in (("adopted", []), ("+ nearest hospital (and when home has none)", ["nearest_hospital", "nearest_x_none"])):
         Xc = base.assign(**{e: pairs[e].values[rows] for e in extra})
         Xm = pd.concat([Xc, FE], axis=1)
-        errs = []
-        for f in p.i.unique():
-            tr, te = (p.i != f).values, (p.i == f).values
-            Xt = Xm.drop(columns=[f"o_{f}"])
-            Xt = Xt.loc[:, Xt[tr].abs().sum() > 0]
-            mt = sm.GLM(y[tr], Xt[tr], family=sm.families.Poisson()).fit(maxiter=200)
-            pr = mt.predict(Xt[te]); sp, sy = pr / pr.sum(), y[te] / max(y[te].sum(), 1)
-            errs += list(100 * np.abs(sp - sy)[(p.visits[te] / p.visits[te].sum() >= 0.01).values])   # 1%+ of visits: not outcome-selected
+        # as coverage_model.py: newsroom counties held out in 8 folds (seed 7); per-county mean absolute share error on
+        # destinations with 1%+ of the county's visits (not selected on stories), averaged over counties
+        ps = gt.loco(y, Xm, p.i.values)
+        err = 100 * np.abs(ps - gt.shares(y, p.i.values))
+        vs = gt.shares(p.visits.values, p.i.values) >= 0.01
+        per = pd.Series(err[vs]).groupby(p.i.values[vs]).mean()
+        E[lab] = per
+        d = "" if lab == "adopted" else "; change {:+.2f} [{:+.2f}, {:+.2f}]".format(
+            (per - E["adopted"]).mean(), *np.quantile(boot_diff(per, E["adopted"]), [.025, .975]))
         mf = sm.GLM(y, Xm, family=sm.families.Poisson()).fit(maxiter=300)
-        print(f"  {version} {lab}: error {np.mean(errs):.2f} points" + "".join(f"; {e} {mf.params[e]:+.2f}" for e in extra))
+        print(f"  {version} {lab}: error {per.mean():.2f} points{d}" + "".join(f"; {e} {mf.params[e]:+.2f}" for e in extra))

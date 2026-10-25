@@ -12,9 +12,10 @@ pair terms explain is how distance and borders distribute that travel or those s
   adjacent                   1 if the counties share a border
   commute_out                log(1 + 1000 x workers living in i who work in j / all workers living in i)
   commute_in                 log(1 + 1000 x workers living in j who work in i / all workers living in j)
-                             LODES 2023 primary jobs (JT01; free/mo_od_main_JT01_2023.csv.gz + aux): one job per worker.
-                             The aux file adds out-of-state residents working in Missouri, so it changes no Missouri pair;
-                             "all workers living in i" = residents of i with a primary job in Missouri
+                             LODES 2023 primary jobs (JT01), Missouri residents (free/mo_residents_od_JT01_2023.csv.gz:
+                             Missouri main + the Missouri-home rows of the KS, IL, IA, AR, OK, NE, TN, KY aux files).
+                             The pair terms are Missouri pairs; "all workers living in i" counts every primary job of
+                             i's residents, in Missouri or out of state
 CENTRING. Distance is measured from 25 miles (REF_MILES; the visit-weighted geometric mean distance of out-of-county
 trips is 26 miles) and home-county population from its mean, so the log_dist coefficient is the distance elasticity of
 travel at 25 miles for a metropolitan home county of mean size, and log_dist + nonmetro_i_x_log_dist the same for a
@@ -57,12 +58,13 @@ SINGLY = ["log_pop_j", "log_retail_pc_j", "log_dist", "adjacent", "nonmetro_i_x_
 
 
 def _lodes():
-    """LODES 2023 Missouri OD, primary jobs (JT01), main + aux: workers by home county -> work county, and by home county."""
+    """LODES 2023 primary jobs (JT01) of Missouri residents, in Missouri and out of state: workers by home county -> work
+    county, and by home county (every job, the denominator)."""
     import csv
     import gzip
     from collections import defaultdict
     flow, work = defaultdict(float), defaultdict(float)
-    for f in ("free/mo_od_main_JT01_2023.csv.gz", "free/mo_od_aux_JT01_2023.csv.gz"):
+    for f in ("free/mo_residents_od_JT01_2023.csv.gz",):
         with gzip.open(root / f, "rt") as fh:
             for r in csv.DictReader(fh):
                 h, w, n = r["h_geocode"][:5], r["w_geocode"][:5], float(r["S000"])
@@ -131,10 +133,12 @@ def design(p):
 # ---- the travel outcome ----------------------------------------------------------------------------------------------
 # Visits by residents of county i to county j (i != j), Advan Neighborhood Patterns Plus, on one device -> person scale
 # per month (visits_statewide: recorded / statewide units per resident, build_calibration.py; adopted 2026-10-24), minus
-# the pass-through discount: visits x (1 - discount), road_stop_share.csv `discount` = highway-stop share (stores within
-# 1 km of an Interstate or US highway) above the share expected from the destination's own store mix, pairs with 200+
-# store-level visitors (build_road_stop_share.py; removes 1.74%). Every travel script scores this outcome.
-# Sensitivities: discounted=False (the primary one); disc=stop_discount(p, "discount_old") (2026-10-16 definition);
+# the pass-through discount: visits x (1 - discount), road_stop_share.csv `discount` = the pair's highway-stop share
+# (stores within 1 km of an Interstate or US highway) above the share expected from the destination's own store mix,
+# shrunk toward zero by empirical Bayes for the pair's store-level sample (pairs with 200+ store-level visitors;
+# build_road_stop_share.py; removes 1.81% of visits_statewide). Every travel script scores this outcome.
+# Sensitivities: discounted=False (the primary one); disc=stop_discount(p, "discount_unshrunk") (unshrunk);
+# disc=stop_discount(p, "discount_old") (2026-10-16 definition);
 # col="visits" (county factor, 2026-10-16); src="od_mo_2026_uncapped.csv" (uncapped destinations only).
 MONTHS = [f"2026-{m:02d}" for m in range(1, 10)]
 OUTCOME = "visits_statewide"

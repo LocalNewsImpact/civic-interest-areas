@@ -6,7 +6,8 @@ The Neighborhood Patterns county counts cannot separate a gas stop from any othe
   discount_old                2026-10-16: gas, fast food (old codes) share above the statewide 12.5%
   discount_codes              codes fixed (+ convenience stores 445120), above the statewide share
   discount_highway_statewide  road stops within 1 km of an Interstate or US highway, above the statewide share
-  discount (ADOPTED)          highway stops above the share expected from the destination's own residents' store mix Same adopted model (gravity_terms.design), refitted. Each row is scored
+  discount_unshrunk           highway stops above the share expected from the destination's own residents' store mix
+  discount (ADOPTED)          the same, shrunk toward zero by empirical Bayes for the pair's store-level sample Same adopted model (gravity_terms.design), refitted. Each row is scored
 against its own outcome, as travel_model.py scores (gravity_terms.HEAD; no change column: the outcomes differ).
 """
 import sys
@@ -24,7 +25,7 @@ pairs = all_pairs()
 X = design(pairs)
 raw = travel_visits(pairs, MONTHS, discounted=False)
 VARIANTS = [("undiscounted", np.zeros(len(pairs)))] + [(c, stop_discount(pairs, c)) for c in
-                                                      ("discount_old", "discount_codes", "discount_highway_statewide")] + [
+                                                      ("discount_old", "discount_codes", "discount_highway_statewide", "discount_unshrunk")] + [
     ("discount (adopted)", stop_discount(pairs))]
 for label, adj in VARIANTS[1:]:
     print(f"{label}: pairs discounted {np.sum(adj > 0):,}; visits removed {np.sum(raw * adj) / raw.sum():.2%} of out-of-county visits")

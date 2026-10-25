@@ -9,10 +9,11 @@ and by destination county.
 PASS-THROUGH DISCOUNT. A device is counted wherever it stops, so a gas stop on the way to somewhere else counts as a
 visit. The county counts cannot separate those stops; the store-level data can (road_stop_share.csv, March Weekly
 Patterns): the pair's share of visits at gas stations, convenience stores and fast food within 1 km of an Interstate or
-US highway, above the share expected from the destination's own residents' store mix, is removed:
+US highway, above the share expected from the destination's own residents' store mix, shrunk by empirical Bayes for
+the pair's store-level sample, is removed:
   visits_ij x (1 - discount_ij), pairs with 200+ store-level visitors (build_road_stop_share.py).
-SENSITIVITIES (distance elasticity at 25 miles, held-out error, R^2): old county factor (visits), undiscounted, old
-discount (discount_old), uncapped destinations only (od_mo_2026_uncapped.csv), distinct people (od_people_mo_2026.csv,
+SENSITIVITIES (distance elasticity at 25 miles, held-out error, R^2): old county factor (visits), undiscounted, unshrunk
+discount (discount_unshrunk), old discount (discount_old), uncapped destinations only (od_mo_2026_uncapped.csv), distinct people (od_people_mo_2026.csv,
 people_lower; St. Louis city and county one unit there, so those pairs use St. Louis County's terms and city is left
 out; undiscounted: a person passing through is still a person).
 
@@ -25,8 +26,9 @@ Scores (gravity_terms.summary): R^2 = 1 - SSE/SST of shares; share-weighted abso
 pairs FORECAST at 5%+ of the origin's out-of-county visits (selected on the forecast, not the outcome).
 Also: the calibration's effect on the centred distance elasticity, and Missouri residents' visits to Kansas, which
 od_mo_2026.csv (Missouri destinations only) does not hold.
-Output: od_predicted.csv -- every pair's recorded and discounted visits, predicted visits, and shares of the
-origin's outflow.
+Output: od_predicted.csv -- every pair's visits on the statewide scale before the discount (visits_undiscounted; renamed
+from visits_recorded 2026-10-25: these are not Advan's recorded units), discounted visits (visits, the outcome),
+stop_discount, predicted visits, and shares of the origin's outflow.
 """
 import glob
 import json
@@ -53,14 +55,14 @@ ALL = MONTHS
 disc = pairs.stop_discount.values
 y = travel_visits(pairs, ALL, disc=disc)
 m = fit_twoway(y, X, pairs)
-pairs["visits_recorded"] = travel_visits(pairs, ALL, discounted=False)
+pairs["visits_undiscounted"] = travel_visits(pairs, ALL, discounted=False)   # statewide scale, before the pass-through discount
 pairs["visits"], pairs["predicted"] = y, m.predict(X).values
 for col in ("visits", "predicted"):
     pairs[col + "_share"] = pairs[col] / pairs.groupby("i")[col].transform("sum")
 pairs["ratio"] = pairs.visits / pairs.predicted
 a = pairs.visits_share.values
 ins = summary(county_stats(a, pairs.predicted_share.values, pairs.i.values, y))
-print(f"pass-through discount: {1 - y.sum() / pairs.visits_recorded.sum():.1%} of out-of-county visits removed")
+print(f"pass-through discount: {1 - y.sum() / pairs.visits_undiscounted.sum():.1%} of out-of-county visits removed")
 print(f"Jan-Sep fit: {len(pairs):,} county pairs, {y.sum():,.0f} visits; IN-SAMPLE R^2 of shares {ins['r2']:.1%}, "
       f"deviance {m.deviance / 1e6:,.1f}M")
 print(f"\nCoefficients (distance centred at {REF_MILES:.0f} miles, home population at its mean; "
@@ -149,6 +151,7 @@ print("| Outcome | Metro home | Nonmetro home | Weighted share error | R^2 | R^2
 sens_row("adopted: visits_statewide, highway discount", y, pairs, X, m)
 sens_row("county factor (visits, 2026-10-16)", travel_visits(pairs, ALL, col="visits", disc=disc), pairs, X)
 sens_row("undiscounted", travel_visits(pairs, ALL, discounted=False), pairs, X)
+sens_row("unshrunk discount (discount_unshrunk)", travel_visits(pairs, ALL, disc=stop_discount(pairs, "discount_unshrunk")), pairs, X)
 sens_row("old discount (discount_old)", travel_visits(pairs, ALL, disc=stop_discount(pairs, "discount_old")), pairs, X)
 sens_row("uncapped destinations only", travel_visits(pairs, ALL, disc=disc, src="od_mo_2026_uncapped.csv"), pairs, X)
 pp = pd.read_csv(root / "analysis/od_people_mo_2026.csv", dtype={"home_county": str, "dest_county": str})
@@ -167,7 +170,7 @@ for f in sorted(glob.glob(str(root / "neighborhood/raw_ks/*.parquet"))):
 ks = pd.DataFrame([(mo, h, v) for (mo, h), v in kv.items()], columns=["month", "home", "v"])
 ks["v"] = ks.v / calibration_factor(ks.home, ks.month)          # statewide units per resident
 ksv = ks[ks.month.isin(ALL)].groupby("home").v.sum()
-mov = pairs.groupby("i").visits_recorded.sum()            # statewide scale, not discounted: the same basis as ksv
+mov = pairs.groupby("i").visits_undiscounted.sum()            # statewide scale, not discounted: the same basis as ksv
 BORDER = ["29095", "29047", "29165", "29037", "29013", "29217", "29011", "29097", "29145", "29119", "29021", "29005",
           "29087", "29003"]
 print("\n## Kansas destinations (neighborhood/raw_ks): Missouri residents' visits, Jan-Sep, statewide scale, undiscounted")

@@ -8,7 +8,8 @@ TRAVEL    A adopted (doubly constrained)  vs  B origin effects only + every dest
 COVERAGE  A adopted (coverage_model.py: gravity terms + log visits + zero-visit indicator + log visits x nonmetro
           newsroom county; excluded_outlets.EXCLUDE, home_fips)  vs  A + every rejected term + saturation level (nonmetro
           home x destination's own stories)  vs  B origin effects only + destination factors (population, stores, jobs,
-          metro, area centre, own stories, newsrooms, broadcaster) + every pair term. Leave one newsroom county out.
+          metro, area centre, own stories, newsrooms, broadcaster) + every pair term. Newsroom counties held out in 8
+          folds (seed 7); per-county mean error on destinations with 1%+ of visits.
 SPILLOVER adopted outlet model (spillover_common.FINAL) vs + every county factor (cohort, border, population, log newsrooms, one newsroom only,
           travel balance, log outlet stories, broadcaster x travel out); plain and ridge. Leave one county out.
 Every held-out error carries a 95% interval from 1,000 bootstrap resamples of the held-out counties (predictions held
@@ -82,7 +83,7 @@ for version in ("all", "no_broadcast"):
         "lv_x_newsrooms": lv * nr_j, "lv_x_broadcast": lv * bc_j, "nonmetro_x_own_level": nonmetro * own_j,
     }).join(X_extra.iloc[rows].reset_index(drop=True))
     dest = DEST.iloc[rows].reset_index(drop=True).assign(own_j=own_j, newsrooms_j=nr_j, broadcast_j=bc_j)
-    out(f"\n## COVERAGE, {version.replace('_', ' ')} (coverage_model.py adopted specification; leave one newsroom county out)")
+    out(f"\n## COVERAGE, {version.replace('_', ' ')} (coverage_model.py adopted specification; newsroom counties held out, 8 folds; per-county mean error)")
     out("| Model | Terms | Mean abs share error (points) [95%] | Change vs adopted [95%] |\n|---|---:|---:|---:|")
     E0 = None
     for label, Xc, FEc in (("A adopted", adopted, pd.concat([Oc, Dc], axis=1)),
@@ -90,7 +91,7 @@ for version in ("all", "no_broadcast"):
                            ("B origin effects + destination factors + every pair term", pd.concat([adopted, rejected, dest], axis=1), Oc)):
         errs = coverage_loo(pd.concat([Xc, FEc], axis=1), p, y)
         E0 = E0 or errs
-        out(f"| {label} | {Xc.shape[1]} | {boot_errs(errs)} | {'' if errs is E0 else boot_errs(errs, E0)} |")
+        out(f"| {label} | {Xc.shape[1]} | {boot_errs(errs, per_county=True)} | {'' if errs is E0 else boot_errs(errs, E0, per_county=True)} |")
 
 # ---- spillover -------------------------------------------------------------------------------------------------------
 if "spillover" in RUN:

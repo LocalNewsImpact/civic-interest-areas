@@ -14,8 +14,9 @@ TRAVEL    adopted model vs + every rejected pair term at once (same metro/micro 
           (route and area terms, competing destinations, home-county ACS measures x distance, hospitals), each alone;
           two procedures scored on the outer counties: lowest inner error, and the selection rule applied inside the
           training counties (admit a candidate only if its inner county-paired gain interval excludes zero).
-COVERAGE  adopted coverage model (coverage_model.py) vs + rings, saturation terms and the travel-side extras. Leave one newsroom
-          county out; error in points on its destination shares where it holds 1%+ of the residents' visits.
+COVERAGE  adopted coverage model (coverage_model.py) vs + rings, saturation terms and the travel-side extras. Newsroom counties
+          held out (8 folds, seed 7, as coverage_model.py); mean absolute share error (points) per newsroom county on
+          the destinations holding 1%+ of its residents' visits, averaged over counties (each county weighs the same).
 SPILLOVER adopted outlet model (spillover_common.FINAL) vs + cohort, border, population, newsrooms, log outlet stories, travel out; plain and
           L2-shrunk (ridge). Leave one county out; mean absolute error in points.
 Every held-out error carries a 95% interval from 1,000 bootstrap resamples of the held-out counties (predictions held
@@ -53,12 +54,16 @@ def poisson_fit(y, X, maxiter=200):
     return sm.GLM(y, X, family=sm.families.Poisson()).fit_regularized(alpha=1e-4, L1_wt=0.0, maxiter=maxiter).params
 
 
-def boot_errs(e, ref=None, draws=1000, seed=7):
-    """e: {held-out county: [errors]}. Mean error, its 95% interval over counties, and the interval of the difference
-    from ref (same structure, same counties)."""
+def boot_errs(e, ref=None, draws=1000, seed=7, per_county=False):
+    """e: {held-out county: [errors]}. Mean error, its 95% interval over counties (1,000 draws), and the interval of the
+    difference from ref (same counties, paired). per_county=True: the mean of per-county means, each county weighing
+    the same (coverage's declared metric); else the mean over all scored units (spillover: outlets)."""
     ks = sorted(e)
     rng = np.random.default_rng(seed)
-    mean = lambda d, b: np.mean(np.concatenate([d[k] for k in b]))
+    if per_county:
+        mean = lambda d, b: np.mean([np.mean(d[k]) for k in b])
+    else:
+        mean = lambda d, b: np.mean(np.concatenate([d[k] for k in b]))
     v = [mean(e, b) - (mean(ref, b) if ref is not None else 0) for b in (rng.choice(ks, len(ks)) for _ in range(draws))]
     lo, hi = np.quantile(v, [.025, .975])
     m = mean(e, ks) - (mean(ref, ks) if ref is not None else 0)
@@ -157,18 +162,14 @@ def coverage_data(version):
 
 
 def coverage_loo(Xm, p, y):
-    """Leave one newsroom county out: absolute error (points) of its destination shares on the destinations holding 1%+
-    of its residents' out-of-county visits (the coverage primary metric; never selected on stories). {county: errors}."""
-    errs = {}
-    for f in p.i.unique():
-        tr, te = (p.i != f).values, (p.i == f).values
-        Xt = Xm.drop(columns=[f"o_{f}"])
-        Xt = Xt.loc[:, Xt[tr].abs().sum() > 0]
-        pr = np.exp(Xt[te].values @ np.asarray(poisson_fit(y[tr], Xt[tr], 300)))
-        sp, sy = pr / pr.sum(), y[te] / max(y[te].sum(), 1)
-        sel = (p.visits[te] / p.visits[te].sum() >= 0.01).values
-        errs[f] = 100 * np.abs(sp - sy)[sel]
-    return errs
+    """As coverage_model.py: newsroom counties held out in 8 folds (seed 7, gravity_terms.loco), each held-out county's
+    story shares predicted from the others; absolute share error (points) on the destinations with 1%+ of its
+    residents' out-of-county visits (the declared primary metric; never selected on stories). {county: errors};
+    score with boot_errs(per_county=True)."""
+    ps = gt.loco(np.asarray(y, float), Xm, p.i.values, fit=lambda yy, XX: np.asarray(poisson_fit(yy, XX, 300)))
+    err = 100 * np.abs(ps - gt.shares(y, p.i.values))
+    vs = gt.shares(p.visits.values, p.i.values) >= 0.01
+    return {f: err[(p.i.values == f) & vs] for f in p.i.unique() if ((p.i.values == f) & vs).any()}
 
 
 nbr = {f: set(pairs[(pairs.i == f) & (pairs.adjacent == 1)].j) for f in FIPS}
@@ -375,7 +376,7 @@ for version in ("all", "no_broadcast"):
         "lv_x_own": lv * own_j, "lv_x_own_x_nonmetro": lv * own_j * nonmetro,
         "lv_x_newsrooms": lv * np.log1p([len(outlets[j]) for j in p.j]), "lv_x_broadcast": lv * np.array([float(j in bcast) for j in p.j]),
     }).join(X_extra.iloc[rows].reset_index(drop=True))
-    out(f"\n## COVERAGE, {version.replace('_', ' ')} (coverage_model.py adopted specification; leave one newsroom county out)")
+    out(f"\n## COVERAGE, {version.replace('_', ' ')} (coverage_model.py adopted specification; newsroom counties held out, 8 folds; per-county mean error)")
     out("| Model | Terms | Mean abs share error (points) [95%] | Change vs adopted [95%] | Deviance (full fit, in-sample) |\n|---|---:|---:|---:|---:|")
     E0 = None
     for label, Xc in (("adopted (gravity terms + log visits, zero-visit indicator, log visits x nonmetro)", adopted),
@@ -384,7 +385,7 @@ for version in ("all", "no_broadcast"):
         dev = sm.GLM(y, Xm, family=sm.families.Poisson()).fit(maxiter=300).deviance
         errs = coverage_loo(Xm, p, y)
         E0 = E0 or errs
-        out(f"| {label} | {Xc.shape[1]} | {boot_errs(errs)} | {'' if errs is E0 else boot_errs(errs, E0)} | {dev:,.0f} |")
+        out(f"| {label} | {Xc.shape[1]} | {boot_errs(errs, per_county=True)} | {'' if errs is E0 else boot_errs(errs, E0, per_county=True)} | {dev:,.0f} |")
 
 # ---- spillover -------------------------------------------------------------------------------------------------------
 if "spillover" not in RUN:
