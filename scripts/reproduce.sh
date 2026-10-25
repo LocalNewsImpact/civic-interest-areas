@@ -14,8 +14,7 @@ cd $ROOT
 PY="$ROOT/.venv/bin/python -I"
 LOG=$ROOT/logs/reproduce
 CHROME=${CHROME:-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}
-REGIONS=(columbia springfield cape kirksville joplin kansascity stjoseph)
-BUILT=(columbia springfield joplin kirksville)        # markets with study towns that have mapped areas
+REGIONS=(columbia)        # Columbia-Jefferson City television market: the study's civic interest areas
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 MKL_NUM_THREADS=1 PYTHONHASHSEED=0
 mkdir -p $LOG
 stage() { [[ " ${STAGES:-data travel coverage spillover public areas qa figures} " == *" $1 "* ]]; }
@@ -35,8 +34,6 @@ if stage data; then
   step build_unique_od         analysis/build_unique_od.py
   step build_road_stop_share   analysis/build_road_stop_share.py
   step build_tract_od          analysis/build_tract_od.py
-  step build_ks_od             analysis/build_ks_od.py
-  step build_ks_tract_bg       analysis/build_ks_tract_bg.py
   step crossover_compare       analysis/crossover_compare.py
 fi
 
@@ -70,14 +67,14 @@ if stage spillover; then
   step spillover_allfactors    analysis/combined_all_factors_test.py
 fi
 
-# Public-data travel model, its Advan-learned corrections and the Kansas transfer test.
+# Public-data travel model and its Advan-learned corrections.
 if stage public; then
   bash $ROOT/scripts/public_model.sh > $LOG/public_model.log 2>&1 || { echo "public_model FAILED"; exit 1; }
   echo "public_model done"
 fi
 
-# Civic interest areas: homes, travel patterns (non-negative matrix factorization) and the network tie per market;
-# the 1,728-version drawing ensemble and the multi-part area for markets with mapped areas; tie-market accuracy.
+# Civic interest areas, Columbia-Jefferson City television market: homes, travel patterns (non-negative matrix
+# factorization), the network tie, the 1,728-version drawing ensemble, the multi-part areas and tie-market accuracy.
 if stage areas; then
   for r in $REGIONS; do
     step homes_$r              flows/build_homes.py $r
@@ -85,10 +82,10 @@ if stage areas; then
     step market_$r             flows/market_patterns.py $r
     step confidence_$r         analysis/confidence_layer.py $r
   done
-  for r in $BUILT; do
+  for r in $REGIONS; do
     step ensemble_$r           flows/area_ensemble.py $r
   done
-  step area_core               flows/area_core.py $BUILT
+  step area_core               flows/area_core.py $REGIONS
   step market_stability        analysis/market_stability.py
   step selection_sensitivity   analysis/selection_sensitivity.py columbia
   for r in $REGIONS; do
@@ -99,7 +96,7 @@ fi
 
 # Supply on the travel-only footprint: quality-assurance diagnostics, not results of the article.
 if stage qa; then
-  for r in $BUILT; do
+  for r in $REGIONS; do
     step coverage_density_$r   REGION=$r analysis/area_coverage_alignment.py
     step diet_$r               REGION=$r DIET_K=0 analysis/cin_diet.py
   done

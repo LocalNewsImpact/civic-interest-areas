@@ -1,4 +1,4 @@
-"""Scores shared by the public-model scripts (score_segments.py, score_ks.py, public_stage1_nested.py,
+"""Scores shared by the public-model scripts (score_segments.py, public_stage1_nested.py,
 public_adjusted_nested.py, public_adjusted_model.py).
 
 Two metrics, both per home county and then averaged over the counties of a class (every county weighs the same):

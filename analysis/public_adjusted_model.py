@@ -24,13 +24,13 @@ is reported. Scores: share-weighted error and log-ratio error (public_scoring.py
 The structure is a configuration (keys(cfg)); run as a script it is read from the environment (SPLIT3, C5AS,
 DIST_BY_RANK, DIST_HUB, CORE, CORE_NEAR, TRANSFER, RC_PF, COMMUTE, POOLED), as before. public_adjusted_nested.py
 imports the functions to choose the structure inside an outer cross-validation loop.
-Environment (printed at start): BASE, OUTTAG, EXPORT and the structure SPLIT3, C5AS, DIST_BY_RANK, DIST_HUB, CORE,
+Environment (printed at start): BASE, OUTTAG and the structure SPLIT3, C5AS, DIST_BY_RANK, DIST_HUB, CORE,
 CORE_NEAR, TRANSFER, RC_PF, COMMUTE, POOLED. public_adjusted_pairs_trnear.csv (the 2026-10-18 structure on the
 2026-10-18 base; read by tie_footprint.py, public_activity_space.py, directions_per_tract.py):
   LEGACY=1 CLASS5=_g_40_sales OUTTAG=_c5_g_40_sales python analysis/assemble_public_by_class.py
   BASE=public_model_pairs_tiers_byclass_c5_g_40_sales.csv SPLIT3=1 C5AS="class 2" DIST_BY_RANK=1 CORE= CORE_NEAR=1 \
     TRANSFER=1 RC_PF=1.0 COMMUTE=commute_rank,dest_order,dest_class POOLED= OUTTAG=_trnear python analysis/public_adjusted_model.py
-(every command of the chain: scratchpad review_fixes/public_commands.sh, 2026-10-24). Factors learned on all counties
+(every command of the chain: scripts/public_model.sh). Factors learned on all counties
 are written for reuse: analysis/public_adjustments.csv (distance and adjacency by class; destination coefficients).
 """
 import csv
@@ -361,22 +361,9 @@ def cv(K, base_T, p_base, mode, train_S=None, fold_ids=range(8)):
     return out
 
 
-def export(K, p_base, name):
-    """Segment corrections (mode C) learned on every Missouri county, for transfer_adjustments.py."""
-    import pickle
-    F = learn(K, p_base, np.ones(NS, bool), None)
-    c = K.cfg
-    env = {"DIST_BY_RANK": "1" if c["DIST_BY_RANK"] else None, "DIST_HUB": "1" if c["DIST_HUB"] else None,
-           "SPLIT3": "1" if c["SPLIT3"] else None, "C5AS": c["C5AS"], "TRANSFER": "1" if c["TRANSFER"] else None,
-           "CORE_NEAR": "1" if c["CORE_NEAR"] else None, "RC_PF": str(c["RC_PF"]), "CORE": "1" if c["CORE"] else None}
-    pickle.dump({"fb": dict(F.fb), "fa": dict(F.fa), "fc": dict(F.fc), "fx": dict(F.fx), "groups": list(K.groups), "pooled": list(K.pooled),
-                 "label": K.LABEL, "env": env, "cfg": dict(c)}, open(A_ / name, "wb"))
-    print("exported segment corrections to", name)
-
-
 def main():
     cfg = env_cfg()
-    print("environment:", {"BASE": BASE, "OUTTAG": os.environ.get("OUTTAG", ""), "EXPORT": os.environ.get("EXPORT", ""), **cfg}, flush=True)
+    print("environment:", {"BASE": BASE, "OUTTAG": os.environ.get("OUTTAG", ""), **cfg}, flush=True)
     K = keys(cfg)
     LABEL = K.LABEL
     print("destination order counts:", pd.Series([K.dest_order(j) for j in dests]).value_counts().sort_index().to_dict(),
@@ -425,8 +412,6 @@ def main():
         print(f"  {t[5:]} (lat {lat[t]:.2f}): Marion {100 * adv_t.get('29127', 0):.1f} / {100 * base.get('29127', 0):.1f} / {100 * b.get('29127', 0):.1f};"
               f"  Boone {100 * adv_t.get('29019', 0):.1f} / {100 * base.get('29019', 0):.1f} / {100 * b.get('29019', 0):.1f}")
 
-    if os.environ.get("EXPORT"):        # segment corrections learned on every Missouri county, for transfer_adjustments.py
-        export(K, p0, os.environ["EXPORT"])
     F = learn(K, p0, np.ones(NS, bool), True)
     for g in K.pooled:
         print(g, "factors (all classes):", {int(v): round(F.fx.get((g, "all", v), np.nan), 2) for v in np.unique(K.p_S[g])})

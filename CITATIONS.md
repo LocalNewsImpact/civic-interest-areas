@@ -7,8 +7,6 @@ against the source before publication.
 
 Federal Highway Administration. (2023†). *2022 National Household Travel Survey* (version 2) [Data set]. U.S. Department of Transportation. https://nhts.ornl.gov
 
-Kansas Department of Revenue. (2025). *Pull factors, fiscal year 2025* [Data set]. Kansas transfer test only.
-
 Missouri Department of Revenue. (2025). *Taxable sales by county and SIC code, 2025* [Data set]. https://dor.mo.gov/public-reports/ †
 
 Missouri Secretary of State. (2025†). *Official Manual, State of Missouri, 2025–2026: Newspapers* [Data set]. Publication frequency of Missouri newspapers. https://www.sos.mo.gov/bluebook
@@ -17,7 +15,7 @@ Nielsen. (2026†). *Designated Market Area (DMA) county assignments* [Data set]
 
 Office of Management and Budget. (2023). *Core based statistical area delineation file, List 1* (July 2023) [Data set]. https://www.census.gov/geographies/reference-files/time-series/demo/metro-micro/delineation-files.html
 
-OpenStreetMap contributors. (2026). *OpenStreetMap: Missouri and Kansas extracts* [Data set]. Geofabrik. https://download.geofabrik.de/north-america/us.html
+OpenStreetMap contributors. (2026). *OpenStreetMap: Missouri extract* [Data set]. Geofabrik. https://download.geofabrik.de/north-america/us.html
 
 U.S. Census Bureau. (2021a). *Cartographic boundary files: 2020* [Data set]. https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html
 
