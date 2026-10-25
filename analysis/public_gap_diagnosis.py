@@ -16,17 +16,25 @@ import statsmodels.api as sm
 
 here = Path(__file__).resolve().parent
 sys.path.insert(0, str(here))
-src = open(here / "travel_commute_pair_test.py").read().split('print("| Model | "')[0]
-__file__ = str(here / "travel_commute_pair_test.py")
-exec(src)
+# the adopted travel model's terms and data (travel_model_dc_test.py preamble: pairs, X0, O, Dd, y9, share, ...)
+exec(open(here / "travel_model_dc_test.py").read().split("models = [")[0])
+from gravity_terms import FACTORS, loco  # noqa: E402
+unit = lambda f: "29189" if f == "29510" else f
+tier = pd.read_csv(root / "analysis/county_class_k4.csv", dtype={"fips": str}).set_index("fips")["class"]
+names = {"class 1": "small rural", "class 2": "independent towns", "class 3": "commuter counties", "class 4": "hubs"}
+iu = np.array([unit(i) for i in pairs.i])
+cls = np.array([tier.get(u, "class 1") for u in iu])
+a = share(y9)
+cv = lambda X, counties: loco(y9, X, pairs.i.values)              # each county held out, 8 folds, seed 7
+err = lambda ps, mask: 100 * np.sum(a[mask] * np.abs(ps[mask] - a[mask])) / np.sum(a[mask])
 PUBLIC_DEST = ["log_pop_j", "log_jobs_pc_j", "log_retail_pc_j", "metro_j", "dest_centre"]
-full = models["+ commuting out and in"]
-dist_flex = ["log_dist_sq", "nonmetro_i_x_log_dist_sq", "log_pop_i_x_log_dist"]
+full = FACTORS                                   # the adopted 8 terms (rural flag: Census settlement, 2026-10-25)
+dist_flex = ["log_dist_sq", "rural_i_x_log_dist_sq", "log_pop_i_x_log_dist"]
 variants = {"Advan-fitted (all ingredients)": (full, True),
             "- destination effects (public destination measures instead)": (full + PUBLIC_DEST, False),
             "- adjacency": ([c for c in full if c != "adjacent"], True),
             "- pair commuting": ([c for c in full if c not in ("commute_out", "commute_in")], True),
-            "- flexible distance (log distance only)": ([c for c in full if c not in dist_flex + ["nonmetro_i_x_log_dist"]], True),
+            "- flexible distance (log distance only)": ([c for c in full if c not in dist_flex + ["rural_i_x_log_dist"]], True),
             "- destination effects - adjacency": ([c for c in full if c != "adjacent"] + PUBLIC_DEST, False)}
 print("| Variant | " + " | ".join(names.values()) + " | all |\n|---|" + "---:|" * 5)
 for lab, (cols, fe) in variants.items():
@@ -48,8 +56,10 @@ tot = np.abs(S[pub] - S.advan).mul(S.advan).sum()
 S["contrib"] = S.advan * np.abs(S[pub] - S.advan)
 c = S.groupby("j").contrib.sum() / tot
 inflow["share of public error"] = c
-out = inflow.sort_values("share of public error", ascending=False).head(15)
-print("\nDestinations carrying the public model's error (inflow = sum of home counties' shares):")
+top = inflow.sort_values("share of public error", ascending=False).head(15)
+print(f"\nDestinations carrying the public model's error: the 15 largest carry {top['share of public error'].sum():.1%} of it. "
+      "Audrain, Boone and Osage as destinations (inflow = sum of home counties' shares):")
+out = inflow.reindex(["29007", "29019", "29151"])
 print(out[["name", "advan", pub, "ratio", "dest effect", "share of public error"]].round(3).rename(columns={pub: "public"}).to_string())
 print("\nDestination effect vs public measures, R^2:",
       round(sm.OLS(np.array([fe.get(j, 0) for j in cov.index]), sm.add_constant(X0.groupby(pairs.j)[PUBLIC_DEST].first().reindex(cov.index).values)).fit().rsquared, 3))

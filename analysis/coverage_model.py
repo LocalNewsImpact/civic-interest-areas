@@ -12,7 +12,7 @@ discounted) -- the same visits the travel model fits.
 
 ADOPTED SPECIFICATION. PPML; a fixed effect for every newsroom county and every county covered; plus
   CONTROLS (theory; gravity_terms.FACTORS, tested only as blocks, never one term at a time):
-    distance block   log_dist, log_dist_sq, nonmetro_i_x_log_dist, nonmetro_i_x_log_dist_sq, log_pop_i_x_log_dist
+    distance block   log_dist, log_dist_sq, rural_i_x_log_dist, rural_i_x_log_dist_sq, log_pop_i_x_log_dist
                      (hierarchy: log_dist is kept with its square and with its interactions; the block enters or leaves
                      whole)
     border           adjacent
@@ -21,10 +21,12 @@ ADOPTED SPECIFICATION. PPML; a fixed effect for every newsroom county and every 
     log_visits              log visits i -> j where visits > 0 (0 otherwise)
     zero_visits             1 where no visit was recorded
   HYPOTHESIS TERM (stated in advance; reported whatever the result)
-    log_visits_x_nonmetro   log_visits x nonmetropolitan newsroom county (USDA RUCC 4-9)
+    log_visits_x_rural      log_visits x rural newsroom county (gravity_terms cov.rural: under 50% of the 2020
+                            population in Census urban areas; RUCC nonmetro until 2026-10-25, under which Osage, 0%
+                            urban, counted as metro)
 The elasticity -- the percentage difference in stories associated with 1% more visits, holding the controls and both
-sets of fixed effects fixed -- is reported for metro newsroom counties (log_visits) and nonmetro ones (log_visits +
-log_visits_x_nonmetro). It is an association, not an effect of travel on coverage. The pooled elasticity (no
+sets of fixed effects fixed -- is reported for urban newsroom counties (log_visits) and rural ones (log_visits +
+log_visits_x_rural). It is an association, not an effect of travel on coverage. The pooled elasticity (no
 hypothesis term) is printed as a sensitivity.
 
 STANDARD ERRORS. A story is counted once for each county it names, so the pairs from one newsroom county are not
@@ -66,9 +68,9 @@ warnings.filterwarnings("ignore")   # clustered covariance with fewer clusters t
 
 BLOCKS = {"distance block (5 terms)": DIST_TERMS, "border (adjacent)": ["adjacent"],
           "commuting block (out + in)": ["commute_out", "commute_in"]}
-HYP = "log_visits_x_nonmetro"
+HYP = "log_visits_x_rural"
 
-cov = pd.read_csv(root / "analysis/county_covariates.csv", dtype={"fips": str}).set_index("fips")
+cov = gt.cov                       # county covariates with the settlement-based rural flag
 tp = pd.read_csv(root / "analysis/od_predicted.csv", dtype={"i": str, "j": str}).set_index(["i", "j"])
 data = json.load(open(root / "coverage/storymap/statewide_2026_03_articles.json"))
 n_excluded = sum(a["publisher"] in EXCLUDE for a in data["articles"])
@@ -138,15 +140,13 @@ out_state = [a for a in data["articles"] if not newsroom_fips(a)]
 print(f"stories excluded by excluded_outlets.EXCLUDE: {n_excluded:,}")
 print(f"stories NOT IN THE FIT, outlet filed under a county outside Missouri and not homed by HOME_COUNTY: "
       f"{len(out_state)}")
-for (o, c, t), k in Counter((a["publisher"], a["publisher_county"], a["publisher_type"]) for a in out_state).items():
-    mo = Counter(j for a in out_state if a["publisher"] == o for j in a["counties"] if j.startswith("29"))
-    tot = Counter(j[:2] for a in out_state if a["publisher"] == o for j in a["counties"])
-    print(f"  {o} ({t}; filed {c}): {k} stories; county mentions in Missouri {tot.get('29', 0)}, elsewhere "
-          f"{sum(tot.values()) - tot.get('29', 0)}; Missouri counties named "
-          + ", ".join(f"{county_name(j)} {v}" for j, v in mo.most_common(4)))
+if out_state:
+    tot = Counter(j[:2] for a in out_state for j in a["counties"])
+    print(f"  from {len({a['publisher'] for a in out_state})} outlets; county mentions in Missouri {tot.get('29', 0)}, "
+          f"elsewhere {sum(tot.values()) - tot.get('29', 0)}")
 moved = Counter(a["publisher"] for a in data["articles"] if newsroom_fips(a)
                 and newsroom_fips(a) != county_fips(a["publisher_county"]))
-print("stories counted with their HOME_COUNTY newsroom county:", dict(moved))
+print(f"stories counted with their HOME_COUNTY newsroom county: {sum(moved.values())} from {len(moved)} outlets")
 
 pairs = gt.all_pairs()
 pairs["visits"] = gt.travel_visits(pairs, gt.MONTHS)
@@ -169,7 +169,7 @@ for version, keep in (("all", lambda a: True), ("no_broadcast", lambda a: "broad
     pos = (p.visits > 0).values
     log_visits = np.where(pos, np.log(p.visits.where(pos, 1.0)), 0.0)
     zero = (~pos).astype(float)
-    nonmetro = 1 - cov.metro.reindex(p.i).values
+    rural = cov.rural.reindex(p.i).values
     vs = gt.shares(p.visits.values, p.i.values) >= 0.01
     print(f"\n## {version}: {len(arts):,} stories from {p.i.nunique()} newsroom counties; "
           f"{int(y.sum()):,} story-county pairs outside the newsroom's county; {len(p):,} county pairs, "
@@ -188,11 +188,11 @@ for version, keep in (("all", lambda a: True), ("no_broadcast", lambda a: "broad
         if zero_col:
             Z = Z.assign(zero_visits=zero)
         if interact:
-            Z = Z.assign(**{HYP: t * nonmetro})
+            Z = Z.assign(**{HYP: t * rural})
         return pd.concat([Z, O], axis=1)
 
     def split(m):
-        """(metro elasticity, s.e.), (nonmetro elasticity, s.e.) from a fit with the hypothesis term."""
+        """(urban elasticity, s.e.), (rural elasticity, s.e.) from a fit with the hypothesis term."""
         b_, V = m.params, m.cov_params()
         se_n = np.sqrt(V.loc["log_visits", "log_visits"] + V.loc[HYP, HYP] + 2 * V.loc["log_visits", HYP])
         return (b_["log_visits"], m.bse["log_visits"]), (b_["log_visits"] + b_[HYP], se_n)
@@ -203,17 +203,17 @@ for version, keep in (("all", lambda a: True), ("no_broadcast", lambda a: "broad
     p["pred_travel"] = ma.predict(Xa).values
     (bm, sm_), (bn, sn) = split(ma)
     r2 = np.corrcoef(y, p.pred_travel)[0, 1] ** 2
-    n_m, n_n = int((cov.metro.reindex(p.i.unique()) == 1).sum()), int((cov.metro.reindex(p.i.unique()) == 0).sum())
+    n_m, n_n = int((cov.rural.reindex(p.i.unique()) == 0).sum()), int((cov.rural.reindex(p.i.unique()) == 1).sum())
     print(f"### ADOPTED: controls (distance block, border, commuting block) + both fixed effects + log visits + "
-          f"zero-visit indicator + hypothesis term log visits x nonmetro newsroom county; errors clustered by newsroom "
+          f"zero-visit indicator + hypothesis term log visits x rural newsroom county; errors clustered by newsroom "
           f"county ({p.i.nunique()} clusters); r^2 of fitted with observed pairs {r2:.2f}")
     c = pd.DataFrame({"coef": ma.params, "se": ma.bse, "p": ma.pvalues}).loc[FACTORS + ["log_visits", HYP, "zero_visits"]]
     print(c.round(3).to_string())
-    for lab, (b, se), k_ in (("metro newsroom counties", (bm, sm_), n_m), ("nonmetro newsroom counties", (bn, sn), n_n)):
+    for lab, (b, se), k_ in (("urban newsroom counties", (bm, sm_), n_m), ("rural newsroom counties", (bn, sn), n_n)):
         print(f"ELASTICITY (adopted, {version}), {lab} ({k_}): {b:.3f}, s.e. {se:.3f}, 95% CI {b - 1.96 * se:.2f} to "
               f"{b + 1.96 * se:.2f}. 1% more visits is associated with {b:.2f}% more stories; twice the visits, "
               f"{2 ** b:.2f} times the stories")
-    print("  s.e. by clustering, metro / nonmetro (a story counts once per county it names; pairs are not independent):")
+    print("  s.e. by clustering, urban / rural (a story counts once per county it names; pairs are not independent):")
     for lab, kw in cl.items():
         a1, a2 = sm_, sn
         if not lab.startswith("newsroom county"):
@@ -249,7 +249,7 @@ for version, keep in (("all", lambda a: True), ("no_broadcast", lambda a: "broad
     print(f"  SENSITIVITY, pooled (no hypothesis term): {mp.params['log_visits']:.3f} (s.e. {mp.bse['log_visits']:.3f})")
 
     # zero-visit pairs: how the elasticities move with their treatment
-    print("  elasticity, metro / nonmetro, by treatment of the zero-visit pairs:")
+    print("  elasticity, urban / rural, by treatment of the zero-visit pairs:")
     alt = {"indicator + log visits where > 0 (adopted)": (bm, bn)}
     for lab, col in (("zeros set to log(1e-3) = -6.9 (before 2026-10-24)", np.log(p.visits.clip(lower=1e-3))),
                      ("log(visits + 1)", np.log1p(p.visits)),
@@ -281,14 +281,11 @@ for version, keep in (("all", lambda a: True), ("no_broadcast", lambda a: "broad
         Xk = Xk.loc[:, Xk.abs().sum() > 0]
         mk = poisson(y[k], Xk, start_params=ma.params[Xk.columns].values)
         loo[f] = (mk.params["log_visits"], mk.params["log_visits"] + mk.params[HYP])
-    L = pd.DataFrame(loo, index=["metro", "nonmetro"]).T
+    L = pd.DataFrame(loo, index=["urban", "rural"]).T
     print(f"  leave one newsroom county out ({len(L)} fits):")
     for col in L.columns:
         s = L[col]
-        lo_f, hi_f = s.idxmin(), s.idxmax()
-        print(f"    {col:9s} {s.min():.3f} (without {county_name(lo_f)}, {int(p[p.i == lo_f].stories.sum())} story-county "
-              f"pairs) to {s.max():.3f} (without {county_name(hi_f)}, {int(p[p.i == hi_f].stories.sum())}); "
-              f"median {s.median():.3f}")
+        print(f"    {col:9s} {s.min():.3f} to {s.max():.3f}; median {s.median():.3f}")
 
     # NOT ADOPTED, for the record
     lv1 = np.log1p(p.visits.values)

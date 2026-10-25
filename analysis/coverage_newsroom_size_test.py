@@ -1,13 +1,14 @@
-"""Does the coverage model's metro / nonmetro elasticity gap reflect rurality, or newsroom size and outlet type?
+"""Does the coverage model's urban / rural elasticity gap reflect rurality, or newsroom size and outlet type?
 
-The adopted coverage model (coverage_model.py) has log visits x nonmetro newsroom county as a hypothesis term (metro
-0.50, nonmetro 0.26). Nonmetro counties also have fewer and smaller newsrooms, fewer dailies and few TV stations, so
-the term may measure newsroom size or type, not rurality. Data build, controls, fixed effects, PPML, newsroom-county
+The adopted coverage model (coverage_model.py) has log visits x rural newsroom county as a hypothesis term. Rural
+counties also have fewer and smaller newsrooms, fewer dailies and few TV stations, so the term may measure newsroom
+size or type, not rurality. Data build, controls, fixed effects, PPML, newsroom-county
 clustering and held-out scoring are coverage_model.py's (its definitions are executed from its source, without its
 model runs). All outlets.
 
 Newsroom-county measures (interacted with log visits; their levels are absorbed by the newsroom-county effects):
-  nonmetro       USDA RUCC 4-9 (the adopted term)
+  rural          under 50% of 2020 population in Census urban areas (gravity_terms cov.rural; the adopted term;
+                 RUCC nonmetro until 2026-10-25)
   log_outlets    log(1 + active local outlets filed in the county), pinned registry (excluded_outlets.registry():
                  status active, Missouri, not EXCLUDE, HOME_COUNTY applied), collected or not -- a size measure not
                  built from the stories
@@ -17,13 +18,13 @@ Newsroom-county measures (interacted with log visits; their levels are absorbed 
   log_stories    log(1 + all March stories by the county's newsrooms, home and away). SECONDARY: built from the same
                  stories as the outcome, so mechanically related to it; reported, not used in the combined model
 Tests
-  1. Each measure x log visits alone, and size + type together with and without nonmetro; implied elasticities for
+  1. Each measure x log visits alone, and size + type together with and without rural; implied elasticities for
      profiles; held out (coverage_model.heldout: 8 folds of newsroom counties, mean absolute share error per county;
      PRIMARY destinations with 1%+ of visits) against the adopted model, county-paired 95% intervals.
   2. Outlet as the source unit: stories by outlet o about county j (j outside its home county), outlet and destination
      fixed effects, the home county's controls and log visits; elasticity by outlet type (non-daily print, daily
-     print, digital native, broadcast), and metro / nonmetro within each type. Errors clustered by newsroom county.
-  3. Matched on output: newsroom counties inside the overlap of metro and nonmetro counties' out-of-county story
+     print, digital native, broadcast), and urban / rural within each type. Errors clustered by newsroom county.
+  3. Matched on output: newsroom counties inside the overlap of urban and rural counties' out-of-county story
      pairs (and, separately, of registry outlet counts); the adopted model refitted on them.
 Only model-level statistics and Audrain / Boone / Osage are printed; other counties' figures are appended to
 advan-notes/statewide_and_other_results.md.
@@ -74,7 +75,7 @@ X, O = Xd[FACTORS], Xd[[c for c in Xd.columns if c.startswith(("o_", "d_"))]]
 y = p.stories.astype(float)
 pos = (p.visits > 0).values
 lv = np.where(pos, np.log(p.visits.where(pos, 1.0)), 0.0)
-Z = pd.DataFrame({"nonmetro": 1 - cov.metro.reindex(p.i).values,
+Z = pd.DataFrame({"rural": cov.rural.reindex(p.i).values.astype(float),
                   "log_outlets": np.log1p(n_outlets.reindex(p.i).fillna(0).values),
                   "has_daily": p.i.isin(daily_c).astype(float).values,
                   "has_tv": p.i.isin(tv_c).astype(float).values,
@@ -100,39 +101,39 @@ def elast(m, prof):
     return float(m.params[names].values @ w), float(np.sqrt(w @ V @ w))
 
 
-print(f"# Newsroom counties: {len(C)} ({int((C.nonmetro == 0).sum())} metro, {int(C.nonmetro.sum())} nonmetro); "
+print(f"# Newsroom counties: {len(C)} ({int((C.rural == 0).sum())} urban, {int(C.rural.sum())} rural); "
       f"{int(y.sum()):,} out-of-county story-county pairs")
-print("Measures by metro / nonmetro (medians or shares of newsroom counties):")
-g = C.groupby(C.nonmetro.map({0: "metro", 1: "nonmetro"}))
+print("Measures by urban / rural (medians or shares of newsroom counties):")
+g = C.groupby(C.rural.map({0: "urban", 1: "rural"}))
 print(pd.DataFrame({"counties": g.size(), "active outlets (median)": g.outlets.median(),
                     "has a daily": g.has_daily.mean().round(2), "has TV": g.has_tv.mean().round(2),
                     "out-of-county story pairs (median)": g.out_pairs.median()}).to_string())
-print("Correlation across newsroom counties with nonmetro: "
-      + ", ".join(f"{t} {np.corrcoef(C.nonmetro, C[t])[0, 1]:+.2f}" for t in ("log_outlets", "has_daily", "has_tv", "log_stories")))
+print("Correlation across newsroom counties with rural: "
+      + ", ".join(f"{t} {np.corrcoef(C.rural, C[t])[0, 1]:+.2f}" for t in ("log_outlets", "has_daily", "has_tv", "log_stories")))
 
 # ---- test 1 ------------------------------------------------------------------------------------------------------------
-specs = {"adopted: x nonmetro": ["nonmetro"], "x log outlets (registry)": ["log_outlets"], "x has daily": ["has_daily"],
+specs = {"adopted: x rural": ["rural"], "x log outlets (registry)": ["log_outlets"], "x has daily": ["has_daily"],
          "x has TV": ["has_tv"], "x log stories (SECONDARY, built from the outcome)": ["log_stories"],
-         "x outlets + daily + TV (no nonmetro)": ["log_outlets", "has_daily", "has_tv"],
-         "x nonmetro + outlets + daily + TV": ["nonmetro", "log_outlets", "has_daily", "has_tv"]}
+         "x outlets + daily + TV (no rural)": ["log_outlets", "has_daily", "has_tv"],
+         "x rural + outlets + daily + TV": ["rural", "log_outlets", "has_daily", "has_tv"]}
 fits, E = {}, {}
 for k, t in specs.items():
     Xm = model(t)
     fits[k] = poisson(y, Xm, **CL(p))
     E[k] = heldout(y, Xm, p, fits[k].params)
-E0 = E["adopted: x nonmetro"]
-print("\n## 1. Size and type in place of, and beside, nonmetro (interactions with log visits; clustered s.e.)")
+E0 = E["adopted: x rural"]
+print("\n## 1. Size and type in place of, and beside, rural (interactions with log visits; clustered s.e.)")
 print("Held-out error, points; change = model - adopted, county-paired 95% (negative = lower error than adopted)")
-print("| Model | log visits | x nonmetro | x log outlets | x has daily | x has TV | x log stories | Primary (1%+ of visits) | "
+print("| Model | log visits | x rural | x log outlets | x has daily | x has TV | x log stories | Primary (1%+ of visits) | "
       "Change | All destinations | Change |\n|---|---|---|---|---|---|---|---:|---:|---:|---:|")
 for k, m in fits.items():
     cells = []
-    for t in ["log_visits", "lv_x_nonmetro", "lv_x_log_outlets", "lv_x_has_daily", "lv_x_has_tv", "lv_x_log_stories"]:
+    for t in ["log_visits", "lv_x_rural", "lv_x_log_outlets", "lv_x_has_daily", "lv_x_has_tv", "lv_x_log_stories"]:
         cells.append(f"{m.params[t]:+.3f} ({m.bse[t]:.3f})" if t in m.params else "")
     for col in ("travel", "all"):
         e = E[k][col]
         cells.append(f"{e.mean():.3f}")
-        if k == "adopted: x nonmetro":
+        if k == "adopted: x rural":
             cells.append("—")
         else:
             d = e - E0[col]
@@ -145,27 +146,27 @@ profiles = {
     "daily, no TV (median outlets of such counties)": dict(log_outlets=med((C.has_daily == 1) & (C.has_tv == 0)), has_daily=1, has_tv=0),
     "daily + TV (median outlets of such counties)": dict(log_outlets=med((C.has_daily == 1) & (C.has_tv == 1)), has_daily=1, has_tv=1),
 }
-print("\nImplied elasticities by profile (s.e.); counties in each profile, metro / nonmetro:")
-print("| Profile | Counties (metro / nonmetro) | Outlets x size + type model | Metro, full model | Nonmetro, full model |"
+print("\nImplied elasticities by profile (s.e.); counties in each profile, urban / rural:")
+print("| Profile | Counties (urban / rural) | Outlets x size + type model | Urban, full model | Rural, full model |"
       "\n|---|---|---|---|---|")
-mt, mf = fits["x outlets + daily + TV (no nonmetro)"], fits["x nonmetro + outlets + daily + TV"]
+mt, mf = fits["x outlets + daily + TV (no rural)"], fits["x rural + outlets + daily + TV"]
 for lab, pr in profiles.items():
     d_, t_ = pr["has_daily"], pr["has_tv"]
     mask = (C.has_daily == d_) & (C.has_tv == t_) & ((C.outlets <= 1) if lab.startswith("one") else True)
-    cnt = f"{int((mask & (C.nonmetro == 0)).sum())} / {int((mask & (C.nonmetro == 1)).sum())}"
+    cnt = f"{int((mask & (C.rural == 0)).sum())} / {int((mask & (C.rural == 1)).sum())}"
     a = elast(mt, pr)
-    b0, b1 = elast(mf, {"nonmetro": 0, **pr}), elast(mf, {"nonmetro": 1, **pr})
+    b0, b1 = elast(mf, {"rural": 0, **pr}), elast(mf, {"rural": 1, **pr})
     print(f"| {lab} | {cnt} | {a[0]:.2f} ({a[1]:.2f}) | {b0[0]:.2f} ({b0[1]:.2f}) | {b1[0]:.2f} ({b1[1]:.2f}) |")
 print("\nStudy counties: profile and implied elasticity")
-print("| County | Nonmetro | Active outlets | Daily | TV | Adopted (x nonmetro) | Size + type model | Full model |\n|---|---|---|---|---|---|---|---|")
+print("| County | Rural | Active outlets | Daily | TV | Adopted (x rural) | Size + type model | Full model |\n|---|---|---|---|---|---|---|---|")
 for f, nm in STUDY.items():
     if f not in C.index:
         continue
     r = C.loc[f]
     pr = dict(log_outlets=r.log_outlets, has_daily=r.has_daily, has_tv=r.has_tv)
-    print(f"| {nm} | {int(r.nonmetro)} | {int(r.outlets)} | {int(r.has_daily)} | {int(r.has_tv)} | "
-          f"{elast(fits['adopted: x nonmetro'], {'nonmetro': r.nonmetro})[0]:.2f} | {elast(mt, pr)[0]:.2f} | "
-          f"{elast(mf, {'nonmetro': r.nonmetro, **pr})[0]:.2f} |")
+    print(f"| {nm} | {int(r.rural)} | {int(r.outlets)} | {int(r.has_daily)} | {int(r.has_tv)} | "
+          f"{elast(fits['adopted: x rural'], {'rural': r.rural})[0]:.2f} | {elast(mt, pr)[0]:.2f} | "
+          f"{elast(mf, {'rural': r.rural, **pr})[0]:.2f} |")
 
 # ---- test 2: outlet as the source unit -----------------------------------------------------------------------------------
 def otype(a):
@@ -195,7 +196,7 @@ q["adjacent"] = pi.adjacent.reindex(list(zip(q.i, q.j))).values
 Xq = gt.candidates(q)
 posq = (q.visits > 0).values
 lvq = np.where(posq, np.log(q.visits.where(posq, 1.0)), 0.0)
-nmq = 1 - cov.metro.reindex(q.i).values
+nmq = cov.rural.reindex(q.i).values.astype(float)
 OF = pd.get_dummies(q.outlet, prefix="out").astype(float)
 DF = Xq[[c for c in Xq.columns if c.startswith("d_")]]
 types = ["non-daily print", "daily print", "digital native", "broadcast"]
@@ -209,18 +210,18 @@ TB = base_q.copy()
 for t in types:
     w = (q.outlet.map(typ) == t).values
     TB[f"lv_{t}_metro"] = lvq * w * (1 - nmq)
-    TB[f"lv_{t}_nonmetro"] = lvq * w * nmq
+    TB[f"lv_{t}_rural"] = lvq * w * nmq
 XB = pd.concat([TB, OF, DF], axis=1)
 mB = poisson(q.stories.astype(float), XB.loc[:, XB.abs().sum() > 0], **CL(q))
 VB = mB.cov_params()
 print(f"\n## 2. Outlet as the source unit ({len(outl)} outlets with out-of-county stories; outlet and destination fixed "
       f"effects; errors clustered by newsroom county)")
-print("| Outlet type | Outlets (metro / nonmetro home) | Elasticity, all | Metro home | Nonmetro home | Nonmetro - metro |"
+print("| Outlet type | Outlets (urban / rural home) | Elasticity, all | Urban home | Rural home | Rural - urban |"
       "\n|---|---|---|---|---|---|")
 for t in types:
     os_ = [o for o in outl if typ[o] == t]
-    nm_ = sum(1 - cov.metro[home[o]] for o in os_)
-    a, b = f"lv_{t}_metro", f"lv_{t}_nonmetro"
+    nm_ = sum(cov.rural[home[o]] for o in os_)
+    a, b = f"lv_{t}_metro", f"lv_{t}_rural"
     cell_m = f"{mB.params[a]:.2f} ({mB.bse[a]:.2f})" if (len(os_) - nm_) > 0 else "—"
     cell_n = f"{mB.params[b]:.2f} ({mB.bse[b]:.2f})" if nm_ > 0 else "—"
     diff = "—"
@@ -232,35 +233,35 @@ for t in types:
           f"{cell_m} | {cell_n} | {diff} |")
 
 # ---- test 3: matched on output -------------------------------------------------------------------------------------------
-print("\n## 3. Matched on output: the adopted model on newsroom counties in the metro / nonmetro overlap")
-print("| Sample | Newsroom counties (metro / nonmetro) | Metro | Nonmetro | x nonmetro (s.e., p) |\n|---|---|---|---|---|")
+print("\n## 3. Matched on output: the adopted model on newsroom counties in the urban / rural overlap")
+print("| Sample | Newsroom counties (urban / rural) | Urban | Rural | x rural (s.e., p) |\n|---|---|---|---|---|")
 matched = {}
 for lab, col in (("all newsroom counties", None), ("overlap of out-of-county story pairs", "out_pairs"),
                  ("overlap of active registry outlets", "outlets")):
     keep = C.index
     if col:
-        a_, b_ = C[col][C.nonmetro == 0], C[col][C.nonmetro == 1]
+        a_, b_ = C[col][C.rural == 0], C[col][C.rural == 1]
         lo, hi = max(a_.min(), b_.min()), min(a_.max(), b_.max())
         keep = C.index[(C[col] >= lo) & (C[col] <= hi)]
         lab = f"{lab} ({lo:g}-{hi:g})"
     matched[lab] = list(keep)
     k = p.i.isin(keep).values
-    Xk = model(["nonmetro"])[k]
+    Xk = model(["rural"])[k]
     Xk = Xk.loc[:, Xk.abs().sum() > 0]
     mk = poisson(y[k], Xk, **CL(p[k]))
-    e0, e1 = elast(mk, {"nonmetro": 0}), elast(mk, {"nonmetro": 1})
-    print(f"| {lab} | {int((C.loc[keep].nonmetro == 0).sum())} / {int(C.loc[keep].nonmetro.sum())} | {e0[0]:.2f} ({e0[1]:.2f}) | "
-          f"{e1[0]:.2f} ({e1[1]:.2f}) | {mk.params['lv_x_nonmetro']:+.3f} ({mk.bse['lv_x_nonmetro']:.3f}, "
-          f"p {mk.pvalues['lv_x_nonmetro']:.3f}) |")
+    e0, e1 = elast(mk, {"rural": 0}), elast(mk, {"rural": 1})
+    print(f"| {lab} | {int((C.loc[keep].rural == 0).sum())} / {int(C.loc[keep].rural.sum())} | {e0[0]:.2f} ({e0[1]:.2f}) | "
+          f"{e1[0]:.2f} ({e1[1]:.2f}) | {mk.params['lv_x_rural']:+.3f} ({mk.bse['lv_x_rural']:.3f}, "
+          f"p {mk.pvalues['lv_x_rural']:.3f}) |")
 
 # ---- other counties' figures: appended to the notes file -----------------------------------------------------------------
 nm = lambda f: county_name(f)  # noqa: E731
 with open(NOTES, "a") as fh:
-    fh.write("\n## Coverage: newsroom size and type vs nonmetro (coverage_newsroom_size_test.py, 2026-10-25)\n\n")
-    fh.write("Newsroom counties by profile (registry active outlets, daily, TV):\n\n| County | Nonmetro | Active outlets | Daily | TV | "
+    fh.write("\n## Coverage: newsroom size and type vs rural, settlement flag (coverage_newsroom_size_test.py, 2026-10-25 rerun)\n\n")
+    fh.write("Newsroom counties by profile (registry active outlets, daily, TV):\n\n| County | Rural | Active outlets | Daily | TV | "
              "Out-of-county story pairs |\n|---|---|---|---|---|---|\n")
-    for f, r in C.sort_values(["nonmetro", "outlets"]).iterrows():
-        fh.write(f"| {nm(f)} | {int(r.nonmetro)} | {int(r.outlets)} | {int(r.has_daily)} | {int(r.has_tv)} | {int(r.out_pairs)} |\n")
+    for f, r in C.sort_values(["rural", "outlets"]).iterrows():
+        fh.write(f"| {nm(f)} | {int(r.rural)} | {int(r.outlets)} | {int(r.has_daily)} | {int(r.has_tv)} | {int(r.out_pairs)} |\n")
     for lab, keep in matched.items():
         if lab != "all newsroom counties":
             fh.write(f"\nMatched sample, {lab}: " + ", ".join(nm(f) for f in sorted(keep)) + "\n")
