@@ -217,12 +217,17 @@ b = -bta
 b_lo, b_hi = -(bta + 1.96 * se), -(bta - 1.96 * se)
 print(f"{st.pair.nunique()} ordered month pairs stacked, {len(st):,} block-group pairs, {st.cu.nunique()} counties (county-clustered)")
 print(f"  reduced form (leaving m2 on detection m1; diagnostic, the 2026-10-24 estimate): {rf:+.3f} [{rf - 1.96 * rf_se:+.3f}, {rf + 1.96 * rf_se:+.3f}]")
-print(f"  first stage (detection m2 on detection m1): {fs:+.3f} [{fs - 1.96 * fs_se:+.3f}, {fs + 1.96 * fs_se:+.3f}]")
+print(f"  first stage (detection m2 on detection m1): {fs:+.3f} [{fs - 1.96 * fs_se:+.3f}, {fs + 1.96 * fs_se:+.3f}]; "
+      f"cluster-robust first-stage F {(fs / fs_se) ** 2:,.0f} (one endogenous regressor, one excluded instrument: equals the "
+      f"Kleibergen-Paap rk Wald F)")
+print("  just-identified (one excluded instrument per stacked pair): no overidentification test applies")
 print(f"  2SLS (adopted): slope {bta:+.3f} -> b = {b:.3f} [{b_lo:.3f}, {b_hi:.3f}]")
 for L in sorted(st.lag.unique()):
     sub = st[st.lag == L]
     bl, sl = iv(sub)
-    print(f"    lag {L}: {sub.pair.nunique()} pairs, b = {-bl:.3f} [{-bl - 1.96 * sl:.3f}, {-bl + 1.96 * sl:.3f}]")
+    fl, fsl = ols(sub, "ld", "ld2")
+    print(f"    lag {L}: {sub.pair.nunique()} pairs, b = {-bl:.3f} [{-bl - 1.96 * sl:.3f}, {-bl + 1.96 * sl:.3f}], "
+          f"first stage {fl:.3f}, F {(fl / fsl) ** 2:,.0f}")
 print("  caveat: b mixes phantom phones with residents who stay home more (both raise detection and lower leaving); the "
       "second biases b upward, opposite to the attenuation the instrument removes")
 B["county"] = B.h.str[:5]
