@@ -137,4 +137,3 @@ print(pd.DataFrame({"outlets": g.size(), "share to top county": g.top_share.medi
                     "spillover rate": g.rate.median().round(2)}).to_string())
 a, b = (r[r["home class"] == k].top_share for k in ("ring: Kansas City / St. Louis metro", "ring: regional hub"))
 print("rings, share to top county, Mann-Whitney p = %.4f" % stats.mannwhitneyu(a, b).pvalue)
-print(r[r["home class"].str.startswith("ring")].sort_values(["home class", "top_share"])[["home class", "fips", "top_county", "top_share", "top_mi", "median_mi", "rate"]].round(2).to_string())

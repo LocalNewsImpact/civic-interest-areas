@@ -100,8 +100,7 @@ for k, n in enumerate(names):
     print(f"| {n} | " + " | ".join(f"{weights[c][k]:.2f}" for c in LABEL) + " |")
 k = {kk: n for n, kk in enumerate(key)}
 for i, j, n in (("29151", "29051", "Osage -> Cole"), ("29007", "29019", "Audrain -> Boone"), ("29007", "29127", "Audrain -> Marion"),
-                ("29019", "29051", "Boone -> Cole"), ("29019", "29189", "Boone -> St. Louis County"), ("29077", "29043", "Greene -> Christian"),
-                ("29077", "29213", "Greene -> Taney")):
+                ("29019", "29051", "Boone -> Cole"), ("29019", "29189", "Boone -> St. Louis County")):
     print(f"{n}: Advan {100 * a[k[(i, j)]]:.1f}%  Advan-fitted {100 * ref['Advan-fitted'][k[(i, j)]]:.1f}%  public weights by class {100 * pred[k[(i, j)]]:.1f}%")
 pd.DataFrame(weights, index=names).rename(columns=LABEL).to_csv(A / "public_segment_weights.csv")
 S.assign(public_segment=pred).to_csv(A / "compare_shares.csv", index=False)

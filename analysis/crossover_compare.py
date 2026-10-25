@@ -144,53 +144,48 @@ LAB = {"dedup_seen_at_home_coded": "Seen at home, as published (coded county tes
        "dedup_b0": "Seen at home, + Kansas (b = 0, sensitivity)",
        "dedup_linear": f"Linear split, (1 - b) own + b E, b = {B_SLOPE[0]:.2f} (sensitivity)",
        "dedup_lower": f"Calibrated, E (own / E)^(1 - b), b = {B_SLOPE[0]:.2f} (adopted)"}
-print("| Denominator | rho, factor | rho, commuters / employed | rho, commuters / population | Audrain | Boone | Osage | "
-      "Missouri median | St. Louis |")
-print("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+print("| Denominator | rho, factor | rho, commuters / employed | rho, commuters / population | Audrain | Boone | Osage |")
+print("|---|---:|---:|---:|---:|---:|---:|")
 for k, lab in LAB.items():
     rho = lambda col: t[k].corr(t[col], method="spearman")
     print(f"| {lab} | {rho('factor_median'):+.2f} | {rho('commute_emp'):+.2f} | {rho('commute_pop'):+.2f} | "
-          f"{t.loc['29007', k]:.0%} | {t.loc['29019', k]:.0%} | {t.loc['29151', k]:.0%} | {t[k].median():.0%} | {t.loc['29189', k]:.0%} |")
+          f"{t.loc['29007', k]:.0%} | {t.loc['29019', k]:.0%} | {t.loc['29151', k]:.0%} |")
 print(f"| Summed block-group share (current) | {t.current.corr(t.factor_median, method='spearman'):+.2f} | "
       f"{t.current.corr(t.commute_emp, method='spearman'):+.2f} | {t.current.corr(t.commute_pop, method='spearman'):+.2f} | "
-      f"{t.loc['29007', 'current']:.0%} | {t.loc['29019', 'current']:.0%} | {t.loc['29151', 'current']:.0%} | "
-      f"{t.current.median():.0%} | {t.loc['29189', 'current']:.0%} |")
+      f"{t.loc['29007', 'current']:.0%} | {t.loc['29019', 'current']:.0%} | {t.loc['29151', 'current']:.0%} |")
 print(f"| LODES JT01 commuters / population | | | | {t.loc['29007', 'commute_pop']:.0%} | {t.loc['29019', 'commute_pop']:.0%} | "
-      f"{t.loc['29151', 'commute_pop']:.0%} | {t.commute_pop.median():.0%} | {t.loc['29189', 'commute_pop']:.0%} |")
+      f"{t.loc['29151', 'commute_pop']:.0%} |")
 print(f"| LODES JT00 commuters / population | | | | {t.loc['29007', 'commute_pop_jt00']:.0%} | {t.loc['29019', 'commute_pop_jt00']:.0%} | "
-      f"{t.loc['29151', 'commute_pop_jt00']:.0%} | {t.commute_pop_jt00.median():.0%} | {t.loc['29189', 'commute_pop_jt00']:.0%} |")
+      f"{t.loc['29151', 'commute_pop_jt00']:.0%} |")
 print(f"\nDetection slope b = {B_SLOPE[0]:.3f} [{B_SLOPE[1]:.3f}, {B_SLOPE[2]:.3f}]")
 print("| County | Calibrated (adopted) | Range over b in [0, 1] | Range over the b interval | b = 1 (sensitivity) | b = 0 (sensitivity) | Linear split (sensitivity) |\n|---|---:|---:|---:|---:|---:|---:|")
-for f in ("29007", "29019", "29151", None, "29189"):
-    r = t.median(numeric_only=True) if f is None else t.loc[f]
-    print(f"| {'Missouri median' if f is None else t.loc[f, 'name']} | {r.dedup_lower:.0%} | {r.dedup_bound_low:.0%}-{r.dedup_bound_high:.0%} | {r.dedup_band_low:.0%}-{r.dedup_band_high:.0%} | "
+for f in ("29007", "29019", "29151"):
+    r = t.loc[f]
+    print(f"| {t.loc[f, 'name']} | {r.dedup_lower:.0%} | {r.dedup_bound_low:.0%}-{r.dedup_bound_high:.0%} | {r.dedup_band_low:.0%}-{r.dedup_band_high:.0%} | "
           f"{r.dedup_b1:.0%} | {r.dedup_b0:.0%} | {r.dedup_linear:.0%} |")
 for c_ in ("dedup_lower", "dedup_linear", "dedup_b0", "dedup_b1"):
     o = (t[c_] > t.dedup_bound_high + 1e-9) | (t[c_] < t.dedup_bound_low - 1e-9)
-    print(f"containment check, {c_}: inside the range over b in [0, 1] in {len(t) - o.sum()} of {len(t)} counties"
-          + ("" if not o.any() else f"; outside: {t.name[o].tolist()}"))
+    print(f"containment check, {c_}: inside the range over b in [0, 1] in {len(t) - o.sum()} of {len(t)} counties")
 assert not ((t.dedup_lower > t.dedup_bound_high + 1e-9) | (t.dedup_lower < t.dedup_bound_low - 1e-9)).any(), "calibrated outside its grid range"
 t["size"] = pd.cut(t.population, [0, 10_000, 20_000, 50_000, 1e8], labels=["<10k", "10-20k", "20-50k", "50k+"])
-print("\n| County population | Counties | Range over b in [0, 1], width, median (middle 80%), points | Range over the b interval, width, median | Calibrated, median | Low, median | High, median |")
-print("|---|---:|---:|---:|---:|---:|---:|")
+print("\n| County population | Counties | Range over b in [0, 1], width, median (middle 80%), points | Range over the b interval, width, median |")
+print("|---|---:|---:|---:|")
 for k, g_ in t.groupby("size", observed=True):
     print(f"| {k} | {len(g_)} | {100 * g_.dedup_bound_width.median():.1f} ({100 * g_.dedup_bound_width.quantile(.1):.1f}-"
-          f"{100 * g_.dedup_bound_width.quantile(.9):.1f}) | {100 * (g_.dedup_band_high - g_.dedup_band_low).median():.1f} | {g_.dedup_lower.median():.0%} | {g_.dedup_bound_low.median():.0%} | {g_.dedup_bound_high.median():.0%} |")
+          f"{100 * g_.dedup_bound_width.quantile(.9):.1f}) | {100 * (g_.dedup_band_high - g_.dedup_band_low).median():.1f} |")
 t = t.drop(columns="size")
 print("\n| County | Current crossover (summed counts) | Distinct people seen outside, monthly (lower bound) | "
       "Commuting out / population | Commuting out / employed | Conservative | Set by |")
 print("|---|---:|---:|---:|---:|---:|---|")
-for f in ("29007", "29019", "29151", "29051", "29027", "29077", "29095", "29189"):
+for f in ("29007", "29019", "29151"):
     r = t.loc[f]
     print(f"| {r['name']} | {r.current:.0%} | {r.dedup_lower:.0%} | {r.commute_pop:.0%} | {r.commute_emp:.0%} | {r.conservative:.0%} | {r.set_by} |")
 print(f"\nall {len(t)} counties: correlation of current crossover with the conservative lower bound "
       f"{np.corrcoef(t.current, t.conservative)[0, 1]:.2f}; conservative set by phone data in {(t.set_by == 'phone data').sum()}, "
       f"by commuting in {(t.set_by == 'commuting').sum()}")
-print("medians:", {c: f"{t[c].median():.1%}" for c in ("current", "dedup_lower", "commute_pop", "commute_emp", "commute_pop_jt00",
-                                                       "commute_emp_jt00", "conservative")})
-print("commuters / population including jobs in the 8 neighbouring states: median", f"{t.commute_pop_all.median():.1%}",
-      "; Audrain, Boone, Osage, St. Louis:", t.loc[["29007", "29019", "29151", "29189"], "commute_pop_all"].round(3).tolist())
-print("JT01 - JT00, commuters / employed: median", f"{(t.commute_emp - t.commute_emp_jt00).median():+.3f}",
-      "range", f"{(t.commute_emp - t.commute_emp_jt00).min():+.3f} to {(t.commute_emp - t.commute_emp_jt00).max():+.3f}")
-print("Kansas destinations add (dedup_b1 - dedup_acs_mo), points: median", f"{100 * (t.dedup_b1 - t.dedup_acs_mo).median():.2f}",
-      "; largest:", (100 * (t.dedup_b1 - t.dedup_acs_mo)).sort_values().tail(4).round(1).rename(t.name).to_dict())
+THREE = ["29007", "29019", "29151"]
+print("commuters / population including jobs in the 8 neighbouring states; Audrain, Boone, Osage:",
+      t.loc[THREE, "commute_pop_all"].round(3).tolist())
+print("JT01 - JT00, commuters / employed; Audrain, Boone, Osage:", ((t.commute_emp - t.commute_emp_jt00).loc[THREE].round(3) + 0.0).tolist())
+print("Kansas destinations add (dedup_b1 - dedup_acs_mo), points; Audrain, Boone, Osage:",
+      (100 * (t.dedup_b1 - t.dedup_acs_mo)).loc[THREE].round(2).tolist())

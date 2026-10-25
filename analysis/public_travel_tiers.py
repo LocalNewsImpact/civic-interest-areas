@@ -150,7 +150,7 @@ UNMET["retail"] = (1 - TAC).clip(lower=0, upper=1)
 expected = state_pc * POP * pci.reindex(cid).fillna(pci_mo).values / pci_mo
 DRAW["retail"] = (TS if HUFF == "sales" else np.maximum(TS - expected, 0)) ** HUFF_ALPHA + 1
 if RETAIL == "tac":
-    for c, n in (("29151", "Osage"), ("29051", "Cole"), ("29019", "Boone"), ("29007", "Audrain"), ("29127", "Marion"), ("29135", "Moniteau")):
+    for c, n in (("29151", "Osage"), ("29019", "Boone"), ("29007", "Audrain")):
         print(f"{n}: pull factor {PF[c]:.2f}, trade area capture {TAC[c]:.2f}, retail leakage {UNMET['retail'][c]:.2f}")
 DRAW["visiting"] = POP
 home = np.asarray(tr.tract.str[:5], dtype=object)
@@ -161,7 +161,7 @@ if os.environ.get("URBAN_CLASSES"):
     k4 = pd.read_csv(root / "analysis/county_class_k4.csv", dtype={"fips": str}).set_index("fips")["class"]
     to_urban = {c.strip() for c in os.environ["URBAN_CLASSES"].split(",")}
     rural &= ~np.array([k4.get("29189" if h == "29510" else h, "class 1") in to_urban for h in home])
-for c, n in (("29151", "Osage"), ("29051", "Cole"), ("29019", "Boone"), ("29007", "Audrain"), ("29127", "Marion")):
+for c, n in (("29151", "Osage"), ("29019", "Boone"), ("29007", "Audrain")):
     print(f"{n}: unmet grocery {UNMET['grocery'][c]:.2f}, box store {UNMET['boxstore'][c]:.2f}, medical {UNMET['medical'][c]:.2f}, specialty {UNMET['specialty'][c]:.2f}")
 
 R = 3959.0

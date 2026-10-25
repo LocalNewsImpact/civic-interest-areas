@@ -21,8 +21,9 @@ draws) percentile CI. Scored by leaving each county out, on the fitted outlets a
 10+ stories, against intercept-only and broadcaster-only baselines. County expectations are HELD OUT: each county's
 outlets predicted by a fit without that county. The terms were first found by a search; its honest error is the
 nested search B figure (spillover_nested_selection.py).
-Outputs (none under SPILL_DRY=1): analysis/spillover_outlets.csv, flows/outlet_spillover_2026_03.json (the three
-counties, for the chart), flows/outlet_spillover_springfield_2026_03.json.
+Outputs (none under SPILL_DRY=1): analysis/spillover_outlets.csv, analysis/spillover_quoted_rows.csv,
+flows/outlet_spillover_2026_03.json (the three counties, for the chart). Printed and quoted figures for single counties
+and outlets are those of Audrain, Boone and Osage (STUDY); every other figure is model-level.
 """
 import json
 import math
@@ -194,12 +195,15 @@ print(f"left out as not local news: EXCLUDE + CAMPUS ({', '.join(sorted(CAMPUS))
 print(f"DENOMINATOR (a definition): {int(d.no_centre.sum())} stories with no central county and "
       f"{int(d.far_out_of_state.sum())} centred out of state beyond 60 miles stay in the denominator "
       f"({(d.no_centre.sum() + d.far_out_of_state.sum()) / d.placed.sum():.1%} of stories); they count only as mentions")
+THREE = {fp for _, fp in STUDY}
 mv = d[d.home_also != ""]
 print(f"HOME rule (city counties + Kansas City, Kansas): {len(mv)} outlets have extra home counties; "
       f"{int(d.moved_home.sum())} stories centred in them move from away to home, and {int(d.moved_home_mention.sum())} "
       "mention-only stories lose their mention credit")
-print(mv.assign(m=mv.moved_home, mm=mv.moved_home_mention)[["outlet", "fips", "home_also", "placed", "m", "mm"]]
-      .sort_values("m", ascending=False).to_string(index=False))
+mt = mv[mv.fips.isin(THREE)]
+if len(mt):
+    print(mt.assign(m=mt.moved_home, mm=mt.moved_home_mention)[["outlet", "fips", "home_also", "placed", "m", "mm"]]
+          .sort_values("m", ascending=False).to_string(index=False))
 
 # ---- earlier candidates, all outlets (kept for the record; not the adopted model) -------------------------------------
 f_full = "rate ~ broadcast + C(type, Treatment('Rural')) + border + log_pop + travel_out"
@@ -246,13 +250,14 @@ d["expected"] = heldout_expected(d, g)
 print(f"\n## adopted model: fitted on {len(g)} well-collected outlets with {FIT_FLOOR}+ stories in {G} counties (of {len(d)}), "
       f"{int(g.broadcast.sum())} broadcasters; "
       f"crowded weeklies {int(g.crowded_weekly.sum())} in {g[g.crowded_weekly == 1].fips.nunique()} counties "
-      f"({', '.join(sorted(g[g.crowded_weekly == 1].outlet))}); crowded counties {len(CROWDED)}")
+      f"(in the three counties: {', '.join(sorted(g[(g.crowded_weekly == 1) & g.fips.isin(THREE)].outlet)) or 'none'}); "
+      f"crowded counties {len(CROWDED)}")
 print("coefficients: CRV3 (cluster jackknife) SE, p from t with G-1 df (CRV1 beside for comparison); county-cluster "
       "bootstrap, 1,999 draws, percentile 95% CI")
 print(inf.round(3).to_string())
 print(f"border point: {(g.location_basis == 'town centroid').sum()} of {len(g)} fitted outlets located at a town centroid, "
       f"{(g.location_basis == 'address').sum()} at a street address; {int(g.outside_home.sum())} outside their home county "
-      f"(border 0: {', '.join(g[g.outside_home].outlet) or 'none'})")
+      f"(border 0; in the three counties: {', '.join(g[g.outside_home & g.fips.isin(THREE)].outlet) or 'none'})")
 
 print("\n## held-out error (each county's outlets predicted by a fit without that county): mean / median miss, points; "
       "skill = 1 - MAE / MAE(intercept only); R2 = out-of-sample, against intercept only")
@@ -343,46 +348,16 @@ for mw in (0.25, 0.5, 1.0):
         print(f"| {mark}{mw}{mark} | {mark}{sw}{mark} | {gy.rate.mean():.1%} | {k['mean']:.2f} | {k0['mean']:.2f} | "
               f"{k['skill']:+.3f} | {k['r2']:+.3f} | " + " | ".join(cty) + " |")
 
-# ---- Springfield region, held out --------------------------------------------------------------------------------------
-# Greene, Webster and Barry (springfield_vs_columbia.py). The coefficients are refitted WITHOUT the three counties'
-# outlets: out of sample for the COEFFICIENTS ONLY -- the terms were chosen with the region's outlets in the data.
-REGION = {"Greene": "29077", "Webster": "29225", "Barry": "29009"}
-held = d.fips.isin(REGION.values())
-gr = g[~g.fips.isin(REGION.values())]
-print(f"\n## Springfield region held out (out of sample for the coefficients only; the terms were chosen with the region "
-      f"in the data): fitted on {len(gr)} outlets outside it; region outlets {held.sum()} ({(held & d.good).sum()} well collected)")
-for label, formula in (("adopted", FINAL), ("broadcaster + crowded weekly", "rate ~ broadcast + crowded_weekly"),
-                       ("broadcaster + town population", "rate ~ broadcast + log_town_pop")):
-    pr = smf.glm(formula, gr, family=sm.families.Binomial()).fit().predict(d[held])
-    w = d[held].placed
-    miss = (pr - d[held].rate).abs()
-    print(f"  {label}: mean miss, well-collected region outlets ({int(d[held].good.sum())}, primary) "
-          f"{100 * miss[d[held].good].mean():.1f} points; all {int(held.sum())} region outlets {100 * miss.mean():.1f}; "
-          f"region {np.average(d[held].rate, weights=w):.0%} actual vs {np.average(pr, weights=w):.0%} expected")
-    if label == "adopted":
-        d.loc[held, "expected_heldout"] = pr
-out_sgf = {}
-for n, fp in REGION.items():
-    x = d[d.fips == fp].sort_values("placed", ascending=False)
-    if x.empty:
-        continue
-    out_sgf[n] = {"all": tot(x, "expected_heldout"),
-                  "print": tot(x[x.broadcast == 0], "expected_heldout") if (x.broadcast == 0).any() else None,
-                  "outlets": [{"name": r.outlet, "kind": kind(r.outlet), "stories": int(r.placed),
-                               "actual": round(r.rate, 3), "expected": round(r.expected_heldout, 3)} for r in x.itertuples()]}
-    print(f"  {n}: {out_sgf[n]['all']['actual']:.0%} actual vs {out_sgf[n]['all']['expected']:.0%} expected; "
-          + "; ".join(f"{o_['name']} {o_['actual']:.0%}/{o_['expected']:.0%}" for o_ in out_sgf[n]["outlets"]))
-
 # ---- outputs: written once, after every column exists ---------------------------------------------------------------------
-# QUOTED ROWS: every outlet and county actual / expected that MODEL_CHANGES.md quotes, from d.expected (held out).
-QUOTED = ["Mid Rivers Newsmagazine", "Greene County Commonwealth", "The Cash-Book Journal", "Vandalia Leader", "KC Beacon",
-          "The Kansas City Star", "The Pitch/Kansas City Pitch", "Boone County Journal", "Centralia Fireside Guard",
-          "The Mexico Ledger", "Columbia Missourian", "Columbia Daily Tribune"]
+# QUOTED ROWS: the three counties' county and outlet actual / expected figures that MODEL_CHANGES.md quotes, from
+# d.expected (held out).
+QUOTED = ["Vandalia Leader", "Boone County Journal", "Centralia Fireside Guard", "The Mexico Ledger", "Columbia Missourian",
+          "Columbia Daily Tribune"]
 qrows = [{"level": "county", "name": n, "subset": sub, **county_figure(x)}
          for n, fp in STUDY for sub, x in (("all", d[d.fips == fp]), ("print and digital", d[(d.fips == fp) & (d.broadcast == 0)]))
          if len(x)]
 qrows += [{"level": "outlet", "name": r.outlet, "subset": r.fips, "stories": int(r.placed), "actual": round(r.rate, 3),
-           "expected": round(r.expected, 3)} for r in d[d.outlet.isin(QUOTED)].itertuples()]
+           "expected": round(r.expected, 3)} for r in d[d.outlet.isin(QUOTED) & d.fips.isin(THREE)].itertuples()]
 quoted = pd.DataFrame(qrows)
 print("\n## quoted rows (actual / held-out expected): analysis/spillover_quoted_rows.csv")
 print(quoted.to_string(index=False))
@@ -392,5 +367,4 @@ else:
     d.to_csv(root / "analysis/spillover_outlets.csv", index=False)
     quoted.to_csv(root / "analysis/spillover_quoted_rows.csv", index=False)
     json.dump(out, open(root / "flows/outlet_spillover_2026_03.json", "w"), indent=1)
-    json.dump(out_sgf, open(root / "flows/outlet_spillover_springfield_2026_03.json", "w"), indent=1)
-    print("\nwrote analysis/spillover_outlets.csv, flows/outlet_spillover_2026_03.json, flows/outlet_spillover_springfield_2026_03.json")
+    print("\nwrote analysis/spillover_outlets.csv, analysis/spillover_quoted_rows.csv, flows/outlet_spillover_2026_03.json")

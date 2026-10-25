@@ -66,7 +66,7 @@ def kind(f):
     if f not in omb:
         return "Rural"
     metro, central, cbsa = omb[f]
-    # a county of the Kansas City or St. Louis metro is part of that metro, never a hub of its own (Clay draws 1.1)
+    # a county of the Kansas City or St. Louis metro is part of that metro, never a hub of its own
     if cbsa.startswith(("Kansas City", "St. Louis")):
         return "Metro suburban"
     if central and units.draw[f] >= 1:
@@ -76,7 +76,6 @@ def kind(f):
 
 units["type"] = [kind(f) for f in units.index]
 print("cohorts (all 114 units):", units.type.value_counts().to_dict())
-print("regional hubs:", ", ".join(f"{units.name[f]} ({units.draw[f]:.1f})" for f in units.index if units.type[f] == "Regional hub"))
 print("the three:", {n: units.type[f] for n, f in {"Audrain": "29007", "Boone": "29019", "Osage": "29151"}.items()},
       "| Audrain draw", round(units.draw["29007"], 2))
 
@@ -116,17 +115,11 @@ for version, keep in (("all outlets", lambda a: True), ("print and digital", lam
     print(pd.DataFrame({"coef": m.params, "se": m.bse, "p": m.pvalues}).round(3).to_string())
     print("| County | Type | Border | Stories | Spill (MO only) | Spill (MO + near other state) | Predicted |")
     print("|---|---|---|---:|---:|---:|---:|")
-    show = c[c.type.isin(["Top 50 metro", "Regional hub"])].sort_values("population", ascending=False)
+    show = c[c.type.isin(["Top 50 metro", "Regional hub"]) & c.index.isin(HOME.values())].sort_values("population", ascending=False)
     for f, r in show.iterrows():
         print(f"| {r['name']} | {r.type} | {'yes' if r.border else 'no'} | {int(r.placed)} | {r.rate_mo:.0%} | {r.rate:.0%} | {r.pred:.0%} |")
     for name, f in HOME.items():
         if f in c.index:
             r = c.loc[f]
             print(f"{name} ({r.type}, border {'yes' if r.border else 'no'}): {r.rate:.0%} of {int(r.placed)} stories spill over; predicted {r.pred:.0%}")
-    for name, f in HOME.items():
-        if f not in c.index:
-            continue
-        r = c.loc[f]
-        peers = c[(c.type == r.type) & (c.population.between(r.population / 2.5, r.population * 2.5))].sort_values("population", ascending=False)
-        print(f"  {name}'s {r.type.lower()} peers: " + "; ".join(f"{p['name']} {p.rate:.0%} ({int(p.placed)})" for _, p in peers.iterrows()))
     c.to_csv(root / f"analysis/spillover_v2_{version.split()[0]}.csv")

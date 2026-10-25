@@ -10,7 +10,7 @@ EXCLUDE -- not any county's local news:
   The Missouri Independent, Missouri Net, Missouri Scout, The Missouri Times
                                statewide outlets covering the capitol from Jefferson City; statewide, not
                                Cole County's local news, and not local outlets for the spillover model
-                               (2026-10-17). With them, Cole's spillover was 36%; without, 30%.
+                               (2026-10-17).
   CAMPUS                       student newspapers of a college or university (registry owner the institution, print
                                or digital, published for its campus), on the same footing as The Maneater
                                (2026-10-24). Kept as local news: university-licensed public broadcasters (KBIA,
@@ -20,13 +20,14 @@ EXCLUDE -- not any county's local news:
   Dos Mundos Bilingual Newspaper
                                filed in Wyandotte County, Kansas; mostly Spanish-language, outside the English-
                                language corpus the models describe (2026-10-24)
-  KHQA 7                       Quincy, Illinois station (licensed to Hannibal); 51 of its 65 March county mentions are
+  KHQA 7                       Quincy, Illinois station (licensed to Hannibal); most of its March county mentions are
                                Illinois counties; an Illinois newsroom, out of the models (2026-10-24)
 
 HOME_COUNTY -- published in one county, covering another (2026-10-24, replaces leaving them out of the fit):
-  Mid Rivers Newsmagazine      published in Chesterfield (St. Louis County); 19 of 26 March stories centred in
-                               St. Charles County, its home here
-  Greene County Commonwealth   published in Mount Vernon (Lawrence County); 20 of 23 centred in Greene County
+  Mid Rivers Newsmagazine      published in Chesterfield (St. Louis County); most of its March stories are centred
+                               in St. Charles County, its home here
+  Greene County Commonwealth   published in Mount Vernon (Lawrence County); most of its March stories are centred in
+                               Greene County, its home here
 
 REGISTRY, COUNTY_DMA -- pinned copies (data/registry/README.md), not the crawler's working tree.
 """

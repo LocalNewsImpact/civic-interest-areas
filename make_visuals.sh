@@ -35,7 +35,6 @@ shot() {   # shot <url path> <png name>
 }
 for v in audrain_all boone_all boone_no_broadcast osage_all; do shot "alignment_print.html?v=$v" "alignment_${v}_2026_03.png"; done
 shot "outlet_spillover_print.html" "outlet_spillover_2026_03.png"
-shot "outlet_spillover_print.html?region=springfield" "outlet_spillover_springfield_2026_03.png"
 shot "model_diagram_print.html" "model_diagram.png"
 kill $SRV
 cd print && eval $PY - <<'PYEOF'

@@ -62,13 +62,7 @@ for version, keep in (("all outlets", lambda a: True), ("print and digital", lam
         if f not in c.index:
             continue
         r = c.loc[f]
-        peers = c[c.type == r.type].sort_values("population", ascending=False)
         print(f"\n## {name} ({r.type}, {int(r.population):,} people): {r.rate:.0%} of {int(r.placed)} stories touch another "
               f"county; the model predicts {r.pred:.0%}")
-        print("| County | Population | Residents' visits outside | Stories | Touch another county | Model predicts |")
-        print("|---|---:|---:|---:|---:|---:|")
-        near = peers[(peers.population >= r.population / 2.5) & (peers.population <= r.population * 2.5)]
-        for p in near.itertuples():
-            mark = "**" if p.Index == f else ""
-            print(f"| {mark}{p.name}{mark} | {int(p.population):,} | {p.travel_out:.0%} | {int(p.placed)} | {mark}{p.rate:.0%}{mark} | {p.pred:.0%} |")
+        print(f"   residents' visits outside {r.travel_out:.0%}")
 c.to_csv(root / "analysis/spillover_by_type.csv")

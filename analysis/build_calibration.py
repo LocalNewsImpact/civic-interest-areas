@@ -9,8 +9,8 @@ calibration_county_month.csv, one row per Missouri county x month:
   county, month, seen_at_home, population, factor
       factor = people from the county seen in their own home block group that month / ACS 2020-2024 population (the
       2026-10-16 calibration). It ranges 0.19-12.73 across county-months and 0.24-10.78 across county medians: it
-      measures home detection as much as panel size (Scotland: 40-60k "seen at home" against 4,686 people; St. Louis city: residents seen in another block group
-      more often than at home in 82% of block groups).
+      measures home detection as much as panel size (in some counties the devices seen at home outnumber the residents
+      several times over; in others residents are seen in another block group more often than at home).
   max_seen_any         sum over the county's home block groups of the largest count of the block group's residents in
                        any ONE block group (its own or another; Missouri and Kansas destinations): at least this many
                        distinct devices live there
@@ -151,11 +151,11 @@ cm = cal.groupby("county")[["factor", "factor_trimmed"]].median()
 print(f"county medians: factor {cm.factor.min():.2f}-{cm.factor.max():.2f}, factor_trimmed {cm.factor_trimmed.min():.2f}-{cm.factor_trimmed.max():.2f}")
 print(f"phantom home block group-months (own > {PHANTOM:g} x expected): {bg.phantom.sum()} of {len(bg)} "
       f"({bg.phantom.mean():.1%}), holding {bg.own[bg.phantom == 1].sum() / bg.own.sum():.1%} of devices seen at home")
-print(cal[cal.county.isin(["29007", "29019", "29151", "29199", "29510"])].pivot(index="month", columns="county", values="factor").round(2).to_string())
+print(cal[cal.county.isin(["29007", "29019", "29151"])].pivot(index="month", columns="county", values="factor").round(2).to_string())
 
 # Study towns: estimated residents (mean over Jan-Jul, the travel-pattern months) under each calibration, against the
 # ACS population of the same block groups (flows/reach/*/homes.csv, written by flows/build_homes.py)
-towns = {"Columbia": "", "Mexico": "", "Linn": "", "Lancaster": "kirksville/", "Webb City": "joplin/"}
+towns = {"Columbia": "", "Mexico": "", "Linn": ""}
 jj = bg[bg.month <= "2026-07"].merge(cal[["county", "month", "factor", "factor_trimmed", "factor_statewide"]], on=["county", "month"])
 print("\n| Town | Block groups | Seen at home / factor (2026-10-16) | / factor_trimmed | / factor_statewide | ACS population of the block groups |")
 print("|---|---:|---:|---:|---:|---:|")

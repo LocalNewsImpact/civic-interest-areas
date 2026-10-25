@@ -13,8 +13,7 @@ signed in-sample sums carry nothing; the measures are chosen to avoid that):
   coverage, newsroom     per newsroom county, mean absolute share error (points) of coverage_model.py's fitted
                          stories (coverage_predicted_<version>.csv, pred_travel) on the destinations holding 1%+ of the
                          county's visits -- in-sample: coverage_model.py writes no held-out predictions
-Printed: I, E[I], p, n for each; values for Audrain, Boone and Osage. With --notes PATH, the counties with the largest
-values are appended to that local file (other counties are not printed).
+Printed: I, E[I], p, n for each; values for Audrain, Boone and Osage.
 """
 import sys
 import warnings
@@ -72,12 +71,3 @@ for label, v in R.items():
     i0, e, p, n = moran(v)
     st = " | ".join(f"{v.get(f, np.nan):.2f}" for f in STUDY)
     print(f"| {label} | {n} | {i0:+.3f} | {e:+.3f} | {p:.3f} | {st} |")
-
-if "--notes" in sys.argv:
-    path = Path(sys.argv[sys.argv.index("--notes") + 1])
-    with open(path, "a") as fh:
-        fh.write("\n## Residual autocorrelation (analysis/residual_autocorrelation.py), counties with the largest values\n\n")
-        for label, v in R.items():
-            top = v.dropna().sort_values(key=np.abs, ascending=False).head(10)
-            fh.write(f"- {label}: " + "; ".join(f"{cov.name[f]} {x:+.2f}" for f, x in top.items()) + "\n")
-    print(f"other counties' values appended to {path}")

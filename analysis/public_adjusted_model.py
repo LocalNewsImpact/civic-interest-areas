@@ -395,8 +395,7 @@ def main():
     kk = {kx: n for n, kx in enumerate(key)}
     print("\n| Pair | Advan | Advan-fitted | public | public + A | public + B | public + C |\n|---|---:|---:|---:|---:|---:|---:|")
     for i, j, n in (("29151", "29051", "Osage -> Cole"), ("29151", "29019", "Osage -> Boone"), ("29007", "29019", "Audrain -> Boone"),
-                    ("29007", "29127", "Audrain -> Marion"), ("29019", "29051", "Boone -> Cole"), ("29019", "29189", "Boone -> St. Louis County"),
-                    ("29077", "29043", "Greene -> Christian"), ("29077", "29213", "Greene -> Taney")):
+                    ("29007", "29127", "Audrain -> Marion"), ("29019", "29051", "Boone -> Cole"), ("29019", "29189", "Boone -> St. Louis County")):
         q = kk[(i, j)]
         print(f"| {n} | {100 * a[q]:.1f}% | {100 * adv[q]:.1f}% | {100 * p0[q]:.1f}% | " + " | ".join(f"{100 * v[q]:.1f}%" for v in results.values()) + " |")
 

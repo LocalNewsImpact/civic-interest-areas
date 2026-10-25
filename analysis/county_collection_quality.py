@@ -45,12 +45,6 @@ for f, g in m.groupby("county_fips"):
 t = pd.DataFrame(rows)
 t = t[~t.fips.isin(["29007", "29019", "29151"])]
 good = t[(t.coverage == 1) & (t.text_ok >= .95) & (t.full_length >= .8) & (t.placed >= .6) & ~t.paywall]
-pd.set_option("display.width", 250)
-cols = ["county", "dma", "known", "collected", "local_news", "text_ok", "full_length", "placed"]
 print(f"{len(t)} counties with known newsrooms; {len(good)} meet every test "
       "(all known newsrooms collected, 95%+ with text, 80%+ full length, 60%+ placed, no paywall)\n")
-for d, g in good.sort_values("local_news", ascending=False).groupby("dma"):
-    if len(g) >= 2 or g.local_news.max() >= 60:
-        print(f"## {d}: {len(g)} qualifying counties")
-        print(g[cols].round(2).to_string(index=False))
 t.to_csv(root / "analysis/county_collection_quality.csv", index=False)

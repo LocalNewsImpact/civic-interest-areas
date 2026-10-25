@@ -37,10 +37,8 @@
 const T = { ink: "#0b0b0b", mute: "#5b6370", grid: "#e1e0d9", actual: "#003a56", expected: "#898781", band: "#f4f4f1" };
 const pct = (x) => `${Math.round(100 * x)}%`;
 
-// ?region=springfield draws the Springfield-area counties (outlet_spillover_springfield_2026_03.json); default is the
-// three study counties. Counties are drawn in the order the data file lists them.
-const REGION = new URLSearchParams(location.search).get("region");
-d3.json(REGION ? `outlet_spillover_${REGION}_2026_03.json` : "outlet_spillover_2026_03.json").then((data) => {
+// The three study counties, drawn in the order the data file lists them.
+d3.json("outlet_spillover_2026_03.json").then((data) => {
   const key = d3.select("#key");
   key.append("span").attr("class", "item").html(
     `<svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="${T.actual}"/></svg>Actual`);
