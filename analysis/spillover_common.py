@@ -63,6 +63,7 @@ SPORTS_WEIGHT = 0.5
 # MODEL PROCEDURE (authors, 2026-10-24; one procedure for every model in the project):
 #   1. Core terms are set by theory and tested as a block, not one at a time.
 #   2. Hypothesis terms are stated in advance and reported with coefficient and held-out gain whatever the result.
+#   GAIN (every script): held-out mean miss without the term(s) minus with them, points; positive = the term helps.
 #   3. Exploratory additions are adopted only if the NESTED procedure's held-out gain (selection repeated inside each
 #      fold without the held-out county) has a county-paired bootstrap 95% interval excluding zero (multiplicity guard;
 #      spillover_rule_selection.py). Selection code breaks ties toward fewer terms.
@@ -207,16 +208,17 @@ def skill(terms, fit, score=None, y="rate"):
 
 
 def paired_interval(e_with, e_without, fips, B=1999, seed=20261024):
-    """Mean of e_with - e_without (absolute misses, points x 100), with a county-paired bootstrap percentile 95% interval:
-    counties resampled with replacement, both error sets of a county kept together."""
+    """GAIN = mean held-out miss WITHOUT minus WITH (points; positive: `with` predicts better), with a county-paired
+    bootstrap percentile 95% interval: counties resampled with replacement, both error sets of a county kept together.
+    `kept`: the interval lies above zero."""
     e_with, e_without, fips = np.asarray(e_with), np.asarray(e_without), np.asarray(fips)
     keys, inv = np.unique(fips, return_inverse=True)
-    dsum, n = np.bincount(inv, e_with - e_without), np.bincount(inv)
+    dsum, n = np.bincount(inv, e_without - e_with), np.bincount(inv)
     draws = np.random.default_rng(seed).integers(0, len(keys), (B, len(keys)))
     boot = dsum[draws].sum(1) / n[draws].sum(1)
-    return {"gain": 100 * (e_with.mean() - e_without.mean()), "lo": 100 * np.quantile(boot, .025),
+    return {"gain": 100 * (e_without.mean() - e_with.mean()), "lo": 100 * np.quantile(boot, .025),
             "hi": 100 * np.quantile(boot, .975), "median_with": 100 * np.median(e_with),
-            "median_without": 100 * np.median(e_without), "kept": bool(np.quantile(boot, .975) < 0)}
+            "median_without": 100 * np.median(e_without), "kept": bool(np.quantile(boot, .025) > 0)}
 
 
 def loo_fips(score):
@@ -225,7 +227,7 @@ def loo_fips(score):
 
 
 def paired_gain(terms_with, terms_without, fit, score=None, B=1999, seed=20261024):
-    """Held-out gain of a term: mean absolute miss with it minus without it (negative = the term helps), both by leaving
+    """Held-out gain of a term: mean absolute miss without it minus with it (positive = the term helps), both by leaving
     each county out, and a county-paired bootstrap percentile 95% interval (B draws). Also the median of each."""
     score = fit if score is None else score
     ew, eo = np.abs(loo(terms_with, fit, score)), np.abs(loo(terms_without, fit, score))

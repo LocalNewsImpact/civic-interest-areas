@@ -243,7 +243,8 @@ def county_figure(x, col="expected", rate="rate"):
 
 
 d["expected"] = heldout_expected(d, g)
-print(f"\n## adopted model: fitted on {len(g)} well-collected outlets with {FIT_FLOOR}+ stories in {G} counties (of {len(d)}); "
+print(f"\n## adopted model: fitted on {len(g)} well-collected outlets with {FIT_FLOOR}+ stories in {G} counties (of {len(d)}), "
+      f"{int(g.broadcast.sum())} broadcasters; "
       f"crowded weeklies {int(g.crowded_weekly.sum())} in {g[g.crowded_weekly == 1].fips.nunique()} counties "
       f"({', '.join(sorted(g[g.crowded_weekly == 1].outlet))}); crowded counties {len(CROWDED)}")
 print("coefficients: CRV3 (cluster jackknife) SE, p from t with G-1 df (CRV1 beside for comparison); county-cluster "
@@ -275,10 +276,12 @@ print("honest error of the search that found the hypothesis terms: nested search
       "exploratory guard: spillover_rule_selection.py")
 
 # HYPOTHESIS TERMS (pre-specified): coefficient (above) and drop-one held-out gain -- mean miss of the adopted model
-# minus the model without the term (negative: the term helps) -- with a county-paired bootstrap 95% interval, reported
+# GAIN = held-out mean miss without the term minus with it (positive: the term helps) -- with a county-paired bootstrap 95% interval, reported
 # whatever the result; the block (both terms) against intercept only. LOCO folds are the counties, so the folds have no
 # seed; the only randomness is the county bootstrap, shown over five seeds.
-print("\n## hypothesis terms: drop-one held-out gain (mean miss with - without, points), county-paired bootstrap 95% "
+print("\nGAIN (this output and spillover_rule_selection.py): held-out mean miss WITHOUT the term(s) minus WITH them, "
+      "points; positive = the term helps; county-paired bootstrap 95% interval")
+print("\n## hypothesis terms: drop-one held-out gain, county-paired bootstrap 95% "
       "interval over 5 seeds (1,999 draws each); median with / without")
 print("| Term | Against | Gain | 95% interval (5 seeds: lowest lo - highest hi) | Median with / without |\n|---|---|---:|---|---|")
 base = terms_of(FINAL)
@@ -353,7 +356,8 @@ for label, formula in (("adopted", FINAL), ("broadcaster + crowded weekly", "rat
     pr = smf.glm(formula, gr, family=sm.families.Binomial()).fit().predict(d[held])
     w = d[held].placed
     miss = (pr - d[held].rate).abs()
-    print(f"  {label}: mean miss {100 * miss.mean():.1f} points (well collected {100 * miss[d[held].good].mean():.1f}); "
+    print(f"  {label}: mean miss, well-collected region outlets ({int(d[held].good.sum())}, primary) "
+          f"{100 * miss[d[held].good].mean():.1f} points; all {int(held.sum())} region outlets {100 * miss.mean():.1f}; "
           f"region {np.average(d[held].rate, weights=w):.0%} actual vs {np.average(pr, weights=w):.0%} expected")
     if label == "adopted":
         d.loc[held, "expected_heldout"] = pr

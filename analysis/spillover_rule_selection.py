@@ -5,8 +5,9 @@ hypothesis terms (spillover_outlets.py reports their coefficients and drop-one g
 Exploratory candidates are added by a search: starting from the hypothesis pair, add the candidate that lowers the
 held-out mean miss most (each county's outlets predicted by a fit without that county), and repeat while one lowers
 it; ties go to fewer terms. The search is then repeated inside each fold without the held-out county (nested), and
-an addition is ADOPTED only if the nested procedure's held-out gain over the hypothesis pair -- nested miss minus the
-pair's miss, the same outlets -- has a county-paired bootstrap 95% interval excluding zero (multiplicity guard).
+an addition is ADOPTED only if the nested procedure's held-out gain over the hypothesis pair -- the pair's miss minus
+the nested miss, the same outlets; positive = the search helps -- has a county-paired bootstrap 95% interval above
+zero (multiplicity guard).
 
 Outlets: the fitted set of analysis/spillover_outlets.csv. Exploratory candidates (computed in spillover_outlets.py):
 outlets per 10,000, all outlets, TV stations, border (print and digital), border (every outlet), miles to a town of
@@ -66,5 +67,5 @@ print(f"nested search: mean {100 * e_nested.mean():.2f}, median {100 * np.median
 print("additions chosen in the folds: " + "; ".join(f"{' + '.join(k) or 'none'} {n}" for k, n in picks.most_common()))
 for sd in range(1, 6):
     r = paired_interval(e_nested, e_h, fips, seed=sd)
-    print(f"GUARD (seed {sd}): nested search minus hypothesis pair {r['gain']:+.2f} points, 95% interval "
+    print(f"GUARD (seed {sd}): gain of the nested search over the hypothesis pair (pair miss - nested miss) {r['gain']:+.2f} points, 95% interval "
           f"{r['lo']:+.2f} to {r['hi']:+.2f}: {'additions ADOPTED' if r['kept'] else 'no addition adopted'}")
