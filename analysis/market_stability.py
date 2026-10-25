@@ -1,9 +1,9 @@
-"""A DIAGNOSTIC OF ONE DRAWING (2026-10-25): for every study town and area (market_patterns.py) in every region, the
+"""A DIAGNOSTIC OF ONE DRAWING (2026-10-25): for every study town and area (market_patterns.py) of the Columbia-Jefferson City TV market, the
 residents and share following the pattern, the hexagons drawn by the member of the settings ensemble with the adopted
 settings (one middle-value drawing, not the published area: the area is the ensemble core, flows/area_ensemble.py), and
 the share of them whose tie clears that drawing's floor in both halves of the year (independent halves,
-confidence_layer.py). The ensemble exists for the built towns only, so this check of the minimum-size rule over all 58
-areas is run on the one drawing."""
+confidence_layer.py). The ensemble exists for the built towns only, so this check of the minimum-size rule over all the
+market's areas is run on the one drawing."""
 import json
 import os
 import runpy
@@ -15,7 +15,7 @@ import pandas as pd
 root = Path(__file__).resolve().parents[1]
 os.environ["TIE_LIB"] = "1"
 rows = []
-for region in ("columbia", "springfield", "cape", "kirksville", "joplin", "kansascity", "stjoseph"):
+for region in ("columbia",):                     # the Columbia-Jefferson City TV market only
     sys.argv = ["confidence_layer.py", region]
     src = open(root / "analysis/confidence_layer.py").read()
     g = {"__file__": str(root / "analysis/confidence_layer.py"), "__name__": "lib"}

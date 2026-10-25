@@ -24,8 +24,7 @@ HERE = Path(__file__).resolve().parent
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 BASE = "http://127.0.0.1:8765/market_pattern_print.html"
 # the built towns; their areas are every market market_patterns.py keeps for them (the count follows the fit)
-BUILT = {"columbia": ("Columbia", "Mexico", "Linn"), "springfield": ("Springfield",), "joplin": ("Joplin",),
-         "kirksville": ("Kirksville",)}
+BUILT = {"columbia": ("Columbia", "Mexico", "Linn")}     # the Columbia-Jefferson City TV market only
 _REGIONS = json.load(open(HERE / "regions.json"))
 AREAS = {r_: [(t_, m_["rank"]) for t_ in towns_
               for m_ in json.load(open(HERE.parent / _REGIONS[r_]["out"] / "market_pattern_maps.json"))["towns"][t_]]

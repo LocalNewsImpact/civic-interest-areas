@@ -82,6 +82,7 @@ if stage areas; then
     step market_$r             flows/market_patterns.py $r
     step confidence_$r         analysis/confidence_layer.py $r
   done
+  step regular_distance        flows/regular_distance.py
   for r in $REGIONS; do
     step ensemble_$r           flows/area_ensemble.py $r
   done

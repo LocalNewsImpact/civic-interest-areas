@@ -1,6 +1,6 @@
 """Export every civic interest area as one data table for the datadesk builder (2026-10-22).
 
-The user's split: the Advan travel model runs here and its result is uploaded to the builder as a CSV; the builder
+The authors' split: the Advan travel model runs here and its result is uploaded to the builder as a CSV; the builder
 draws the hexagons, frame, borders and labels itself, and computes coverage density from the corpus. One row per
 hexagon drawn in 10%+ of the ensemble's settings (market_pattern_print.html?table=1; 2026-10-25: the ensemble and the
 multi-part area only -- no single-setting map):

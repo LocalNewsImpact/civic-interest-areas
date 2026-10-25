@@ -4,7 +4,7 @@ with where residents travel, in each civic interest area's travel-only footprint
 
 AREA (2026-10-25): the TRAVEL-ONLY CORE of the settings ensemble (hexagons drawn in half or more of its members,
   flows/area_ensemble.py p_travel). Before: the hexagons whose centres lie inside the travel-only outline
-  (flows/reach/confidence_columbia.json), drawn from the TRAVEL-ONLY civic interest area (user, 2026-10-24, option A:
+  (flows/reach/confidence_columbia.json), drawn from the TRAVEL-ONLY civic interest area (authors, 2026-10-24:
   supply is measured on where residents go, not on an area news ties already enlarged). Every hexagon counts the same.
   Area = the hexagons' area on the ground, 5.85 km2 x cos(latitude) / cos(38.7) each (the hexagon plane is scaled at
   38.7 N). "people inside" = the 2020 population of those hexagons (block-group population over the
@@ -19,16 +19,16 @@ STORIES, March 2026, local outlets statewide (statewide and campus outlets exclu
     statewide, national, international, other            no local area
   A story whose point is only a county stands for the county (any local scope). Statewide, national and international
   stories add nothing, their mentions included.
-  Weights (user, 2026-10-19): central focus 1, each place or county it mentions 0.5 -- a named town stands for the town
-  and 3 km around it, a named county for the county. Sports stories count half (user, 2026-10-20), as in spillover.
-  ATTRIBUTION (user, 2026-10-20: city, county and region mentions apply to the whole region, the larger the region the
+  Weights (authors, 2026-10-19): central focus 1, each place or county it mentions 0.5 -- a named town stands for the town
+  and 3 km around it, a named county for the county. Sports stories count half (authors, 2026-10-20), as in spillover.
+  ATTRIBUTION (authors, 2026-10-20: city, county and region mentions apply to the whole region, the larger the region the
   less weight): weight per hexagon = story weight x (A0 / A) ^ alpha, A = the region's hexagons, A0 = 7 (a hexagon and
   its ring: a neighbourhood or a town the size of Linn; smaller regions take full weight). Towns and neighbourhoods:
   alpha = 0.5 (env ALPHA). Counties and regions: alpha = 1 (env ALPHA_REGION), each story counted once -- the square
-  root overvalued county-wide stories and county mentions (user, 2026-10-20) -- spread by where people live: each block
+  root overvalued county-wide stories and county mentions (authors, 2026-10-20) -- spread by where people live: each block
   group's 2020 population over the hexagons whose centres lie in it. A hexagon takes a story's strongest claim.
   "local" = the same without county-level points and county mentions.
-  A hexagon's coverage = the weighted stories in the month whose area includes it. Tiers (user, 2026-10-19; renamed 2026-10-20):
+  A hexagon's coverage = the weighted stories in the month whose area includes it. Tiers (authors, 2026-10-19; renamed 2026-10-20):
   regular = 2+ a month (2-3 a month as the floor); frequent = 9+ a month (2-3 a week: 2 x 31/7); sporadic = under 2.
   "None" cannot occur in an area: every hexagon lies in a county, and every county in an area has county-level stories
   or mentions, which reach all of its hexagons (by population); the tier is reported for completeness.
@@ -50,7 +50,7 @@ from shapely.geometry import Point, shape
 
 root = Path(__file__).resolve().parents[1]
 flows = root / "flows"
-REGION = os.environ.get("REGION", "columbia")          # any region of flows/regions.json
+REGION = os.environ.get("REGION", "columbia")          # the Columbia-Jefferson City TV market
 sys.argv = ["market_patterns.py", REGION]
 src = (flows / "market_patterns.py").read_text().split("# DASYMETRIC TRAVEL")[0]
 # read-only: write nothing. Neutralise the open(..., "w") as well as the dump -- opening for writing empties the file
@@ -61,7 +61,7 @@ ns = {"__file__": str(flows / "market_patterns.py"), "__name__": "coverage_lib"}
 exec(compile(src, "market_patterns.py", "exec"), ns)
 pts, plc, place_hexes, county_hexes, hex_of = ns["pts"], ns["plc"], ns["place_hexes"], ns["county_hexes"], ns["hex_of"]
 by_outlet, cov_unit, CIN = ns["by_outlet"], ns["cov_unit"], ns["cin"]
-TIERS = {"regular": 2.0, "frequent": 9.0}   # never "weekly"/"daily": those name publications (user, 2026-10-20)
+TIERS = {"regular": 2.0, "frequent": 9.0}   # never "weekly"/"daily": those name publications (authors, 2026-10-20)
 qr = lambda k: tuple(map(int, k.split(",")))
 NB = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
 ring = lambda hs: set(hs) | {f"{a + dq},{b + dr}" for a, b in map(qr, hs) for dq, dr in NB}
@@ -145,7 +145,7 @@ for r in pts.itertuples():
 import os  # noqa: E402
 
 ALPHA, A0 = float(os.environ.get("ALPHA", 0.5)), 7
-# counties and regions are counted once (user, 2026-10-20: the square root "overvalues mentions and county-wide coverage")
+# counties and regions are counted once (authors, 2026-10-20: the square root "overvalues mentions and county-wide coverage")
 ALPHA_REGION = float(os.environ.get("ALPHA_REGION", 1.0))
 # population by hexagon: each block group's 2020 population over the hexagons whose centres lie in it (the block
 # group's population centre's hexagon when none does)
@@ -181,7 +181,7 @@ def attribute(hs, w, by_pop):
     tot_pop = sum(hex_pop.get(k, 0) for k in hs)
     if tot_pop <= 0:
         return {k: per for k in hs}
-    # spread by population, CAPPED at the story's weight w per hexagon (2026-10-24, peer review): a county story spread
+    # spread by population, CAPPED at the story's weight w per hexagon (2026-10-24): a county story spread
     # by population put up to several stories' weight on one dense hexagon (a county seat's centre)
     return {k: min(w, per * len(hs) * hex_pop.get(k, 0) / tot_pop) for k in hs}
 
@@ -206,7 +206,7 @@ for r in plc.itertuples():
         claim(r.article_id, attribute(town_area(r.geoid), 0.5, False), True)
     elif r.geoid_level == "county":
         claim(r.article_id, attribute(county_hexes.get(r.geoid, []), 0.5, True), False)
-SPORTS_W = 0.5   # Sports stories count half (user, 2026-10-20), as in spillover: a game involves two places by nature
+SPORTS_W = 0.5   # Sports stories count half (authors, 2026-10-20), as in spillover: a game involves two places by nature
 COVCAT = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))   # CIN category -> outlet -> hexagon -> weight
 for aid, hs in story_hexes.items():
     sw = SPORTS_W if CIN.get(aid) == "Sports" else 1.0
@@ -220,7 +220,7 @@ print("stories with a local area:", len(story_area), "of", sum(1 for a in art_ou
 RDIR = flows / "reach" if REGION == "columbia" else flows / "reach" / REGION
 MAPS = json.load(open(RDIR / "market_pattern_maps.json"))
 CONF = json.load(open(RDIR / ("confidence_columbia.json" if REGION == "columbia" else "confidence.json")))
-# THE QA FOOTPRINT (2026-10-25, D2-A): the TRAVEL-ONLY core of the settings ensemble -- hexagons drawn in half or more of
+# THE QA FOOTPRINT (authors, 2026-10-25): the TRAVEL-ONLY core of the settings ensemble -- hexagons drawn in half or more of
 # its members with travel-only ties (flows/area_ensemble.py p_travel) -- the same kind of object as the published area
 PROB = json.load(open(RDIR / ("probability_columbia.json" if REGION == "columbia" else "probability.json")))
 # the multi-part rule applies (area_core.py: the home body and every piece of 3+ hexagons; specks out)
@@ -326,7 +326,7 @@ for town, rank in AREAS:
     layer.setdefault(town, {})[rank] = {kind: {k: round(sum(cov[kind][o].get(k, 0) for o in cov[kind]), 2) for k in area}
                                         for kind in ("all", "local")}
     layer[town][rank]["pop"] = {k: round(hex_pop.get(k, 0)) for k in area}
-    # OUTLET CIRCLES (user, 2026-10-20: sources are pinned to a place, so a circle for the statistical bounds of each one's
+    # OUTLET CIRCLES (authors, 2026-10-20: sources are pinned to a place, so a circle for the statistical bounds of each one's
     # contribution): centred on the newsroom (registry office); radius = the distance from it holding half the outlet's
     # story weight, story by story (central location 1, each place or county mentioned 0.5; a county at its population
     # centre; statewide and wider stories left out). Drawn for the outlets that alone give regular coverage (2+ a month)
