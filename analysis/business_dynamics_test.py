@@ -5,10 +5,10 @@ counts: establishment openings and closings per 100 establishments (BDS estabs_e
 difference (net) and sum (turnover), and jobs created and lost by opening and closing establishments per 100 jobs.
 Averaged 2021-2023 so one year's noise in a small county does not carry; St. Louis city and county one unit
 (recomputed from the summed counts). Standardized.
-  CROSSOVER  share of residents seen outside the county (distinct people, lower bound) ~ log population + nonmetro +
+  CROSSOVER  share of residents seen outside the county (distinct people, lower bound) ~ log population + rural +
              commuting share + one rate; OLS on the logit; leave one county out.
-  SPILLOVER  adopted outlet model (broadcaster + urban share + concentration) + one rate; leave one county out;
-             all outlets and well-collected outlets.
+  SPILLOVER  the adopted outlet model (spillover_common.FINAL) + one rate; fitted on the adopted outlets, each
+             county's scored outlets held out (spillover_common.heldout_error).
 """
 import warnings
 from pathlib import Path
@@ -19,6 +19,9 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
 warnings.filterwarnings("ignore")
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+from spillover_common import FINAL, adopted_split, heldout_error, rural_by_unit  # noqa: E402,F401  the adopted spillover model
 root = Path(__file__).resolve().parents[1]
 unit = lambda f: "29189" if f == "29510" else f
 b = pd.read_csv(root / "census_dl/bds/bds2023_st_cty.csv", dtype={"st": str, "cty": str}, na_values=["D"])
@@ -49,11 +52,11 @@ Z = (R - R.mean()) / R.std()
 cc = pd.read_csv(root / "analysis/crossover_compare.csv", dtype={"Unnamed: 0": str}).rename(columns={"Unnamed: 0": "fips"}).set_index("fips")
 cov = pd.read_csv(root / "analysis/county_covariates.csv", dtype={"fips": str})
 cov["u"] = cov.fips.map(unit)
-c = cc[["dedup_lower", "commute_pop", "population"]].join(cov.groupby("u").metro.max()).join(Z)
-c["y"] = np.log(c.dedup_lower / (1 - c.dedup_lower)); c["log_pop"] = np.log(c.population); c["nonmetro"] = 1 - c.metro
+c = cc[["dedup_lower", "commute_pop", "population"]].join(rural_by_unit()).join(Z)
+c["y"] = np.log(c.dedup_lower / (1 - c.dedup_lower)); c["log_pop"] = np.log(c.population)
 inv = lambda z: 1 / (1 + np.exp(-z))
 loo_c = lambda f: 100 * np.mean([abs(inv(smf.ols(f, c.drop(index=k)).fit().predict(c.loc[[k]]).iloc[0]) - c.loc[k, "dedup_lower"]) for k in c.index])
-B = "y ~ log_pop + nonmetro + commute_pop"
+B = "y ~ log_pop + rural + commute_pop"
 print(f"\n## CROSSOVER ({len(c)} counties): baseline error {loo_c(B):.1f} points")
 res = []
 for v in VARS:
@@ -65,24 +68,18 @@ print(pd.DataFrame(res, columns=["rate", "error", "coef", "p"]).sort_values("err
 so = pd.read_csv(root / "analysis/spillover_outlets.csv", dtype={"fips": str}).join(Z, on="fips")
 q = pd.read_csv(root / "coverage/source_quality_2026_03.csv").groupby("canonical_name").agg(
     ln=("local_news", "max"), tu=("text_unavailable", "max"), shrt=("short_texts", "max"))
-so = so.join(q, on="outlet")
+so = so.drop(columns=["ln", "tu", "shrt", "good"], errors="ignore").join(q, on="outlet")   # the outlet file carries them too
 so["good"] = (so.ln / (so.ln + so.tu) >= .95) & (1 - so.shrt / so.ln >= .8) & (so.placed / so.ln >= .6)
-BASE = "rate ~ broadcast + pct_urban + concentration"
+BASE = FINAL                       # the adopted outlet model (spillover_common.FINAL)
 fit = lambda f, d: smf.glm(f, d, family=sm.families.Binomial()).fit()
+loo = heldout_error                # fitted on the adopted outlets, each county's scored outlets held out
 
 
-def loo(f, d):
-    e = []
-    for fp in d.fips.unique():
-        tr, te = d[d.fips != fp], d[d.fips == fp]
-        e += list(np.abs(fit(f, tr).predict(te) - te.rate))
-    return 100 * np.mean(e)
-
-
-for lab, d in (("all outlets", so), ("well-collected outlets", so[so.good])):
-    print(f"\n## SPILLOVER, {lab}: {len(d)} outlets, {d.fips.nunique()} counties; adopted model error {loo(BASE, d):.1f} points")
+for lab, d in (("adopted outlets", so),):
+    df = adopted_split(d)[0]
+    print(f"\n## SPILLOVER, {lab} ({BASE}): fitted {len(df)}, scored {int(d.scored.sum())} outlets, {df.fips.nunique()} counties; adopted model error {loo(BASE, d):.2f} points")
     res = []
     for v in VARS:
-        m = smf.glm(BASE + f" + {v}", d, family=sm.families.Binomial()).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(d.fips)[0]})
+        m = smf.glm(BASE + f" + {v}", df, family=sm.families.Binomial()).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(df.fips)[0]})
         res.append((v, loo(BASE + f" + {v}", d), m.params[v], m.pvalues[v]))
     print(pd.DataFrame(res, columns=["rate", "error", "coef", "p"]).sort_values("error").round(3).to_string(index=False))

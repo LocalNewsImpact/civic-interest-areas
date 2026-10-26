@@ -23,6 +23,7 @@ population, all tracts (adopted)") is
   BETA_IN   within-county distance exponent (default 1)
   REGRULE   1: Advan's regularity as a rule on the public prediction
   ATTRPOP   1: population a third of the within-county spread; nonmetro; density:<people per km2>
+  SPREAD    the spread's destination part: mix (default, jobs and OpenStreetMap destinations half each), jobs, osm
   OUTTAG    suffix of the output file; OUTDIR its folder (default analysis/)
 Diagnostics (2026-10-24, to isolate changes since 2026-10-18; defaults are the current method):
   CAMPUS_IN=1     campus papers (excluded_outlets.CAMPUS) counted as local outlets, as before 2026-10-24
@@ -124,6 +125,14 @@ POPB = np.array([_bgp.get(b, 0.0) for b in BG])
 # ATTRPOP=1: where people live is a third of the within-county spread (visits to family, friends, churches, schools)
 ATTR_POP = (0.5 * share_in(J) + 0.5 * share_in(C)) / 3 + share_in(O_) / 3 + share_in(POPB) / 3 + 1e-6
 ATTR_DEST = 0.5 * (0.5 * share_in(J) + 0.5 * share_in(C)) + 0.5 * share_in(O_) + 1e-6
+# SPREAD (sensitivity): the destination part of the spread from jobs only (LODES all jobs and consumer-sector jobs, half
+# each) or OpenStreetMap destinations only, in place of half each (mix, the default); population keeps its third
+SPREAD = _os.environ.get("SPREAD", "mix")
+SETTINGS["SPREAD"] = SPREAD
+if SPREAD != "mix":
+    _dest = {"jobs": 0.5 * share_in(J) + 0.5 * share_in(C), "osm": share_in(O_)}[SPREAD]
+    ATTR_POP = 2 * _dest / 3 + share_in(POPB) / 3 + 1e-6
+    ATTR_DEST = _dest + 1e-6
 ATTRPOP = _os.environ.get("ATTRPOP", "0")      # 1: every tract; nonmetro: tracts in nonmetro counties (RUCC 2023 >= 4)
 _ru = pd.read_csv(root / "census_dl/ref/rucc2023.csv", dtype=str, encoding="latin-1")
 _ru = _ru[_ru.Attribute == "RUCC_2023"]

@@ -15,9 +15,11 @@ core50_specks [...], and core50_kept {hexagons, km2, people} beside the unconnec
 over the hexagons of the statewide 3 km grid whose centres lie in it; a block group holding no centre goes to the
 hexagon of its population centre); a part's name is the largest town of 2,500+ (or a configured study town) within one
 hexagon of it, else "rural <county>".
+PROB=<file>: the same rule on another ensemble file, written back into it (the BUSIEST=hexagon sensitivity).
 Usage: area_core.py <region> [<region> ...]"""
 import json
 import math
+import os
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -149,6 +151,8 @@ for region in sys.argv[1:] or ["columbia"]:
     cfg = json.load(open(here / "regions.json"))[region]
     R = root / cfg["out"]
     pf = here / "reach/probability_columbia.json" if region == "columbia" else R / "probability.json"
+    if os.environ.get("PROB"):              # another ensemble's file (the BUSIEST=hexagon sensitivity), rewritten in place
+        pf = Path(os.environ["PROB"])
     M = json.load(open(R / "market_pattern_maps.json"))
     PR = json.load(open(pf))
     for town, ranks in PR.items():

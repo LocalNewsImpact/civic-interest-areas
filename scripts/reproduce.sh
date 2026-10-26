@@ -7,7 +7,7 @@
 # Stages: data travel coverage spillover public areas qa figures. Logs: logs/reproduce/<step>.log.
 # Requires the Python environment in requirements.txt at .venv/, the Advan files under neighborhood/ and weekly/
 # (Dewey Data, academic licence) and the inputs listed in README.md (Inputs). The figures stage requires Google Chrome.
-# Runtime on one laptop core per process: about 6 hours, most of it in the travel patterns and the drawing ensembles.
+# Runtime on one laptop core per process: about 7 hours, most of it in the travel patterns and the drawing ensembles.
 set -e
 ROOT=${0:A:h:h}
 cd $ROOT
@@ -37,15 +37,27 @@ if stage data; then
   step crossover_compare       analysis/crossover_compare.py
 fi
 
-# Gravity model of travel, its block tests and the nested test of exploratory terms.
+# Gravity model of travel, its block tests and the nested test of exploratory terms; then the steps table, the
+# rejected terms, the small-county tests and the county characteristics (method log, Travel model).
 if stage travel; then
   step travel_model            analysis/travel_model.py
   step travel_selection        analysis/travel_model_dc_test.py selection
+  step travel_spline           analysis/travel_distance_spline.py
   step travel_commute          analysis/travel_commute_pair_test.py
   step travel_nested           analysis/combined_marginal_test.py travel_nested_all
   step travel_marginal         analysis/combined_marginal_test.py travel
   step travel_competing        analysis/travel_competing_test.py
   step travel_class            analysis/travel_county_class_model.py
+  step travel_steps_singly     analysis/travel_model_compare.py
+  step travel_steps            analysis/travel_model_dc_test.py
+  step travel_hub              analysis/travel_model_hub_test.py
+  step travel_drive            analysis/travel_model_drive_test.py
+  step travel_business         analysis/travel_business_test.py
+  step travel_purpose          analysis/travel_purpose_split_test.py
+  step travel_small_origin     analysis/travel_small_origin_model.py
+  step travel_small_county     analysis/travel_small_county_test.py
+  step travel_jobhub_distance  analysis/travel_distance_variants.py
+  step travel_blend            analysis/travel_blend_test.py
 fi
 
 # Coverage model (reads od_predicted.csv from the travel stage).
@@ -55,6 +67,7 @@ if stage coverage; then
   step coverage_border         analysis/border_coverage_test.py
   step coverage_flag_compare   analysis/coverage_flag_compare.py
   step coverage_newsroom_size  analysis/coverage_newsroom_size_test.py
+  step residual_autocorrelation analysis/residual_autocorrelation.py   # travel and coverage residuals
   step coverage_marginal       analysis/combined_marginal_test.py coverage_all coverage_no_broadcast
 fi
 
@@ -67,12 +80,45 @@ if stage spillover; then
   step spillover_dma           analysis/spillover_dma_holdout.py
   step spillover_quality       analysis/collection_quality_robustness.py
   step spillover_allfactors    analysis/combined_all_factors_test.py
+  step spillover_side_tests    analysis/spillover_side_tests.py
+  # County characteristics (crossover, spillover, travel and coverage columns; read spillover_outlets.csv and the
+  # coverage stage's predictions)
+  step county_acs              analysis/civic_variables_test.py
+  step county_civic_index      analysis/civic_index_test.py
+  step county_civic_index_v2   analysis/civic_index_test_v2.py
+  step county_bylines          analysis/spillover_bylines_test.py
+  step county_business         analysis/business_dynamics_test.py
+  step hospitals               analysis/hospital_test.py
 fi
 
 # Public-data travel model and its Advan-learned corrections.
 if stage public; then
   bash $ROOT/scripts/public_model.sh > $LOG/public_model.log 2>&1 || { echo "public_model FAILED"; exit 1; }
   echo "public_model done"
+  # where the gap is, and the default-weight sensitivity (read compare_shares.csv and the _s_ builds of public_model.sh)
+  step public_gap_corrections  analysis/public_gap_corrections.py
+  step public_default_sens     analysis/public_default_sensitivity.py "_s_ref=reference build" \
+    "_s_wfh=work from home (ACS B08006)" "_s_days15=15 work days" "_s_shop05=shopping x0.5" \
+    "_s_huffhome=gross leakage (Huff home share)" "_s_alpha05=Huff attraction exponent 0.5" \
+    "_s_alpha15=Huff attraction exponent 1.5" "_s_trips=long-distance trips, not days" \
+    "_s_recvis05=recreation and visiting x0.5" "_s_recvis2=recreation and visiting x2" \
+    "_s_medspec05=medical and specialty x0.5" "_s_medspec2=medical and specialty x2" "_s_circ10=circuity 1.0" \
+    "_s_circ14=circuity 1.4" "_s_commurban=commuter classes on urban decay"
+  step public_gap_diagnosis    analysis/public_gap_diagnosis.py
+  # non-work variants (public_model.sh step 9) and work days per commuter (_g_ builds of step 2)
+  step public_nonwork_variants analysis/public_default_sensitivity.py \
+    "public_model_pairs_v1.csv=v1: establishments, population-centre distance, RUCC survey classes, squared loss" \
+    "public_model_pairs_emp.csv=employment draw" "public_model_pairs_hub.csv=job-centre distance" \
+    "public_model_pairs_msa.csv=metro-size survey classes" "public_model_pairs_ll.csv=likelihood loss" \
+    "public_model_pairs_base.csv=all four (base)"
+  step public_nonwork_subgroups analysis/public_default_sensitivity.py "public_model_pairs_base.csv=base" \
+    "public_model_pairs_nw_income.csv=decay by income" "public_model_pairs_nw_degree.csv=decay by degree" \
+    "public_model_pairs_nw_tenure.csv=decay by tenure"
+  step public_work_days_sales  analysis/public_default_sensitivity.py "_g_10_sales=10 work days" "_g_15_sales=15" \
+    "_g_20_sales=20" "_g_25_sales=25" "_g_30_sales=30" "_g_40_sales=40"
+  step public_work_days_surplus analysis/public_default_sensitivity.py "_g_10_surplus=10 work days, Huff on surplus" \
+    "_g_15_surplus=15" "_g_20_surplus=20" "_g_25_surplus=25" "_g_30_surplus=30" "_g_40_surplus=40"
+  step conference_ties         analysis/conference_ties_test.py
 fi
 
 # Civic interest areas, Columbia-Jefferson City television market: homes, travel patterns (non-negative matrix
@@ -89,12 +135,31 @@ if stage areas; then
     step ensemble_$r           flows/area_ensemble.py $r
   done
   step area_core               flows/area_core.py $REGIONS
+  # sensitivity: the busiest hexagon = 50 instead of the busiest place; its own file, never the adopted ensemble
+  step ensemble_busiest_hexagon BUSIEST=hexagon OUT=$ROOT/flows/reach/probability_columbia_busiest_hexagon.json \
+                               flows/area_ensemble.py columbia
+  step area_core_busiest_hexagon PROB=$ROOT/flows/reach/probability_columbia_busiest_hexagon.json flows/area_core.py columbia
   step market_stability        analysis/market_stability.py
   step selection_sensitivity   analysis/selection_sensitivity.py columbia
   for r in $REGIONS; do
     step tie_$r                ATTRPOP=1 REGRULE=1 BETA_IN=0.5 PUBCOL=adjusted_C OUTTAG=_pop analysis/tie_footprint.py $r
   done
   step tie_summary             SUMMARY=1 OUTTAG=_pop analysis/tie_footprint.py columbia
+  # tie-market alternatives (Tie markets): population in the spread, the nonmetro and density rules, the steps
+  T=(nopop "ATTRPOP=0 REGRULE=1 BETA_IN=0.5" popnm "ATTRPOP=nonmetro REGRULE=1 BETA_IN=0.5"
+     pd50 "ATTRPOP=density:50 REGRULE=1 BETA_IN=0.5" pd200 "ATTRPOP=density:200 REGRULE=1 BETA_IN=0.5"
+     s0 "ATTRPOP=0 REGRULE=0 BETA_IN=1" s1 "ATTRPOP=0 REGRULE=0 BETA_IN=0.5"
+     b1 "ATTRPOP=1 REGRULE=1 BETA_IN=1" b3 "ATTRPOP=1 REGRULE=1 BETA_IN=3"
+     jobs "ATTRPOP=1 REGRULE=1 BETA_IN=0.5 SPREAD=jobs" osm "ATTRPOP=1 REGRULE=1 BETA_IN=0.5 SPREAD=osm"
+     jobs0 "ATTRPOP=0 REGRULE=1 BETA_IN=0.5 SPREAD=jobs" osm0 "ATTRPOP=0 REGRULE=1 BETA_IN=0.5 SPREAD=osm"
+     reg45 "PUBFILE=public_adjusted_pairs_reg45.csv ATTRPOP=1 REGRULE=1 BETA_IN=0.5"
+     reg90 "PUBFILE=public_adjusted_pairs_reg90.csv ATTRPOP=1 REGRULE=1 BETA_IN=0.5")
+  for tag set in $T; do
+    step tie_alt_$tag          ${=set} PUBCOL=adjusted_C OUTTAG=_alt_$tag analysis/tie_footprint.py columbia
+    step tie_alt_${tag}_summary SUMMARY=1 OUTTAG=_alt_$tag analysis/tie_footprint.py columbia
+  done
+  step tie_mexico_reg45        PUBFILE=public_adjusted_pairs_reg45.csv PUBCOL=adjusted_C ATTRPOP=1 REGRULE=1 BETA_IN=0.5 \
+                               DETAIL=Mexico OUTTAG=_alt_reg45_detail analysis/tie_footprint.py columbia
 fi
 
 # Supply on the travel-only footprint: quality-assurance diagnostics, not results of the article.

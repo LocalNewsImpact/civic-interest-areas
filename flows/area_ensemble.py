@@ -60,6 +60,11 @@ here = Path(__file__).resolve().parent
 root = here.parent
 region = sys.argv[1] if len(sys.argv) > 1 else "columbia"
 ALL = len(sys.argv) > 2 and sys.argv[2] == "all"
+# BUSIEST=hexagon is a sensitivity (market_patterns.norm_hex): it never writes over the adopted ensemble
+SENS = os.environ.get("BUSIEST", "place") == "hexagon"
+if SENS and (not (os.environ.get("OUT") or os.environ.get("SMOKE")) or Path(os.environ.get("SMOKE") or os.environ["OUT"]).name
+             in ("probability_columbia.json", "probability.json")):
+    raise SystemExit("BUSIEST=hexagon: set OUT to a separate file; the adopted ensemble is not overwritten")
 os.environ.pop("HEX_KM", None)
 sys.argv = ["confidence_layer.py", region]
 C = runpy.run_path(str(root / "analysis/confidence_layer.py"), run_name="confidence_lib")
@@ -384,7 +389,8 @@ for (town, rank) in AREAS:
     pub, _ = shown_fast(_net, set(MAPS.get("in_market", [])), home, 0.5, 2, 4, 2)
     pub, _ = body(pub, home, 15 / SP3)
     print(f"{town} {rank}: adopted member vs the published map, Jaccard {jac(ad, pub):.3f}")
-    assert os.environ.get("SMOKE") or jac(ad, pub) >= 0.98, f"{town} {rank}: the adopted member differs from the published map"
+    # the published map is drawn with the busiest place = 50; under BUSIEST=hexagon the adopted member differs by design
+    assert os.environ.get("SMOKE") or SENS or jac(ad, pub) >= 0.98, f"{town} {rank}: the adopted member differs from the published map"
     hc = G3["hex_county"]
     rec = {"members": MEMBERS, "design": {**{k: [str(x) for x in v] for k, v in LEVELS.items()}, "factorial": True,
                                           "adopted": [str(x) for x in ADOPTED]},

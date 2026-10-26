@@ -137,7 +137,8 @@ _pidx = {k: n for n, k in enumerate(key)}
 
 def coverage_data(version):
     """Story-county pairs as coverage_model.py builds them, and its ADOPTED terms: the gravity terms + log visits (where
-    > 0) + zero-visit indicator + log visits x nonmetro newsroom county (fixed effects separate)."""
+    > 0) + zero-visit indicator + log visits x rural newsroom county (gravity_terms cov.rural: under 50% of the 2020
+    population in Census urban areas; fixed effects separate)."""
     keep = (lambda a: True) if version == "all" else (lambda a: "broadcast" not in (a["publisher_type"] or ""))
     arts = [a for a in ARTS if keep(a) and newsroom_fips(a)]
     n = Counter()
@@ -153,12 +154,12 @@ def coverage_data(version):
     rows = [_pidx[k] for k in zip(p.i, p.j)]
     pos = (p.visits > 0).values
     lv = np.where(pos, np.log(p.visits.where(pos, 1.0)), 0.0)
-    nonmetro = 1 - cov.metro.reindex(p.i).values
+    rural = cov.rural.reindex(p.i).values.astype(float)
     adopted = base.iloc[rows][FACTORS].reset_index(drop=True).assign(
-        log_visits=lv, zero_visits=(~pos).astype(float), log_visits_x_nonmetro=lv * nonmetro)
+        log_visits=lv, zero_visits=(~pos).astype(float), log_visits_x_rural=lv * rural)
     Oc = pd.get_dummies(p.i, prefix="o").astype(float)
     Dc = pd.get_dummies(p.j, prefix="d", drop_first=True).astype(float)
-    return p, p.stories.values.astype(float), rows, lv, nonmetro, adopted, Oc, Dc
+    return p, p.stories.values.astype(float), rows, lv, rural, adopted, Oc, Dc
 
 
 def coverage_loo(Xm, p, y):
@@ -369,17 +370,17 @@ if "travel_nested_all" in RUN:
 for version in ("all", "no_broadcast"):
     if f"coverage_{version}" not in RUN:
         continue
-    p, y, rows, lv, nonmetro, adopted, Oc, Dc = coverage_data(version)
+    p, y, rows, lv, rural, adopted, Oc, Dc = coverage_data(version)
     own_j = np.log1p(np.array([own[j] for j in p.j], float))
     more = pd.DataFrame({
         "ring2": [float(R[i][j] == 2) for i, j in zip(p.i, p.j)], "ring3plus": [float(R[i][j] >= 3) for i, j in zip(p.i, p.j)],
-        "lv_x_own": lv * own_j, "lv_x_own_x_nonmetro": lv * own_j * nonmetro,
+        "lv_x_own": lv * own_j, "lv_x_own_x_rural": lv * own_j * rural,
         "lv_x_newsrooms": lv * np.log1p([len(outlets[j]) for j in p.j]), "lv_x_broadcast": lv * np.array([float(j in bcast) for j in p.j]),
     }).join(X_extra.iloc[rows].reset_index(drop=True))
     out(f"\n## COVERAGE, {version.replace('_', ' ')} (coverage_model.py adopted specification; newsroom counties held out, 8 folds; per-county mean error)")
     out("| Model | Terms | Mean abs share error (points) [95%] | Change vs adopted [95%] | Deviance (full fit, in-sample) |\n|---|---:|---:|---:|---:|")
     E0 = None
-    for label, Xc in (("adopted (gravity terms + log visits, zero-visit indicator, log visits x nonmetro)", adopted),
+    for label, Xc in (("adopted (gravity terms + log visits, zero-visit indicator, log visits x rural)", adopted),
                       ("adopted + all rejected terms", pd.concat([adopted, more], axis=1))):
         Xm = pd.concat([Xc, Oc, Dc], axis=1)
         dev = sm.GLM(y, Xm, family=sm.families.Poisson()).fit(maxiter=300).deviance

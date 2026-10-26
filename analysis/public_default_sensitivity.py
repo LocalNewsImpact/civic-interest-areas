@@ -48,9 +48,9 @@ def ratio(p):            # typical miss within the band, actual / predicted (med
 
 
 rows = [("Advan-fitted (reference)", S["Advan-fitted (adopted, counties held out)"].values)]
-for arg in sys.argv[1:]:
+for arg in sys.argv[1:]:          # TAG=label: public_model_pairs_tiers<TAG>.csv; or FILE.csv=label: that build as named
     tag, label = arg.split("=", 1)
-    rows.append((label, roll_up(f"public_model_pairs_tiers{tag}.csv")))
+    rows.append((label, roll_up(tag if tag.endswith(".csv") else f"public_model_pairs_tiers{tag}.csv")))
 base = rows[1][1]
 print("| Variant | " + " | ".join(LABEL.values()) + " | all |\n|---|" + "---:|" * 5)
 for i, (lab, p) in enumerate(rows):

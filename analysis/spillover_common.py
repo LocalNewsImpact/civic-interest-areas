@@ -234,6 +234,26 @@ def paired_gain(terms_with, terms_without, fit, score=None, B=1999, seed=2026102
     return paired_interval(ew, eo, loo_fips(score), B, seed)
 
 
+def adopted_split(d):
+    """The adopted model's outlets (spillover_outlets.py): fitted = well collected, 20+ placed stories, not NOT_FITTED;
+    scored = 10+ placed stories. d: rows of spillover_outlets.csv (with any county columns joined)."""
+    return d[d.fitted.astype(bool)], d[d.scored.astype(bool)]
+
+
+def heldout_error(formula, d):
+    """Mean absolute held-out miss (points) of `formula` under the adopted scheme: fitted on the fitted outlets, each
+    county's scored outlets predicted by a fit without that county (fractional logit, IRLS)."""
+    fit, sc = adopted_split(d)
+    return 100 * np.abs(loo(terms_of(formula), fit, sc)).mean()
+
+
+def rural_by_unit():
+    """The settlement rural flag by county unit (St. Louis city with the county): under 50% of the 2020 population in
+    Census urban areas (county_urban_share.csv), as gravity_terms.cov.rural."""
+    u = pd.read_csv(root / "analysis/county_urban_share.csv", dtype={"u": str}).set_index("u").pct_urban
+    return (u < 0.5).astype(int).rename("rural")
+
+
 def cluster_inference(d, formula, B=1999, seed=20261024):
     """Coefficients with county-cluster inference.
     se_crv3, p_cluster_t: CRV3 -- the cluster jackknife, V = (G-1)/G * sum_g (b_(g) - b_bar)(b_(g) - b_bar)', each b_(g)

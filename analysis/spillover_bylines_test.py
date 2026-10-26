@@ -6,8 +6,9 @@ credits dropped (staff, report, news, press, wire services). Per outlet:
   bylines        distinct named authors
   byline_share   share of its stories with a named author (completeness varies by site)
   volume         local stories it published in March (all, not only placed)
-Added to the adopted print model (spillover ~ residents' share of visits outside the county), alone and together;
-scored by leaving out one county at a time. Also run on outlets with >= 50% bylined stories only.
+Added to the adopted model's print term (spillover_common.FINAL: log(1 + print and digital outlets in the county);
+the broadcaster term is constant here), alone and together; fitted on the adopted outlets, each county's scored
+outlets held out (spillover_common.heldout_error). Also run on outlets with >= 50% bylined stories only.
 """
 import re
 import warnings
@@ -20,6 +21,9 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
 warnings.filterwarnings("ignore")
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+from spillover_common import FINAL, adopted_split, heldout_error, rural_by_unit  # noqa: E402,F401  the adopted spillover model
 root = Path(__file__).resolve().parents[1]
 a = pd.read_csv(root / "coverage/bylines/march_2026_authors.csv", keep_default_na=False)
 a.columns = ["id", "outlet", "author"]
@@ -44,22 +48,19 @@ print(f"{len(p)} print/digital outlets; bylines median {p.bylines.median():.0f} 
       f"outlets >= 50% bylined: {(p.byline_share >= .5).sum()}")
 print(f"correlations: log bylines vs log volume {np.corrcoef(p.log_bylines, p.log_volume)[0, 1]:.2f}; "
       f"spillover vs log bylines {np.corrcoef(p.rate, p.log_bylines)[0, 1]:+.2f}; vs log volume {np.corrcoef(p.rate, p.log_volume)[0, 1]:+.2f}")
-specs = {"adopted: travel out": "rate ~ travel_out",
-         "+ bylines": "rate ~ travel_out + log_bylines",
-         "+ volume": "rate ~ travel_out + log_volume",
-         "+ bylines + volume": "rate ~ travel_out + log_bylines + log_volume",
-         "+ stories per byline": "rate ~ travel_out + stories_per_byline"}
+specs = {"adopted, print and digital (FINAL without the broadcaster term)": "rate ~ log_print",
+         "+ bylines": "rate ~ log_print + log_bylines",
+         "+ volume": "rate ~ log_print + log_volume",
+         "+ bylines + volume": "rate ~ log_print + log_bylines + log_volume",
+         "+ stories per byline": "rate ~ log_print + stories_per_byline"}
 for label, sub in (("all print/digital outlets", p), ("outlets with >= 50% bylined stories", p[p.byline_share >= .5])):
-    print(f"\n## {label} ({len(sub)} outlets, {sub.fips.nunique()} counties)")
+    sf = adopted_split(sub)[0]
+    print(f"\n## {label} (fitted {len(sf)}, scored {int(sub.scored.sum())} outlets, {sf.fips.nunique()} counties)")
     print("| Model | Leave-one-county-out error (points) | Added terms (coef, p, county-clustered) |\n|---|---:|---|")
     for name, f in specs.items():
-        e = []
-        for fp in sub.fips.unique():
-            tr, te = sub[sub.fips != fp], sub[sub.fips == fp]
-            e += list(np.abs(smf.glm(f, tr, family=sm.families.Binomial()).fit().predict(te) - te.rate))
-        m = smf.glm(f, sub, family=sm.families.Binomial()).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(sub.fips)[0]})
-        extra = [k for k in m.params.index if k not in ("Intercept", "travel_out")]
-        print(f"| {name} | {100 * np.mean(e):.1f} | " + "; ".join(f"{k} {m.params[k]:+.2f} (p {m.pvalues[k]:.3f})" for k in extra) + " |")
+        m = smf.glm(f, sf, family=sm.families.Binomial()).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(sf.fips)[0]})
+        extra = [k for k in m.params.index if k not in ("Intercept", "log_print")]
+        print(f"| {name} | {heldout_error(f, sub):.2f} | " + "; ".join(f"{k} {m.params[k]:+.2f} (p {m.pvalues[k]:.3f})" for k in extra) + " |")
 cols = ["outlet", "fips", "placed", "volume", "bylines", "byline_share", "rate"]
 print("\nthe three counties' print outlets:")
 print(p[p.fips.isin(["29007", "29019", "29151"])][cols].round(2).to_string(index=False))
