@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 MKL_NUM_THREADS=1
 PY=".venv/bin/python -I"
 mkdir -p logs
-step() { [[ " ${STEPS:-1 2 3 4 5 6 7 8} " == *" $1 "* ]]; }   # STEPS="2 3" runs only those steps
+step() { [[ " ${STEPS:-1 9 2 3 4 5 10 6 7 8} " == *" $1 "* ]]; }   # STEPS="2 3" runs only those steps
 
 # Round 3 (2026-10-25): free/mo_residents_od_JT01_2023.csv.gz (travel model; Missouri main + Missouri-home rows of the
 # 8 aux files) is read by public_work_model.py and public_adjusted_model.py. For the work model it holds exactly the rows read before (2,621,217 jobs, every tract->county
@@ -22,6 +22,29 @@ step() { [[ " ${STEPS:-1 2 3 4 5 6 7 8} " == *" $1 "* ]]; }   # STEPS="2 3" runs
 # ---- 1. Work model (LODES JT01) -------------------------------------------------------------------------------------------
 if step 1; then
 DIST=pop TAG=_v1 $PY analysis/public_work_model.py > logs/work_v1_mo.log 2>&1
+fi
+
+# ---- 9. Work + non-work builds (public_nonwork_model.py), one factor at a time against v1; the baseline public build
+#         (_base, read by public_vs_advan_compare.py and public_segment_weights.py) and its survey-subgroup decays.
+#         Work part: the step 1 work model (_v1); the job-centre-distance variant reads the job-centre work model.
+#         Recipes reproduce the 2026-10-18 non-work shares exactly (max difference 3e-16).
+if step 9; then
+DIST=hub TAG= $PY analysis/public_work_model.py > logs/work_hub_mo.log 2>&1
+NW=$(cat <<EOF
+_v1|DRAW=est DIST=pop CLASS=rucc LOSS=sq
+_emp|DRAW=emp DIST=pop CLASS=rucc LOSS=sq
+_hub|DRAW=est DIST=hub CLASS=rucc LOSS=sq
+_msa|DRAW=est DIST=pop CLASS=msa LOSS=sq
+_ll|DRAW=est DIST=pop CLASS=rucc LOSS=ll
+_base|DRAW=emp DIST=pop CLASS=rucc LOSS=ll
+_nw_income|DRAW=emp DIST=pop CLASS=rucc LOSS=ll SUBGROUP=income
+_nw_degree|DRAW=emp DIST=pop CLASS=rucc LOSS=ll SUBGROUP=degree
+_nw_tenure|DRAW=emp DIST=pop CLASS=rucc LOSS=ll SUBGROUP=tenure
+EOF
+)
+echo "$NW" | while IFS='|' read -r tag e; do
+  env $e TAG=$tag $PY analysis/public_nonwork_model.py > logs/nonwork$tag.log 2>&1 || echo "FAIL nonwork$tag"
+done
 fi
 
 # ---- 2. Stage 1 candidate builds: public_travel_tiers.py, one per setting (53, Missouri) ---------------------------------
@@ -114,6 +137,27 @@ fi
 if step 5; then
 PROCS=2 $PY analysis/public_adjusted_nested.py > logs/adj_nested.log 2>&1
 $PY analysis/score_segments.py > logs/score_segments_nested.log 2>&1
+fi
+
+# ---- 10. Regular-travel builds with observed LODES within 45 and 90 miles (REGULAR=1: no long-distance kinds), by class,
+#          with the 2026-10-18 corrections structure: public_adjusted_pairs_reg45.csv / _reg90.csv (tie_footprint.py PUBFILE;
+#          Mexico's false Jefferson City market). Recipes reproduce the 2026-10-18 builds exactly on that day's work model.
+#          Before step 6, which writes public_adjustments.csv last.
+if step 10; then
+for b in "_r45g_40_sales|WORK_HYBRID=45 WORK_DAYS=40 HUFF=sales" "_r45c_40_l6all|WORK_HYBRID=45 HUFF=sales WORK_DAYS=40 LAMBDA=retail:6,medical:6,specialty:6" \
+         "_r45g_20_surplus|WORK_HYBRID=45 WORK_DAYS=20 HUFF=surplus" "_rc_grav20|HUFF=sales WORK_DAYS=20" \
+         "_rg_40_sales|WORK_HYBRID=90 WORK_DAYS=40 HUFF=sales" "_rc_40_l6all|WORK_HYBRID=90 HUFF=sales WORK_DAYS=40 LAMBDA=retail:6,medical:6,specialty:6" \
+         "_rg_20_surplus|WORK_HYBRID=90 WORK_DAYS=20 HUFF=surplus"; do
+  tag=${b%%|*}; e=${b#*|}
+  env $S CHAIN=1 REGULAR=1 $e TAG=$tag $PY analysis/public_travel_tiers.py > logs/tiers_29$tag.log 2>&1 || echo "FAIL $tag"
+done
+REGULAR=1 HYB=45 CLASS5=_r45g_40_sales OUTTAG=_regular45 $PY analysis/assemble_public_by_class.py
+REGULAR=1 CLASS5=_rg_40_sales OUTTAG=_regular $PY analysis/assemble_public_by_class.py
+for r in "45|_regular45" "90|_regular"; do
+  BASE=public_model_pairs_tiers_byclass${r#*|}.csv SPLIT3=1 C5AS="class 2" DIST_BY_RANK=1 CORE= CORE_NEAR=1 TRANSFER=1 \
+    RC_PF=1.0 COMMUTE=commute_rank,dest_order,dest_class POOLED= OUTTAG=_reg${r%%|*} $PY analysis/public_adjusted_model.py \
+    > logs/adj_reg${r%%|*}.log 2>&1
+done
 fi
 
 # ---- 6. public_adjusted_pairs_trnear.csv: the 2026-10-18 structure on the 2026-10-18 base (read by tie_footprint.py,

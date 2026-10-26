@@ -5,10 +5,11 @@ TRAVEL    A adopted (doubly constrained)  vs  B origin effects only + every dest
           jobs, metro, area centre) + adopted pair terms + every rejected pair term. Outcome: the adopted one
           (calibrated, pass-through discounted). Primary: leave one home county out (8 folds, seed 7), Jan-Sep. Stability
           check: fit Jan-Jun, score Jul-Sep, beside persistence.
-COVERAGE  A adopted (coverage_model.py: gravity terms + log visits + zero-visit indicator + log visits x nonmetro
-          newsroom county; excluded_outlets.EXCLUDE, home_fips)  vs  A + every rejected term + saturation level (nonmetro
-          home x destination's own stories)  vs  B origin effects only + destination factors (population, stores, jobs,
-          metro, area centre, own stories, newsrooms, broadcaster) + every pair term. Newsroom counties held out in 8
+COVERAGE  A adopted (coverage_model.py: gravity terms + log visits + zero-visit indicator + log visits x rural
+          newsroom county, gravity_terms cov.rural; excluded_outlets.EXCLUDE, home_fips)  vs  A + every rejected term +
+          saturation level (rural home x destination's own stories)  vs  B origin effects only + destination factors
+          (population, stores, jobs, metro, area centre, own stories, newsrooms, broadcaster) + every pair term.
+          Newsroom counties held out in 8
           folds (seed 7); per-county mean error on destinations with 1%+ of visits.
 SPILLOVER adopted outlet model (spillover_common.FINAL) vs + every county factor (cohort, border, population, log newsrooms, one newsroom only,
           travel balance, log outlet stories, broadcaster x travel out); plain and ridge. Leave one county out.
@@ -73,14 +74,14 @@ if "travel" in RUN:
 for version in ("all", "no_broadcast"):
     if "coverage" not in RUN:
         break
-    p, y, rows, lv, nonmetro, adopted, Oc, Dc = coverage_data(version)
+    p, y, rows, lv, rural, adopted, Oc, Dc = coverage_data(version)
     own_j = np.log1p(np.array([own[j] for j in p.j], float))
     nr_j = np.log1p(np.array([len(outlets[j]) for j in p.j], float))
     bc_j = np.array([float(j in bcast) for j in p.j])
     rejected = pd.DataFrame({
         "ring2": [float(R[i][j] == 2) for i, j in zip(p.i, p.j)], "ring3plus": [float(R[i][j] >= 3) for i, j in zip(p.i, p.j)],
-        "lv_x_own": lv * own_j, "lv_x_own_x_nonmetro": lv * own_j * nonmetro,
-        "lv_x_newsrooms": lv * nr_j, "lv_x_broadcast": lv * bc_j, "nonmetro_x_own_level": nonmetro * own_j,
+        "lv_x_own": lv * own_j, "lv_x_own_x_rural": lv * own_j * rural,
+        "lv_x_newsrooms": lv * nr_j, "lv_x_broadcast": lv * bc_j, "rural_x_own_level": rural * own_j,
     }).join(X_extra.iloc[rows].reset_index(drop=True))
     dest = DEST.iloc[rows].reset_index(drop=True).assign(own_j=own_j, newsrooms_j=nr_j, broadcast_j=bc_j)
     out(f"\n## COVERAGE, {version.replace('_', ' ')} (coverage_model.py adopted specification; newsroom counties held out, 8 folds; per-county mean error)")

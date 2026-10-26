@@ -4,9 +4,10 @@ Variables: ACS 2020-2024 5-year, county, from datadesk's Census store (mo_county
 measure is a share, logs for dollar values, as published otherwise. St. Louis city and county one unit (population-
 weighted). Plus LODES 2023 commuting share (employed residents working in another county / population).
   1 CROSSOVER  county share of residents seen outside it in a month (distinct people, lower bound; crossover_compare.csv)
-               ~ log population + nonmetro + commuting share [+ one ACS variable]; ordinary least squares on the logit;
+               ~ log population + rural (settlement flag) + commuting share [+ one ACS variable]; ordinary least squares on the logit;
                leave one county out; then forward selection by that error.
-  2 SPILLOVER  outlet model (broadcaster + crossover) + one county ACS variable; leave one county out.
+  2 SPILLOVER  the adopted outlet model (spillover_common.FINAL) + one county ACS variable; fitted on the adopted
+               outlets, each county's scored outlets held out (spillover_common.heldout_error).
   3 TRAVEL     the adopted travel model + (home-county variable x centred log distance): does a county's makeup change
                how far its residents travel? Outcome: the adopted one (calibrated, pass-through discounted). Primary:
                leave one home county out (8 folds, seed 7), share-weighted error and big flows (FORECAST at 5%+) with
@@ -24,6 +25,9 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
 warnings.filterwarnings("ignore")
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+from spillover_common import FINAL, adopted_split, heldout_error, rural_by_unit  # noqa: E402  the adopted spillover model
 here = Path(__file__).resolve().parent
 root = here.parent
 unit = lambda f: "29189" if f == "29510" else f
@@ -47,10 +51,9 @@ VARS = list(X.columns)
 cc = pd.read_csv(root / "analysis/crossover_compare.csv", dtype={"Unnamed: 0": str}).rename(columns={"Unnamed: 0": "fips"}).set_index("fips")
 cov = pd.read_csv(root / "analysis/county_covariates.csv", dtype={"fips": str})
 cov["u"] = cov.fips.map(unit)
-c = cc[["dedup_lower", "commute_pop", "population"]].join(cov.groupby("u").metro.max()).join(X)
+c = cc[["dedup_lower", "commute_pop", "population"]].join(rural_by_unit()).join(X)
 c["y"] = np.log(c.dedup_lower / (1 - c.dedup_lower))
 c["log_pop"] = np.log(c.population)
-c["nonmetro"] = 1 - c.metro
 VARS = [v for v in VARS if c[v].notna().all() and c[v].std() > 0]   # measures missing for any county are left out
 print("variables tested:", len(VARS), VARS)
 for v in VARS:
@@ -66,9 +69,9 @@ def loo(formula, d, target, inv):
 
 
 inv = lambda z: 1 / (1 + np.exp(-z))
-BASE = "y ~ log_pop + nonmetro + commute_pop"
+BASE = "y ~ log_pop + rural + commute_pop"
 b0 = loo(BASE, c, "dedup_lower", inv)
-print(f"## 1 CROSSOVER ({len(c)} counties): baseline (population, nonmetro, commuting) error {b0:.1f} points")
+print(f"## 1 CROSSOVER ({len(c)} counties): baseline (population, rural, commuting) error {b0:.1f} points")
 res = []
 for v in VARS:
     e = loo(BASE + f" + {v}", c, "dedup_lower", inv)
@@ -91,22 +94,15 @@ for v in VARS:
     so[v] = (so[v] - so[v].mean()) / so[v].std()
 
 
-def loo_out(f):
-    e = []
-    for fp in so.fips.unique():
-        tr, te = so[so.fips != fp], so[so.fips == fp]
-        e += list(np.abs(smf.glm(f, tr, family=sm.families.Binomial()).fit().predict(te) - te.rate))
-    return 100 * np.mean(e)
-
-
-s0 = loo_out("rate ~ broadcast + travel_out")
+so_fit = adopted_split(so)[0]
+s0 = heldout_error(FINAL, so)
 res = []
 for v in VARS:
-    f = f"rate ~ broadcast + travel_out + {v}"
-    m = smf.glm(f, so, family=sm.families.Binomial()).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(so.fips)[0]})
-    res.append((v, loo_out(f), m.params[v], m.pvalues[v]))
+    f = f"{FINAL} + {v}"
+    m = smf.glm(f, so_fit, family=sm.families.Binomial()).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(so_fit.fips)[0]})
+    res.append((v, heldout_error(f, so), m.params[v], m.pvalues[v]))
 r = pd.DataFrame(res, columns=["variable", "error", "coef", "p"]).sort_values("error")
-print(f"\n## 2 SPILLOVER ({len(so)} outlets): adopted error {s0:.1f} points")
+print(f"\n## 2 SPILLOVER ({FINAL}; fitted {len(so_fit)}, scored {int(so.scored.sum())} outlets): adopted error {s0:.2f} points")
 print(r.head(8).round(3).to_string(index=False))
 
 sys.path.insert(0, str(here))

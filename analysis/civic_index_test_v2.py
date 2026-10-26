@@ -1,8 +1,9 @@
-"""Civic Information Index indicators against the adopted spillover model (broadcaster + urban share + concentration).
+"""Civic Information Index indicators against the adopted spillover model (spillover_common.FINAL), on its outlets.
 
 Each of 28 indicators added alone (leave one county out). Then an honest check of choosing several: for every held-out
 county, indicators are chosen by forward selection (error across five groups of the other counties, up to 4) on the other counties only, and the held-out county is
-then predicted -- the selection never sees the county it is scored on. All outlets and well-collected outlets.
+then predicted -- the selection never sees the county it is scored on. Fitted on the adopted outlets (well
+collected, 20+ stories), each county's scored outlets (10+) held out.
 Civic Information Index 2026, Internews Listening Post Collective and Brown University Information Futures Lab.
 """
 import warnings
@@ -14,6 +15,9 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
 warnings.filterwarnings("ignore")
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+from spillover_common import FINAL, adopted_split, heldout_error, rural_by_unit  # noqa: E402,F401  the adopted spillover model
 root = Path(__file__).resolve().parents[1]
 unit = lambda f: "29189" if f == "29510" else f
 cii = pd.read_csv(root / "census_dl/civic_index/cii_2026.csv", dtype={"FIPS": str})
@@ -36,18 +40,11 @@ X = (X[VARS] - X[VARS].mean()) / X[VARS].std()
 so = pd.read_csv(root / "analysis/spillover_outlets.csv", dtype={"fips": str}).join(X, on="fips")
 q = pd.read_csv(root / "coverage/source_quality_2026_03.csv").groupby("canonical_name").agg(
     ln=("local_news", "max"), tu=("text_unavailable", "max"), shrt=("short_texts", "max"))
-so = so.join(q, on="outlet")
+so = so.drop(columns=["ln", "tu", "shrt", "good"], errors="ignore").join(q, on="outlet")   # the outlet file carries them too
 so["good"] = (so.ln / (so.ln + so.tu) >= .95) & (1 - so.shrt / so.ln >= .8) & (so.placed / so.ln >= .6)
-BASE = "rate ~ broadcast + pct_urban + concentration"
+BASE = FINAL                       # the adopted outlet model (spillover_common.FINAL)
 fit = lambda f, d: smf.glm(f, d, family=sm.families.Binomial()).fit()
-
-
-def loo(f, d):
-    e = []
-    for fp in d.fips.unique():
-        tr, te = d[d.fips != fp], d[d.fips == fp]
-        e += list(np.abs(fit(f, tr).predict(te) - te.rate))
-    return 100 * np.mean(e)
+loo = heldout_error                # fitted on the adopted outlets, each county's scored outlets held out
 
 
 def cv_err(f, d, folds=5):
@@ -62,8 +59,9 @@ def cv_err(f, d, folds=5):
 
 def nested(d, k=4):
     e, picks = [], []
-    for fp in d.fips.unique():
-        tr, te = d[d.fips != fp], d[d.fips == fp]
+    df, ds = adopted_split(d)
+    for fp in ds.fips.unique():
+        tr, te = df[df.fips != fp], ds[ds.fips == fp]
         chosen, best = [], cv_err(BASE, tr)
         for _ in range(k):
             trial = [(cv_err(BASE + " + " + " + ".join(chosen + [v]), tr), v) for v in VARS if v not in chosen]
@@ -76,16 +74,17 @@ def nested(d, k=4):
     return 100 * np.mean(e), pd.Series(picks).map(label).value_counts()
 
 
-for lab, d in (("all outlets", so), ("well-collected outlets", so[so.good])):
+for lab, d in (("adopted outlets", so),):
     b0 = loo(BASE, d)
-    print(f"\n## {lab}: {len(d)} outlets, {d.fips.nunique()} counties; adopted model error {b0:.1f} points")
+    df = adopted_split(d)[0]
+    print(f"\n## {lab} ({BASE}): fitted {len(df)}, scored {int(d.scored.sum())} outlets, {df.fips.nunique()} counties; adopted model error {b0:.2f} points")
     res = []
     for v in VARS:
-        m = smf.glm(BASE + f" + {v}", d, family=sm.families.Binomial()).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(d.fips)[0]})
+        m = smf.glm(BASE + f" + {v}", df, family=sm.families.Binomial()).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(df.fips)[0]})
         res.append((label[v], loo(BASE + f" + {v}", d), m.params[v], m.pvalues[v]))
     r = pd.DataFrame(res, columns=["indicator", "error", "coef", "p"]).sort_values("error")
     print("Each indicator alone (best 8):")
     print(r.head(8).round(3).to_string(index=False))
     e, picks = nested(d)
-    print(f"Choosing up to 4 indicators, chosen without seeing the held-out county: error {e:.1f} points (adopted {b0:.1f})")
+    print(f"Choosing up to 4 indicators, chosen without seeing the held-out county: error {e:.2f} points (adopted {b0:.2f})")
     print("indicators most often chosen:", picks.head(5).to_dict())

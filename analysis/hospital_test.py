@@ -23,6 +23,9 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
 warnings.filterwarnings("ignore")
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+from spillover_common import FINAL, adopted_split, heldout_error, rural_by_unit  # noqa: E402,F401  the adopted spillover model
 here = Path(__file__).resolve().parent
 root = here.parent
 sys.path.insert(0, str(here))
@@ -39,8 +42,8 @@ print(f"{len(h)} hospitals in {len(hosp_counties)} counties; {len(FIPS) - len(ho
 cc = pd.read_csv(root / "analysis/crossover_compare.csv", dtype={"Unnamed: 0": str}).rename(columns={"Unnamed: 0": "fips"}).set_index("fips")
 cov = pd.read_csv(root / "analysis/county_covariates.csv", dtype={"fips": str})
 cov["u"] = cov.fips.map(unit)
-c = cc[["dedup_lower", "commute_pop", "population"]].join(cov.groupby("u").metro.max())
-c["y"] = np.log(c.dedup_lower / (1 - c.dedup_lower)); c["log_pop"] = np.log(c.population); c["nonmetro"] = 1 - c.metro
+c = cc[["dedup_lower", "commute_pop", "population"]].join(rural_by_unit())
+c["y"] = np.log(c.dedup_lower / (1 - c.dedup_lower)); c["log_pop"] = np.log(c.population)
 cu = Counter(); [cu.update({unit(f): n}) for f, n in count.items()]
 c["has_hospital"] = [float(cu[f] > 0) for f in c.index]; c["log_hospitals"] = np.log1p([cu[f] for f in c.index])
 inv = lambda z: 1 / (1 + np.exp(-z))
@@ -50,7 +53,7 @@ def loo(f, d):
     return 100 * np.mean([abs(inv(smf.ols(f, d.drop(index=k)).fit().predict(d.loc[[k]]).iloc[0]) - d.loc[k, "dedup_lower"]) for k in d.index])
 
 
-B = "y ~ log_pop + nonmetro + commute_pop"
+B = "y ~ log_pop + rural + commute_pop"
 print("\n## 1 CROSSOVER (share of residents seen outside the county)")
 for lab, f in (("baseline", B), ("+ has hospital", B + " + has_hospital"), ("+ hospitals (log count)", B + " + log_hospitals")):
     m = smf.ols(f, c).fit(cov_type="HC1")
@@ -63,14 +66,16 @@ so["has_hospital"] = [float(cu[f] > 0) for f in so.fips]
 
 
 def loo_o(f):
-    return 100 * np.mean(sum((list(np.abs(smf.glm(f, so[so.fips != k], family=sm.families.Binomial()).fit()
-                                         .predict(so[so.fips == k]) - so[so.fips == k].rate)) for k in so.fips.unique()), []))
+    return heldout_error(f, so)     # the adopted outlets and held-out scheme (spillover_common)
+
+
+so_fit = adopted_split(so)[0]
 
 
 print("\n## 2 SPILLOVER (outlets)")
-for lab, f in (("adopted", "rate ~ broadcast + travel_out"), ("+ has hospital", "rate ~ broadcast + travel_out + has_hospital")):
-    m = smf.glm(f, so, family=sm.families.Binomial()).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(so.fips)[0]})
-    print(f"  {lab}: error {loo_o(f):.1f} points" + (f"; has_hospital {m.params['has_hospital']:+.2f} (p {m.pvalues['has_hospital']:.3f})" if "has_hospital" in m.params else ""))
+for lab, f in (("adopted", FINAL), ("+ has hospital", FINAL + " + has_hospital")):
+    m = smf.glm(f, so_fit, family=sm.families.Binomial()).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(so_fit.fips)[0]})
+    print(f"  {lab}: error {loo_o(f):.2f} points" + (f"; has_hospital {m.params['has_hospital']:+.2f} (p {m.pvalues['has_hospital']:.3f})" if "has_hospital" in m.params else ""))
 
 # ---- 3 travel ------------------------------------------------------------------------------------------------------
 import gravity_terms as gt  # noqa: E402
@@ -112,9 +117,9 @@ for version in ("all", "no_broadcast"):
     rows = [pidx[k] for k in zip(p.i, p.j)]
     pos = (p.visits > 0).values
     lv = np.where(pos, np.log(p.visits.where(pos, 1.0)), 0.0)
-    nonmetro = 1 - gt.cov.metro.reindex(p.i).values     # coverage_model.py adopted specification
+    rural = gt.cov.rural.reindex(p.i).values.astype(float)     # coverage_model.py adopted specification (settlement flag)
     base = Xd.iloc[rows][FACTORS].reset_index(drop=True).assign(log_visits=lv, zero_visits=(~pos).astype(float),
-                                                                log_visits_x_nonmetro=lv * nonmetro)
+                                                                log_visits_x_rural=lv * rural)
     FE = pd.concat([pd.get_dummies(p.i, prefix="o").astype(float), pd.get_dummies(p.j, prefix="d", drop_first=True).astype(float)], axis=1)
     y = p.stories.values.astype(float)
     E = {}

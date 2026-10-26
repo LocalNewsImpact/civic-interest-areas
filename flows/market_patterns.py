@@ -343,7 +343,8 @@ def norm_hex(Hk):
     spread by population and destinations, its dense hexagons rise above it, to the cap of 99. BUSIEST=hexagon (a
     sensitivity, 2026-10-25) rescales travel so the busiest HEXAGON -- travel x its dasymetric weight -- is 50 instead:
     every other hexagon falls by the busiest town's peak weight, and the floor of 5 then cuts most rural hexagons
-    (Columbia's area 1,166 -> 811 km2, Mexico's 802 -> 285, Linn's 949 -> 270)"""
+    (6,912 versions, multi-part area: Columbia 979 -> 705 km2, Mexico 802 -> 273, Linn 896 -> 252; area_ensemble.py
+    with OUT, area_core.py with PROB)"""
     if BUSIEST != "hexagon":
         return dict(Hk)
     s_ = max((v * max(DW.get(k_, 1.0) for k_ in _unit_hexes.get(u, [None])) for u, v in Hk.items() if v > 0 and u in _unit_hexes), default=0)
@@ -598,6 +599,8 @@ for town, pats in out.items():
                     idx["netcov"][k_] = 100.0
                 pt["newsrooms"] = {(pl_shapes[X_][0]["NAME"] if X_ in pl_shapes else X_): round(w_, 2) for X_, w_ in news_w.items()}
                 raw = spatial(raw, home_hexes_of[town])
+            else:                     # the alternative weights get the same spatial lag, so the sensitivity compares like
+                raw = spatial(raw, home_hexes_of[town])   # with like (only the print below reads these maps)
             idx[name_] = {k: round(100 * x, 1) for k, x in raw.items() if 100 * x >= 1}
             for k in home_hexes_of[town]:
                 idx[name_][k] = 100.0
