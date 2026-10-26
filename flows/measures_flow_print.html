@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>From data to measures, print figure</title>
+<link rel="stylesheet" href="dd/css/fonts.css">
+<link rel="stylesheet" href="dd/css/tokens.css">
+<link rel="stylesheet" href="dd/css/datadesk.css">
+<style>
+  /* 528 CSS px = 5.5 in; rendered at 3.125x for 300 dpi (as model_diagram_print.html) */
+  html, body { margin: 0; background: #ffffff; color: #0b0b0b; }
+  body { width: 528px; font-size: 9.5px; line-height: 1.35; }
+  .dd-visual { padding: 0; }
+  .dd-subtitle { margin-bottom: 8px; }
+  .flow { display: grid; grid-template-columns: 112px 14px 196px 14px 1fr; row-gap: 6px; align-items: stretch; }
+  .head { font-size: 8.8px; font-weight: 600; color: #5b6370; text-transform: uppercase; letter-spacing: .04em; padding: 0 2px 1px; }
+  .box { background: #fafaf8; border: 1px solid #d9d8d0; padding: 5px 7px 6px; }
+  .box b { display: block; font-size: 10.5px; font-weight: 650; margin-bottom: 1px; }
+  .box .src { color: #5b6370; font-size: 8.8px; }
+  .ans { border-left: 3px solid #003a56; }
+  .rq { font-weight: 600; color: #003a56; }
+  .arrow { display: flex; align-items: center; justify-content: center; color: #8a909a; font-size: 12px; }
+  .num { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<figure class="dd-visual">
+  <h2 class="dd-title">From data to measures</h2>
+  <p class="dd-subtitle">How geolocated stories and residents' travel produce each measure, and the question each answers</p>
+  <div class="flow">
+    <div class="head">Data</div><div></div><div class="head">Measure</div><div></div><div class="head">Answer</div>
+
+    <div class="box"><b>Stories</b><span class="src">March 2026, geolocated to the places they cover</span></div>
+    <div class="arrow">→</div>
+    <div class="box"><b>Spillover</b>The share of an outlet's stories about another county, mentions and sports counted at half</div>
+    <div class="arrow">→</div>
+    <div class="box ans"><span class="rq">RQ1</span> Does local news cross county borders?<br>
+      <span class="num">Audrain 20%, Osage 26%, Boone 29%</span></div>
+
+    <div class="box"><b>Residents' travel</b><span class="src">Mobile-device visits, January–September 2026</span></div>
+    <div class="arrow">→</div>
+    <div class="box"><b>Crossover</b>The share of a county's residents seen outside it in a month</div>
+    <div class="arrow">→</div>
+    <div class="box ans"><span class="rq">RQ1</span> How many residents leave their county?<br>
+      <span class="num">Audrain 44%, Osage 59%, Boone 26%</span></div>
+
+    <div class="box"><b>Stories + travel</b><span class="src">Every pair of Missouri counties</span></div>
+    <div class="arrow">→</div>
+    <div class="box"><b>Coverage model</b>Stories one county's newsrooms publish about another, against residents' travel there</div>
+    <div class="arrow">→</div>
+    <div class="box ans"><span class="rq">RQ1</span> In proportion to travel? No: twice the travel brings
+      <span class="num">1.38×</span> the stories in urban counties, <span class="num">1.18×</span> in rural ones</div>
+
+    <div class="box"><b>Travel + news ties</b><span class="src">Each town's residents, on a grid of hexagons</span></div>
+    <div class="arrow">→</div>
+    <div class="box"><b>Civic interest area</b>Travel patterns drawn under <span class="num">6,912</span> combinations of choices; the area is the places in at least half</div>
+    <div class="arrow">→</div>
+    <div class="box ans"><span class="rq">RQ2</span> Columbia <span class="num">378</span>, Mexico <span class="num">310</span>,
+      Linn <span class="num">346</span> square miles; stable across months
+      (<span class="num">86</span>, <span class="num">87</span>, <span class="num">72%</span> of places)</div>
+  </div>
+  <figcaption class="dd-footer" style="margin-top:7px"><span class="dd-source">Stories: Missouri School of Journalism analysis,
+    March 2026. Visits: Advan Research, Neighborhood Patterns Plus (Dewey Data), January–September 2026 (areas: January–July).
+    Calculations and fitted values: Supplementary Figure S1.</span></figcaption>
+</figure>
+<script>
+  // The figures stage reads data-height to size the screenshot window.
+  addEventListener("load", () => {
+    document.body.dataset.height = Math.ceil(document.querySelector("figure").getBoundingClientRect().height);
+  });
+</script>
+</body>
+</html>

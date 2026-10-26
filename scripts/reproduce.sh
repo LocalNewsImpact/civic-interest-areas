@@ -172,7 +172,7 @@ if stage qa; then
   step coverage_density_alpha1 ALPHA=1 analysis/area_coverage_alignment.py
 fi
 
-# Tables and figures: the area table, the calculation diagram and the area maps (300 dpi PNG and PDF).
+# Tables and figures: the area table, the calculation diagram, the data-to-measures flow and the area maps (300 dpi PNG and PDF).
 if stage figures; then
   cd $ROOT/flows
   python3 -m http.server 8765 --bind 127.0.0.1 > /dev/null 2>&1 &
@@ -192,6 +192,9 @@ if stage figures; then
   shot "model_diagram_print.html" model_diagram.png 528
   "$CHROME" --headless=new --disable-gpu --no-pdf-header-footer --virtual-time-budget=40000 \
     --print-to-pdf=print/model_diagram.pdf "http://127.0.0.1:8765/model_diagram_print.html" 2>/dev/null
+  shot "measures_flow_print.html" measures_flow.png 528
+  "$CHROME" --headless=new --disable-gpu --no-pdf-header-footer --virtual-time-budget=40000 \
+    --print-to-pdf=print/measures_flow.pdf "http://127.0.0.1:8765/measures_flow_print.html" 2>/dev/null
   for t in Columbia Mexico Linn; do
     shot "market_pattern_print.html?town=$t&rank=1" "civic_area_${(L)t}.png" 900
   done
