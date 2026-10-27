@@ -30,7 +30,10 @@ good_counties = set(cq[(cq.coverage == 1) & (cq.text_ok >= .95) & (cq.full_lengt
 so = pd.read_csv(root / "analysis/spillover_outlets.csv", dtype={"fips": str})
 so["good_outlet"] = so.good    # spillover_outlets.py's well-collected test, the one the model is fitted on
 so["good_county"] = so.fips.isin(good_counties)
-sets = {"all outlets": so, "well-collected outlets": so[so.good_outlet], "outlets in well-collected counties": so[so.good_county]}
+# the model's outlets (spillover_common.adopted_split: well collected, 20+ placed stories, not Three Rivers Publishing) --
+# the rule the paper's Methods state, and the one its correlation reports (authors, 2026-10-27)
+sets = {"all outlets": so, "well-collected outlets": so[so.good_outlet], "fitted outlets (the Methods rule)": so[so.fitted.astype(bool)],
+        "outlets in well-collected counties": so[so.good_county]}
 
 
 def loo(f, d):

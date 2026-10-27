@@ -1707,17 +1707,25 @@ commit 8aad9c4); p from the (weighted) least-squares slope:
 |---|---|---:|---:|---:|
 | adopted (b = 0.62) | all outlets | 72 | +0.18 (0.120) | +0.17 (0.142) |
 | adopted (b = 0.62) | well-collected outlets | 53 | +0.41 (0.003) | +0.40 (0.003) |
+| adopted (b = 0.62) | **fitted outlets (the Methods rule; reported in the paper)** | 47 | **+0.33 (0.022)** | +0.37 (0.011) |
 | adopted (b = 0.62) | outlets in well-collected counties | 29 | +0.40 (0.034) | +0.34 (0.067) |
 | low end of b's range | all outlets | 72 | +0.20 (0.101) | +0.19 (0.114) |
 | low end of b's range | well-collected outlets | 53 | +0.42 (0.002) | +0.42 (0.002) |
+| low end of b's range | fitted outlets (the Methods rule) | 47 | +0.34 (0.019) | +0.38 (0.008) |
 | low end of b's range | outlets in well-collected counties | 29 | +0.42 (0.022) | +0.37 (0.046) |
 | high end of b's range | all outlets | 72 | +0.17 (0.142) | +0.16 (0.172) |
 | high end of b's range | well-collected outlets | 53 | +0.39 (0.004) | +0.38 (0.005) |
+| high end of b's range | fitted outlets (the Methods rule) | 47 | +0.33 (0.025) | +0.35 (0.017) |
 | high end of b's range | outlets in well-collected counties | 29 | +0.37 (0.051) | +0.32 (0.094) |
 
 A positive relationship appears where collection is good: well-collected outlets r +0.38 to +0.42 (p ≤ 0.005),
 weighted or not, at the adopted crossover and both ends of b's range; across all outlets it is not distinguishable from
 zero (r +0.16 to +0.20, p ≥ 0.10).
+
+The paper reports the fitted outlets (authors, 2026-10-27): the rule its Methods state for newsroom comparisons --
+well collected, 20+ placed stories, not Three Rivers Publishing (85 outlets, 48 counties; 47 with a print or digital
+outlet). The "well-collected outlets" rows apply the same collection tests at 10+ placed stories and keep Three
+Rivers Publishing, a looser rule the paper does not use.
 
 ## Collection quality (sensitivity)
 
