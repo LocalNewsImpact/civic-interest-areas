@@ -200,7 +200,8 @@ rule keeping only the body would cut it out.
 
 Tie markets, the market's 8 study towns: accuracy median 0.505 (printed 0.51; mean 0.526), month-split stability median
 0.79, travel alone 0.52 (`analysis/tie_footprint.py SUMMARY=1`, from the settings each run recorded). Supply (coverage
-density, balanced diet) is not a result of this paper: see Supply (QA only; next paper).
+density, balanced diet; RQ3): frequent / regular / sporadic 49 / 6 / 45%, 35 / 4 / 61%, 34 / 6 / 60%; balanced diet 49%,
+12%, 28% (Columbia, Mexico, Linn), on the travel-only measured area -- see Supply: coverage density and the balanced diet.
 
 ### Rural flag: Census settlement replaces RUCC (2026-10-25)
 
@@ -2213,20 +2214,25 @@ interest. Map titles: "<Town>'s civic interest area", numbered I, II, III only w
 (Columbia, one area since 2026-10-24: no numeral). Earlier sections keep the name they were written under. Units of
 analysis: county -> civic interest area -> each outlet's zone of service; no statewide measure is a finding.
 
-## Supply (QA only; next paper)
+## Supply: coverage density and the balanced diet (RQ3)
 
-Coverage density and the balanced diet are not results of this paper. They are measured on the **travel-only core**:
-the ensemble's travel-only level, news weight ω = 0 (1,728 versions; idx["travel"]: travel, spatial lag and direction,
-home 100, no news term), core p_travel ≥ 0.5 under the same multi-part rule and D90 limit (home body plus every part of
-3+ hexagons within D90; specks out: Columbia 2, Mexico 4, Linn 9), so that no news term shapes the area the supply is
-measured in. The figures below are QA diagnostics for the next paper and are kept out of Current results
-(`analysis/area_coverage_alignment.py`, `cin_diet.py`):
+Coverage density and the balanced diet are results of this paper (authors, 2026-10-26, reversing the 2026-10-24
+next-paper scope; RQ3). They are measured on the **travel-only measured area**: the ensemble's travel-only level, news
+weight ω = 0 (1,728 versions; idx["travel"]: travel, spatial lag and direction, home 100, no news term), every hexagon
+with p_travel ≥ 0.5 in the home body or in a piece of **any size** whose nearest hexagon lies within D90
+(`area_core.py` `core50_travel_measured_hexes`), so that no news term shapes the area the supply is measured in. Specks
+of 1–2 hexagons are measured (authors, 2026-10-26): the 3-hexagon minimum shapes the outline, not what is measured, and a
+speck is often a small town (Hallsville: two hexagons at p 0.62 and 0.69, about 11 stories a month). Pieces beyond D90
+stay out (Columbia: Jefferson City). `analysis/area_coverage_alignment.py`, `cin_diet.py`:
 
-| Area (travel-only core, multi-part) | km² | People inside | Frequent / regular / sporadic / none (QA) | Balanced diet (QA) |
-|---|---:|---:|---|---:|
-| Columbia | 1,049 | 162,809 | 49 / 6 / 45 / 0 | 49% |
-| Mexico | 820 | 109,941 | 35 / 4 / 61 / 0 | 12% |
-| Linn | 931 | 146,208 | 34 / 6 / 60 / 0 | 28% |
+| Area (travel-only, measured) | Hexagons | km² | People inside | Frequent / regular / sporadic / none | Balanced diet |
+|---|---:|---:|---:|---|---:|
+| Columbia | 182 | 1,061 | 163,560 | 49 / 6 / 45 / 0 | 49% |
+| Mexico | 146 | 849 | 111,443 | 35 / 4 / 61 / 0 | 12% |
+| Linn | 169 | 990 | 147,199 | 34 / 6 / 60 / 0 | 28% |
+
+With specks out (the outlined area, the figures before 2026-10-26): Columbia 180 hexagons, 1,049 km², 162,809 people;
+Mexico 141, 820, 109,941; Linn 159, 931, 146,208. Every share above is the same to the percentage point.
 
 "None" cannot occur: every hexagon lies in a county whose county-level stories reach all its hexagons. County-story
 weight per hexagon is capped at the story's weight; statewide, national and international stories add nothing, in the
@@ -2535,7 +2541,7 @@ stay.
 | Areas | Minimum size evidence | All study towns: 75 markets; Spearman 0.37; median 0.84 under 500 … 0.95 above; Mexico's secondary 729 residents, 389 hexagons, 72% holding; 63 remain; audit round 1 57 areas, median 0.93, 0.83 / 0.855 / 0.91 / 0.94, Spearman 0.31, Mexico 0.98; audit round 2 0.76 / 0.835 / 0.89 / 0.92, Spearman 0.19, Columbia 0.95; round 3 58 areas, median 0.92, 0.76 / 0.84 / 0.89 / 0.93, Spearman 0.39 | The market's 9 areas in 8 towns: median 0.90; 0.87 / 0.78 / 0.90 / 0.93 by size (Linn 0.63); Spearman 0.66 | Independent halves; ACS residents; K rule; scope |
 | Areas | Selection-rule sensitivity ("split-half agreement") | Home included, K = 6: 0.896 / 0.880 / 0.941 / 0.734, mean 0.863, "highest mean agreement"; area sensitivity Columbia I 0.77–1.0, Mexico 0.44 / 0.50; audit round 1 home excluded 0.76 / 0.75 / 0.58, mean 0.70, IoU 0.53–1.0 / 0.52–1.0 / 0.45–1.0; audit round 2 432-version ensemble r(p) 0.99 / 0.96 / 0.86, core Jaccard 0.90 / 0.85 / 0.66 (p ≥ 0.8: 0.95 / 0.96 / 0.58), single-drawing outline 0.85 / 0.74 / 0.55; 1,728 versions r(p) 0.994 / 0.978 / 0.901 (contested 0.990 / 0.956 / 0.734), core Jaccard 0.85 / 0.88 / 0.72 | 6,912 versions, month-split stability: r(p) 0.995 / 0.978 / 0.895 (contested 0.990 / 0.955 / 0.732); core Jaccard 0.86 / 0.87 / 0.72 | Settings enter the ensemble; "agreement" is month-split stability, not validity |
 | Areas | Busiest-hexagon sensitivity (BUSIEST=hexagon) | 1,728 versions at ω = 1, all core hexagons (p ≥ 0.5): Columbia 811 km², 188,276 people; Mexico 285, 12,068; Linn 270, 36,695 | 6,912 versions, 7 of 7, D90 limit, multi-part area: 705 / 273 / 252 km², 152,057 / 11,871 / 36,492 people (all core 764 / 285 / 275 km², 176,025 / 12,068 / 36,736) | Rerun on the current ensemble and area rule |
-| Supply | Coverage density | Columbia II place-specific 24 / 5 / 26 / 45%, with county-level stories 83 / 17 / 0 / 0%; square root for all: Columbia I 58 / 38 / 4 / 0, II 25 / 25 / 50 / 0, Mexico 32 / 15 / 53 / 0, Linn 25 / 54 / 21 / 0; revised: Columbia I 53 / 4 / 43 / 0, II 23 / 4 / 73 / 0, Mexico 30 / 3 / 67 / 0, Linn 22 / 5 / 73 / 0, newsrooms 1 / 1, 2 / 6, 2 / 2, 2 / 2; audit round 1 on the network-tie areas: 44 / 8 / 48 / 0 (newsrooms 2 / 1), 32 / 4 / 64 / 0 (2 / 3), 21 / 8 / 71 / 0 (2 / 2), 259 / 311 / 219 hexagons, alpha 1: 44 / 8 / 48, 29 / 7 / 64, 20 / 9 / 71; audit round 2 QA on the travel-only area: 34 / 9 / 57 / 0, 18 / 5 / 77 / 0, 22 / 9 / 69 / 0 (travel-only area 3,502 / 3,613 / 1,292 km²) ; round 3 unconnected travel-only core: 53 / 6 / 41 / 0, 35 / 4 / 61 / 0, 34 / 6 / 60 / 0 (1,264 / 849 / 990 km²); 1,728-version travel-only core, multi-part, no distance limit: 52 / 5 / 43 / 0, 35 / 4 / 61 / 0, 34 / 6 / 60 / 0 (1,195 / 820 / 931 km²; Columbia 209,594 people) | QA only, travel-only core (ω = 0 of the 6,912 versions; multi-part, D90 limit): 49 / 6 / 45 / 0, 35 / 4 / 61 / 0, 34 / 6 / 60 / 0 (1,049 / 820 / 931 km²; Columbia 162,809 people) | Supply is the next paper's; travel-only core with the multi-part rule and D90 limit (2026-10-25) |
+| Supply | Coverage density | Columbia II place-specific 24 / 5 / 26 / 45%, with county-level stories 83 / 17 / 0 / 0%; square root for all: Columbia I 58 / 38 / 4 / 0, II 25 / 25 / 50 / 0, Mexico 32 / 15 / 53 / 0, Linn 25 / 54 / 21 / 0; revised: Columbia I 53 / 4 / 43 / 0, II 23 / 4 / 73 / 0, Mexico 30 / 3 / 67 / 0, Linn 22 / 5 / 73 / 0, newsrooms 1 / 1, 2 / 6, 2 / 2, 2 / 2; audit round 1 on the network-tie areas: 44 / 8 / 48 / 0 (newsrooms 2 / 1), 32 / 4 / 64 / 0 (2 / 3), 21 / 8 / 71 / 0 (2 / 2), 259 / 311 / 219 hexagons, alpha 1: 44 / 8 / 48, 29 / 7 / 64, 20 / 9 / 71; audit round 2 QA on the travel-only area: 34 / 9 / 57 / 0, 18 / 5 / 77 / 0, 22 / 9 / 69 / 0 (travel-only area 3,502 / 3,613 / 1,292 km²) ; round 3 unconnected travel-only core: 53 / 6 / 41 / 0, 35 / 4 / 61 / 0, 34 / 6 / 60 / 0 (1,264 / 849 / 990 km²); 1,728-version travel-only core, multi-part, no distance limit: 52 / 5 / 43 / 0, 35 / 4 / 61 / 0, 34 / 6 / 60 / 0 (1,195 / 820 / 931 km²; Columbia 209,594 people) | Travel-only measured area (ω = 0 of the 6,912 versions; every core piece within D90, specks included): 49 / 6 / 45 / 0, 35 / 4 / 61 / 0, 34 / 6 / 60 / 0 (1,061 / 849 / 990 km²; Columbia 163,560 people); 2026-10-25 multi-part with specks out: the same shares on 1,049 / 820 / 931 km² | Supply is in this paper (RQ3, 2026-10-26); specks measured (2026-10-26) |
 | Supply | Balanced diet | Columbia I 51%, 5.0, 3 outlets; II 10%, 1.5, 4; Mexico 14%, 2.2, 3; Linn 14%, 1.7, 2; audit round 1 44%, 4.4, 3; 15%, 2.4, 3; 16%, 1.8, 2; Economic Development 14% of Mexico's; audit round 2 QA on the travel-only area 22%, 9%, 17% ; round 3 unconnected core 46%, 12%, 28% | QA only, travel-only core (ω = 0; multi-part, D90 limit): 49%, 12%, 28% | As above |
 | Tie markets | Month-split stability / accuracy, Columbia–Jefferson City market | 2026-10-18: 0.85 / 0.67; audit round 1 (before stage 3) 0.81 / 0.615 (travel alone 0.49); audit round 2 (stage 3) 0.82 / 0.625; round 3 accuracy 0.50 | Accuracy median 0.505 (printed 0.51; mean 0.526), month-split stability 0.79, travel alone 0.52 (8 study towns; settings recorded by each run) | Scoring change (home masked, beyond the home county); stage-3 and round-3 tie changes; scope |
 | Tie markets | Columbia, Mexico, Linn (town) | 2026-10-18 accuracy 0.69, 0.46, 0.68; audit round 1 0.13, 0.41, 0.82, month-split stability 0.88, 0.82, 0.88; audit round 2 accuracy 0.13, 0.41, 0.75; month-split stability 0.89, 0.84, 0.89 | Accuracy 0.14, 0.47, 0.69; month-split stability 0.92, 0.80, 0.79 | Old scoring (Columbia's 0.69 from unmasked home units); stage 3 |

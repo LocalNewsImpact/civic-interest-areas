@@ -203,6 +203,11 @@ for region in sys.argv[1:] or ["columbia"]:
             pt_ = pieces(core_t)
             kept_t = set().union(*[p_ for p_ in pt_ if p_ & home or (len(p_) >= 3 and from_c(p_) <= D[LIMIT])]) if pt_ else set()
             rec["core50_travel_part_hexes"] = sorted(key(c) for c in kept_t)
+            # THE MEASURED AREA (authors, 2026-10-26): coverage density and balance are measured on every core hexagon
+            # within the limit -- the home body and every piece of any size, specks included. The 3-hexagon minimum is a
+            # rule for the outline; a speck is often a small town (Hallsville: two hexagons at p 0.62 and 0.69)
+            meas_t = set().union(*[p_ for p_ in pt_ if p_ & home or from_c(p_) <= D[LIMIT]]) if pt_ else set()
+            rec["core50_travel_measured_hexes"] = sorted(key(c) for c in meas_t)
             rec["core50_travel_kept"] = {"hexagons": len(kept_t), "km2": round(km2(kept_t)),
                                          "people": round(sum(hex_pop.get(c, 0) for c in kept_t)),
                                          "specks_dropped": sum(1 for p_ in pt_ if not (p_ & home) and len(p_) <= 2)}
