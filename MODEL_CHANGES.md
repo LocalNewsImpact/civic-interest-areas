@@ -182,7 +182,8 @@ independently refitted odd and even months: K = 2 (K = 3 fails on the odd/even m
 | All core hexagons (p ≥ 0.5): km² / people | 1,073 / 194,485 | 831 / 124,228 | 955 / 139,992 | `flows/area_ensemble.py` |
 | People at p 0.5–0.8 / p ≥ 0.8 | 47,491 / 146,994 | 111,976 / 12,252 | 100,435 / 39,557 | `flows/area_ensemble.py` |
 | p ≥ 0.8: km² | 536 | 320 | 346 | `flows/area_ensemble.py` |
-| Month-split stability: r(p) all / contested; mean \|p_odd − p_even\|; core Jaccard (home left out; K was selected on the same split) | 0.995 / 0.990; 0.014; 0.86 | 0.978 / 0.955; 0.030; 0.87 | 0.895 / 0.732; 0.056; 0.72 | `flows/area_ensemble.py` |
+| Month-split stability: r(p) all / contested; mean \|p_odd − p_even\|; core Jaccard (home left out; K was selected on the same split) | 0.995 / 0.988; 0.014; 0.84 | 0.978 / 0.955; 0.030; 0.89 | 0.896 / 0.755; 0.054; 0.70 | `flows/area_ensemble.py` |
+| Month-split stability of the area (the full rule, towns included, applied to each half; home left out), road stops at half (2026-10-27) | 0.86 (169 / 146 hexagons) | 0.92 (147 / 137) | 0.67 (197 / 141; Columbia and Ashland in 80% / 79% of odd-month versions, under 50% of even-month) | `flows/area_core.py` `core50_area_month_split` |
 | Boone hexagons: likely 20%+ / 50%+ / 80%+ | — | 51 / 24 (20 in the Columbia part) / 1 | — | `flows/area_ensemble.py` |
 | Towns drawn in 50%+ of versions with no hexagon at p ≥ 0.5, inside the TV market (share of versions drawing the town) | Moberly 0.87, Centralia 0.82, Fulton 0.74, Boonville 0.73 | Moberly 0.73 | Ashland 0.79 | `flows/area_ensemble.py` |
 | Network-tie core against the travel-only core (Jaccard) | 0.93 | 0.91 | 0.95 | `flows/area_ensemble.py` |

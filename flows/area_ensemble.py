@@ -280,6 +280,7 @@ wacc = {a: defaultdict(float) for a in AREAS}                 # marginal-balance
 distant = {a: defaultdict(float) for a in AREAS}
 drawn_any = {a: defaultdict(float) for a in AREAS}            # share of members drawing a town anywhere (area or apart)
 drawn_body = {a: defaultdict(float) for a in AREAS}           # ... inside the member's area
+drawn_half = {a: {s: defaultdict(float) for s in ("odd", "even")} for a in AREAS}   # ... by half year, for the area's month split
 adopted = {}
 for hk in HEX_KMS:
     if hk == 3:
@@ -317,6 +318,9 @@ for hk in HEX_KMS:
                         if kind == "net":
                             for k, f in fr.items():
                                 accw[a][(s, nw)][k] += f
+                            if s != "all":                                            # the town rule, by half year
+                                for n_ in {TOWN_OF[k] for k in b if k in TOWN_OF}:
+                                    drawn_half[a][s][n_] += 1.0 / MEMBERS
                         if (kind, s) == ("net", "all"):
                             for k, f in fr.items():
                                 wacc[a][k] += W_MEMBER * f
@@ -404,6 +408,7 @@ for (town, rank) in AREAS:
            # versions draw different hexagons of it (grid size, spread), so its hexagons can each stay under 0.5
            "drawn_often_outside_area": sorted(n_ for n_, v in drawn_any[a].items()
                                               if v >= 0.5 and max((pa.get(k, 0) for k in TOWN_HEX3.get(n_, [])), default=0) < 0.5),
+           "towns_in_area_halves": {s: {n_: round(v, 3) for n_, v in drawn_half[a][s].items() if v >= 0.2} for s in ("odd", "even")},
            "p_odd": {k: round(v, 4) for k, v in sorted(p[("net", "odd")].items()) if v >= 0.001},
            "p_even": {k: round(v, 4) for k, v in sorted(p[("net", "even")].items()) if v >= 0.001},
            "p_travel": {k: round(v, 4) for k, v in sorted(pt_.items()) if v >= 0.0001},

@@ -616,14 +616,17 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
   }
   // TOWN NAMES IN PLAIN INK, never haloed, and never on a dark hexagon (20+): a dot at the town and its name beside it;
   // where the dark cells leave no room beside the dot, the name sits clear of them with a hairline to the dot
-  const dark = [...on].filter((id) => P.value[id] >= 20).map((id) => {
+  // the area-only maps run 50-100, so their thresholds sit on that scale: clear of every shaded hexagon, white ink only
+  // on the two darkest classes (80+)
+  const DARK_AVOID = ONLY && PRB ? FLOOR : 20, DARK_WHITE = ONLY && PRB ? 80 : 40;
+  const dark = [...on].filter((id) => P.value[id] >= DARK_AVOID).map((id) => {
     const c = mp.hexes[id].slice(0, 6).map((p) => proj(p));
     return [d3.mean(c, (p) => p[0]), d3.mean(c, (p) => p[1])]; });
   const hexR = (() => { const id = Object.keys(mp.hexes)[0]; const c = mp.hexes[id].slice(0, 6).map((p) => proj(p));
     const cx = d3.mean(c, (p) => p[0]), cy = d3.mean(c, (p) => p[1]); return Math.hypot(c[0][0] - cx, c[0][1] - cy); })();
   const overDark = (b) => dark.some(([cx, cy]) => cx > b[0] - hexR && cx < b[2] + hexR && cy > b[1] - hexR && cy < b[3] + hexR);
   // every sample point of the box within a dark (40+) hexagon
-  const dark40 = [...on].filter((id) => P.value[id] >= 40).map((id) => { const c = mp.hexes[id].slice(0, 6).map((p) => proj(p));
+  const dark40 = [...on].filter((id) => P.value[id] >= DARK_WHITE).map((id) => { const c = mp.hexes[id].slice(0, 6).map((p) => proj(p));
     return [d3.mean(c, (p) => p[0]), d3.mean(c, (p) => p[1])]; });
   const allDark = (b) => { for (let i = 0; i <= 6; i++) for (let j = 0; j <= 2; j++) {
       const x = b[0] + ((b[2] - b[0]) * i) / 6, y = b[1] + ((b[3] - b[1]) * j) / 2;

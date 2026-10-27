@@ -212,6 +212,21 @@ for region in sys.argv[1:] or ["columbia"]:
             rec["core50_area_hexes"] = sorted(key(c) for c in area1)
             rec["core50_area_outline"] = (mapping(unary_union([Polygon(corners(c)).buffer(1e-7) for c in area1]).simplify(0.0003))
                                           if area1 else None)
+            # THE AREA'S MONTH SPLIT (2026-10-27): the same rule -- core, D90 pieces, towns in half or more of the versions --
+            # drawn from odd months and from even months alone; Jaccard with home left out (K was selected on this split)
+            def area_of_half(s_):
+                ps_ = pieces({qr(k) for k, v in rec[f"p_{s_}"].items() if v >= 0.5})
+                b_ = set().union(*[p_ for p_ in ps_ if p_ & home]) if any(p_ & home for p_ in ps_) else set()
+                a_ = b_.union(*[p_ for p_ in ps_ if not (p_ & home) and from_c(p_) <= D[LIMIT]]) if b_ else set()
+                for n_, v_ in (rec.get("towns_in_area_halves") or {}).get(s_, {}).items():
+                    if v_ >= 0.5:
+                        a_ |= town_hexes(n_)
+                return a_ - home
+            if rec.get("towns_in_area_halves"):
+                ho_, he_ = area_of_half("odd"), area_of_half("even")
+                rec["core50_area_month_split"] = {"jaccard": round(len(ho_ & he_) / max(1, len(ho_ | he_)), 3),
+                                                  "odd_even": [len(ho_), len(he_)],
+                                                  "note": "home left out; K was selected on the same split"}
             dist_ = lambda p_: round(min(hexdist(x, y) for x in p_ for y in body) * SP3, 1) if body else None
             desc = lambda p_, h=False: {"name": town if h else name_of(p_, M), "home": h, "hexagons": len(p_), "km2": round(km2(p_)),
                                         "people": round(sum(hex_pop.get(c, 0) for c in p_)), "km_from_home_body": 0.0 if h else dist_(p_),
