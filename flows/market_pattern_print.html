@@ -167,10 +167,10 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
   // a town in the area (option A) shades its hexagons by the town's share of versions where that is larger
   if (ONLY && PRB && PR.core50_area_p) P.value = Object.fromEntries(Object.entries(PR.core50_area_p).map(([k, v]) => [k, 100 * v]));
   if (ONLY && PRB) { FLOOR = 50; CUTS = [60, 70, 80, 90]; }   // nothing under 50% is drawn, so the key starts there
-  // the area in square miles from its own hexagons, to the nearest 10
-  const SQMI = ONLY ? Math.round(PR.core50_area_hexes.reduce((s, id) => { const c = mp.hexes[id].slice(0, 6);
-    let a = 0; for (let i = 0; i < 6; i += 1) { const [x1, y1] = c[i], [x2, y2] = c[(i + 1) % 6]; a += x1 * y2 - x2 * y1; }
-    return s + (Math.abs(a) / 2) * 69.17 * 69.17 * Math.cos((d3.mean(c, (p) => p[1]) * Math.PI) / 180); }, 0) / 10) * 10 : 0;
+  // the area in square miles, as the paper's Table 4 measures it (analysis/area_coverage_alignment.py km2_of): each
+  // hexagon hex_km2 x cos(latitude) / cos(38.7); to the square mile
+  const SQMI = ONLY ? Math.round(PR.core50_area_hexes.reduce((s, id) => s + mp.hex_km2
+    * Math.cos((d3.mean(mp.hexes[id].slice(0, 6), (p) => p[1]) * Math.PI) / 180) / Math.cos((38.7 * Math.PI) / 180), 0) / 2.58999) : 0;
   const val = (id) => P.value[id] || 0;
   const counties = geo.counties.features;   // all Missouri counties; the frame shows those in this town's market
   const ORD = ["primary", "secondary", "tertiary"][RANK - 1];
