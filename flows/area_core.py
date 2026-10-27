@@ -208,6 +208,8 @@ for region in sys.argv[1:] or ["columbia"]:
             # rule for the outline; a speck is often a small town (Hallsville: two hexagons at p 0.62 and 0.69)
             meas_t = set().union(*[p_ for p_ in pt_ if p_ & home or from_c(p_) <= D[LIMIT]]) if pt_ else set()
             rec["core50_travel_measured_hexes"] = sorted(key(c) for c in meas_t)
+            rec["core50_travel_measured_outline"] = (mapping(unary_union([Polygon(corners(c)).buffer(1e-7) for c in meas_t])
+                                                             .simplify(0.0003)) if meas_t else None)
             rec["core50_travel_kept"] = {"hexagons": len(kept_t), "km2": round(km2(kept_t)),
                                          "people": round(sum(hex_pop.get(c, 0) for c in kept_t)),
                                          "specks_dropped": sum(1 for p_ in pt_ if not (p_ & home) and len(p_) <= 2)}

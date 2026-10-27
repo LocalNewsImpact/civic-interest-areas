@@ -141,7 +141,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
   // the QA coverage maps are drawn on the travel-only footprint; the area map on the published (network-tie) outline
   // the QA coverage maps are drawn on the TRAVEL-ONLY CORE of the settings ensemble (authors, 2026-10-25); the
   // area map, where no ensemble exists for the town, on its drawing outline
-  const OUTL = (c) => (COVM ? ((PR && PR.core50_travel_outline) || c.outline_travel || c.outline) : c.outline);
+  const OUTL = (c) => (COVM ? ((PR && (PR.core50_travel_measured_outline || PR.core50_travel_outline)) || c.outline_travel || c.outline) : c.outline);
   const PR = PROB && PROB[TOWN] && PROB[TOWN][RANK] ? PROB[TOWN][RANK] : null;
   const PRB = PROBM && PR && !COVM && !STORY_LAYER && !LIFT_Q && (q.get("measure") || "index") === "index" && (q.get("s") || "net") === "net";
   if (PRB) { FLOOR = 10; CUTS = [20, 40, 60, 80]; }
@@ -424,13 +424,15 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     g.append("g").selectAll("path").data(counties.filter((f) => menShade(cmn[f.id] || 0))).join("path").attr("d", path)
       .attr("fill", (f) => menShade(cmn[f.id])).attr("stroke", "none");
   }
-  // ?outline=1: only the market is drawn -- hexagons outside the outline are left off (not relevant to these residents)
-  if (OUTM && !PRB) for (const id of [...on]) { const c = mp.hexes[id].slice(0, 6);
+  // ?outline=1: only the market is drawn -- hexagons outside the outline are left off (not relevant to these residents).
+  // Not on coverage maps (2026-10-26): they draw exactly the measured hexagons and their border ring; filling an outline
+  // drew an older, larger footprint (Moberly, I-70) as if it were measured
+  if (OUTM && !PRB && !COVM) for (const id of [...on]) { const c = mp.hexes[id].slice(0, 6);
     if (P.value[id] < 100 && !d3.geoContains(OUTL(CONF[TOWN][RANK]), [d3.mean(c, (p) => p[0]), d3.mean(c, (p) => p[1])])) on.delete(id); }
-  if (OUTM && !PRB) ring.clear();
+  if (OUTM && !PRB && !COVM) ring.clear();
   // ?outline=1: the market area is filled -- every grid hexagon whose centre lies inside the outline and is not shaded is
   // drawn empty, as the border ring is, so the market reads as one area on the grid
-  if (OUTM && !PRB) for (const id of Object.keys(mp.hexes)) {
+  if (OUTM && !PRB && !COVM) for (const id of Object.keys(mp.hexes)) {
     if (on.has(id) || ring.has(id)) continue;
     const c = mp.hexes[id].slice(0, 6);
     if (d3.geoContains(OUTL(CONF[TOWN][RANK]), [d3.mean(c, (p) => p[0]), d3.mean(c, (p) => p[1])])) ring.add(id);
