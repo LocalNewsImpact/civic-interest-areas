@@ -81,6 +81,7 @@ if stage spillover; then
   step spillover_quality       analysis/collection_quality_robustness.py
   step spillover_allfactors    analysis/combined_all_factors_test.py
   step spillover_side_tests    analysis/spillover_side_tests.py
+  step spillover_population    analysis/spillover_population_test.py
   # County characteristics (crossover, spillover, travel and coverage columns; read spillover_outlets.csv and the
   # coverage stage's predictions)
   step county_acs              analysis/civic_variables_test.py

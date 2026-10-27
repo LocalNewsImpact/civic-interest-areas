@@ -129,6 +129,8 @@ both hypothesis terms (`spillover_common.FINAL`); mention 0.5 and Sports 0.5 are
 | Actual / held-out expected: Audrain, Boone, Osage | 19.5 / 22.5%, 28.7 / 26.4%, 25.6 / 25.3% | `spillover_outlets.py` (`spillover_quoted_rows.csv`) |
 | Leave one TV market out (7 markets with 3+ outlets) | in sample 5.9, held out 6.2, intercept only 7.4 | `spillover_dma_holdout.py` |
 | Mean spillover rate | 24.7% | `spillover_outlets.py` |
+| Fitted outlets, mean rate: broadcasters / print and digital; print and digital by outlets in the county 1 / 2–3 / 4+ | 31.4% / 22.1%; 24.9% / 23.0% / 15.8% | `spillover_population_test.py` |
+| Print outlets against county population (r +0.87), both in the model | print −0.217 (CRV3 s.e. 0.176, p 0.224), population −0.088 (0.080, p 0.278): not separable | `spillover_population_test.py` |
 
 **Public-data travel model** — the study's question is how close a model built from public data gets to the
 Advan-fitted model, and how much of the gap Advan-learned corrections close. The public model is not claimed to beat
@@ -1547,6 +1549,24 @@ comparison (lower mean and median), and was then replaced by the hypothesis pair
 
 Leave one TV market out (`spillover_dma_holdout.py` → `spillover_dma_holdout.csv`), adopted model, markets with 3+
 fitted outlets: in sample 5.9, held out 6.2, intercept only held out 7.4; two markets do worse than intercept only.
+
+Print outlets or population (`spillover_population_test.py`, 2026-10-26): the print-outlet term may stand for county
+size. On the fitted outlets, log(1 + print and digital outlets) correlates with log county population at r +0.87, log
+town population +0.77 and urban share +0.70. Coefficients CRV3; held-out mean miss under the adopted scheme:
+
+| Model | Print outlets | Population measure | Held-out |
+|---|---|---|---:|
+| Adopted: broadcaster + print outlets | −0.387 (0.124, p 0.003) | — | 6.43 |
+| Broadcaster + county population | — | −0.167 (0.035, p < 0.001) | 6.64 |
+| Broadcaster + print outlets + county population | −0.217 (0.176, p 0.224) | −0.088 (0.080, p 0.278) | 6.49 |
+| Broadcaster + print outlets + town population | −0.319 (0.148, p 0.036) | −0.036 (0.062, p 0.562) | 6.42 |
+| Broadcaster + print outlets + urban share | −0.336 (0.131, p 0.013) | −0.166 (0.244, p 0.499) | 6.48 |
+
+Town size and urban share do not absorb the term; county population does, and with both in the model neither is
+distinguishable from zero. The data cannot separate the number of outlets from county population: the finding is that
+outlets in more populous counties, which have more outlets, devote a smaller share of their stories to other counties.
+The term stays in the adopted model as the stated hypothesis term (broadcaster, CRV3 s.e. 0.143–0.176, is unchanged in
+every row).
 
 Market position (`spillover_market_test.py`, on the border form): other outlets nearer the county line, or nearer the
 neighbour the outlet is closest to, add nothing (CRV3 p 0.34–0.75) and replace the border term worse (mean 6.03–6.07
