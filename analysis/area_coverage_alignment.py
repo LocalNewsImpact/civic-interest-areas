@@ -1,9 +1,11 @@
-"""QA DIAGNOSTIC (2026-10-24: supply figures belong to the next paper, not this one). How well news coverage lines up
-with where residents travel, in each civic interest area's travel-only footprint
-(Columbia, Mexico, Linn), and how many newsrooms it takes to supply that coverage.
+"""Coverage density (RQ3; in this paper since 2026-10-26). How well news coverage lines up with where residents travel,
+in each civic interest area's travel-only footprint (Columbia, Mexico, Linn), and how many newsrooms it takes to supply
+that coverage.
 
-AREA (2026-10-25): the TRAVEL-ONLY CORE of the settings ensemble (hexagons drawn in half or more of its members,
-  flows/area_ensemble.py p_travel). Before: the hexagons whose centres lie inside the travel-only outline
+AREA (2026-10-26): the TRAVEL-ONLY MEASURED AREA -- every hexagon drawn in half or more of the ensemble's travel-only
+  members (flows/area_ensemble.py p_travel) in the home body or in a piece of any size within the town's D90
+  (flows/area_core.py core50_travel_measured_hexes; specks included, pieces beyond D90 out). 2026-10-25: the same core,
+  specks out (core50_travel_part_hexes). Before: the hexagons whose centres lie inside the travel-only outline
   (flows/reach/confidence_columbia.json), drawn from the TRAVEL-ONLY civic interest area (authors, 2026-10-24:
   supply is measured on where residents go, not on an area news ties already enlarged). Every hexagon counts the same.
   Area = the hexagons' area on the ground, 5.85 km2 x cos(latitude) / cos(38.7) each (the hexagon plane is scaled at
@@ -223,8 +225,9 @@ CONF = json.load(open(RDIR / ("confidence_columbia.json" if REGION == "columbia"
 # THE QA FOOTPRINT (authors, 2026-10-25): the TRAVEL-ONLY core of the settings ensemble -- hexagons drawn in half or more of
 # its members with travel-only ties (flows/area_ensemble.py p_travel) -- the same kind of object as the published area
 PROB = json.load(open(RDIR / ("probability_columbia.json" if REGION == "columbia" else "probability.json")))
-# the multi-part rule applies (area_core.py: the home body and every piece of 3+ hexagons; specks out)
-travel_core = lambda town, rank: sorted(k for k in PROB[town][str(rank)].get("core50_travel_part_hexes",
+# the MEASURED area (area_core.py, authors 2026-10-26): the home body and every core piece within the town's D90, specks
+# included -- the 3-hexagon minimum shapes the outline, not what is measured
+travel_core = lambda town, rank: sorted(k for k in PROB[town][str(rank)].get("core50_travel_measured_hexes",
                                         [k for k, v in PROB[town][str(rank)]["p_travel"].items() if v >= 0.5]) if k in MAPS["hexes"])
 HOME_HEX = {t_: set(h_.get("hexes", [])) for t_, h_ in MAPS["home"].items()}
 # area on the ground (2026-10-25): a hexagon of the plane x = lon x 111.32 cos 38.7 is 5.85 x cos(lat) / cos(38.7) km2
