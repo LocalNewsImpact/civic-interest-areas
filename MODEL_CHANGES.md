@@ -200,8 +200,8 @@ rule keeping only the body would cut it out.
 
 Tie markets, the market's 8 study towns: accuracy median 0.505 (printed 0.51; mean 0.526), month-split stability median
 0.79, travel alone 0.52 (`analysis/tie_footprint.py SUMMARY=1`, from the settings each run recorded). Supply (coverage
-density, balanced diet; RQ3): frequent / regular / sporadic 49 / 6 / 45%, 35 / 4 / 61%, 34 / 6 / 60%; balanced diet 49%,
-12%, 28% (Columbia, Mexico, Linn), on the travel-only measured area -- see Supply: coverage density and the balanced diet.
+density, balanced diet; RQ3): frequent / regular / sporadic 58 / 6 / 36%, 44 / 2 / 54%, 42 / 5 / 53%; balanced diet 54%,
+20%, 37% (Columbia, Mexico, Linn), on the area both maps draw -- see Supply: coverage density and the balanced diet.
 
 ### Rural flag: Census settlement replaces RUCC (2026-10-25)
 
@@ -2217,22 +2217,40 @@ analysis: county -> civic interest area -> each outlet's zone of service; no sta
 ## Supply: coverage density and the balanced diet (RQ3)
 
 Coverage density and the balanced diet are results of this paper (authors, 2026-10-26, reversing the 2026-10-24
-next-paper scope; RQ3). They are measured on the **travel-only measured area**: the ensemble's travel-only level, news
-weight ω = 0 (1,728 versions; idx["travel"]: travel, spatial lag and direction, home 100, no news term), every hexagon
-with p_travel ≥ 0.5 in the home body or in a piece of **any size** whose nearest hexagon lies within D90
-(`area_core.py` `core50_travel_measured_hexes`), so that no news term shapes the area the supply is measured in. Specks
-of 1–2 hexagons are measured (authors, 2026-10-26): the 3-hexagon minimum shapes the outline, not what is measured, and a
-speck is often a small town (Hallsville: two hexagons at p 0.62 and 0.69, about 11 stories a month). Pieces beyond D90
-stay out (Columbia: Jefferson City). `analysis/area_coverage_alignment.py`, `cin_diet.py`:
+next-paper scope; RQ3). **One area for the maps and the figures (authors, 2026-10-26):** the area map showed every
+hexagon in 10%+ of the versions while the coverage figures were measured on a smaller travel-only core, so a reader saw
+one area and was given figures for another ("you can't ignore it in the narrative calculations"). Both maps now draw
+exactly the area, and every figure is computed on it (`area_core.py` `core50_area_hexes`):
+
+- every hexagon likely 0.5+ (all 6,912 versions, with news ties) in the home body or in a piece of any size whose
+  nearest hexagon lies within D90; and
+- **every town that half or more of the versions place inside their area** (`towns_drawn.in_area` ≥ 0.5; all of the
+  town's 3 km hexagons, centre inside its 2020 boundary). The versions draw a town on different grids (2, 3, 4 km) and
+  hexagons, so a town can be inside most versions' areas with no one hexagon at 0.5: Moberly is inside Columbia's area in
+  54% of versions, its best hexagon at 0.44. Each version's own distance rule applies; no further limit. A town's
+  hexagons are shaded by the larger of their own p and the town's share (`core50_area_p`).
+
+Towns the rule adds: Columbia -- Jefferson City (69%), Moberly (54%), Centralia (54%); Mexico -- the rest of Columbia
+city (72%), Fulton (85%); Linn -- the rest of Columbia city (68%), Ashland (67%), the rest of Jefferson City (100%).
+Boonville (47%) and Fulton (39%) stay out of Columbia's area. The maps draw no outline (authors: the shaded hexagons
+define the area) and nothing under 0.5. `analysis/area_coverage_alignment.py`, `cin_diet.py`:
+
+| Area | Hexagons | km² (sq mi) | People inside | Frequent / regular / sporadic / none | Balanced diet |
+|---|---:|---:|---:|---|---:|
+| Columbia | 195 | 1,137 (439) | 211,898 | 58 / 6 / 36 / 0 | 54% |
+| Mexico | 157 | 913 (353) | 151,950 | 44 / 2 / 54 / 0 | 20% |
+| Linn | 186 | 1,089 (420) | 183,198 | 42 / 5 / 53 / 0 | 37% |
+
+**Disclosure.** The area now includes the news term, which the travel-only measure (2026-10-24 to 10-26) kept out so that
+coverage did not shape the area coverage is measured in. The network-tie and travel-only cores overlap closely (Jaccard
+0.93 / 0.91 / 0.95), and the towns added are added by travel and news together. The travel-only figures, the same rule
+without the towns (home body and every piece within D90, specks included; `core50_travel_measured_hexes`):
 
 | Area (travel-only, measured) | Hexagons | km² | People inside | Frequent / regular / sporadic / none | Balanced diet |
 |---|---:|---:|---:|---|---:|
 | Columbia | 182 | 1,061 | 163,560 | 49 / 6 / 45 / 0 | 49% |
 | Mexico | 146 | 849 | 111,443 | 35 / 4 / 61 / 0 | 12% |
 | Linn | 169 | 990 | 147,199 | 34 / 6 / 60 / 0 | 28% |
-
-With specks out (the outlined area, the figures before 2026-10-26): Columbia 180 hexagons, 1,049 km², 162,809 people;
-Mexico 141, 820, 109,941; Linn 159, 931, 146,208. Every share above is the same to the percentage point.
 
 "None" cannot occur: every hexagon lies in a county whose county-level stories reach all its hexagons. County-story
 weight per hexagon is capped at the story's weight; statewide, national and international stories add nothing, in the
@@ -2242,7 +2260,7 @@ Linn 0.95.
 ### Coverage density (2026-10-20; QA rerun 2026-10-25)
 
 **Coverage density** (name set by the authors) is the supply into an area: for each 3 km hexagon of the footprint
-(the travel-only core; every hexagon counts the same), the local news stories in a month whose
+(the area both maps draw, from 2026-10-26; before, the travel-only core; every hexagon counts the same), the local news stories in a month whose
 area includes it. Central focus counts 1, a mention 0.5, Sports half. A story's area follows its geographic scope (the
 enrichment's scope classification): neighbourhood 3 km around its point; town the 2020 place and 3 km around it (5 km
 around a point outside any town; buffers on the km plane); regional 40 km; a county-only point or a county mention the
