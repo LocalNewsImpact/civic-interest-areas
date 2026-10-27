@@ -125,6 +125,7 @@ fi
 # Civic interest areas, Columbia-Jefferson City television market: homes, travel patterns (non-negative matrix
 # factorization), the network tie, the 6,912-version drawing ensemble, the multi-part areas and tie-market accuracy.
 if stage areas; then
+  step stop_weights           flows/build_stop_weights.py   # road stops at half weight (Columbia market)
   for r in $REGIONS; do
     step homes_$r              flows/build_homes.py $r
     step patterns_$r           flows/travel_patterns.py $r

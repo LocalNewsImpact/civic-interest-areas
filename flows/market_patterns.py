@@ -292,6 +292,26 @@ for k_, u_ in unit_at.items():
         by_unit[u_].append(k_)
     elif u_ and len(u_) == 7:
         town_units[u_].append(k_)
+# SPREAD=visits (a check, NOT adopted; authors, 2026-10-27): spread a rural block group's or a town's travel by where the
+# three counties' residents' visits are (build_stop_weights.py visit_points.csv: Weekly Patterns Plus, March 2026, road
+# stops at half), on the destination scale (visitors / the market's visitors per mapped destination). Visits are far more
+# concentrated than mapped destinations, so each unit's travel piled onto its busiest hexagons: Columbia's tie to
+# Ashland per hexagon rose from 40 to 55 (best hexagon 70 -> 99), Moberly's best hexagon from 26 to 99 (its commercial
+# strip). The authors kept mapped destinations (default SPREAD=osm). A unit with no visits keeps mapped destinations.
+if _os.environ.get("SPREAD", "osm") == "visits" and (here / "reach/visit_points.csv").exists():
+    _vp = pd.read_csv(here / "reach/visit_points.csv", dtype={"block_group": str})
+    _vp = _vp[_vp.block_group.str[:5].isin(DMA)]
+    vcount = defaultdict(float)
+    for x_, y_, w_ in zip(_vp.lon, _vp.lat, _vp.visitors):
+        k_ = hex_of(x_, y_)
+        if k_:
+            vcount[k_] += w_
+    _units = [*by_unit.values(), *town_units.values()]
+    _r = sum(vcount.get(k_, 0) for ks in _units for k_ in ks) / max(1, sum(dcount.get(k_, 0) for ks in _units for k_ in ks))
+    for ks in _units:
+        if sum(vcount.get(k_, 0) for k_ in ks) > 0:
+            for k_ in ks:
+                dcount[k_] = vcount.get(k_, 0) / _r
 _bgh = defaultdict(list)
 for k_, b_ in hex_bg.items():
     _bgh[b_].append(k_)

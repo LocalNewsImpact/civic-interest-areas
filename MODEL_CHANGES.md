@@ -200,8 +200,8 @@ rule keeping only the body would cut it out.
 
 Tie markets, the market's 8 study towns: accuracy median 0.505 (printed 0.51; mean 0.526), month-split stability median
 0.79, travel alone 0.52 (`analysis/tie_footprint.py SUMMARY=1`, from the settings each run recorded). Supply (coverage
-density, balanced diet; RQ3): frequent / regular / sporadic 58 / 6 / 36%, 44 / 2 / 54%, 42 / 5 / 53%; balanced diet 54%,
-20%, 37% (Columbia, Mexico, Linn), on the area both maps draw -- see Supply: coverage density and the balanced diet.
+density, balanced diet; RQ3): frequent / regular / sporadic 60 / 5 / 35%, 44 / 2 / 54%, 41 / 4 / 54%; balanced diet 56%,
+21%, 36% (Columbia, Mexico, Linn), on the area both maps draw, road stops at half weight -- see Supply: coverage density and the balanced diet.
 
 ### Rural flag: Census settlement replaces RUCC (2026-10-25)
 
@@ -2230,27 +2230,49 @@ exactly the area, and every figure is computed on it (`area_core.py` `core50_are
   54% of versions, its best hexagon at 0.44. Each version's own distance rule applies; no further limit. A town's
   hexagons are shaded by the larger of their own p and the town's share (`core50_area_p`).
 
-Towns the rule adds: Columbia -- Jefferson City (69%), Moberly (54%), Centralia (54%); Mexico -- the rest of Columbia
-city (72%), Fulton (85%); Linn -- the rest of Columbia city (68%), Ashland (67%), the rest of Jefferson City (100%).
-Boonville (47%) and Fulton (39%) stay out of Columbia's area. The maps draw no outline (authors: the shaded hexagons
+Towns the rule adds (road stops at half weight): Columbia -- Jefferson City (69%), Moberly (55%), Centralia (55%); Mexico
+-- the rest of Columbia city (70%), Fulton (82%); Linn -- the rest of Columbia city (68%), Ashland (65%), the rest of
+Jefferson City (100%). Boonville (38%) and Fulton (39%) stay out of Columbia's area. The maps draw no outline (authors: the shaded hexagons
 define the area) and nothing under 0.5. `analysis/area_coverage_alignment.py`, `cin_diet.py`:
 
 | Area | Hexagons | km² (sq mi) | People inside | Frequent / regular / sporadic / none | Balanced diet |
 |---|---:|---:|---:|---|---:|
-| Columbia | 195 | 1,137 (439) | 211,898 | 58 / 6 / 36 / 0 | 54% |
-| Mexico | 157 | 913 (353) | 151,950 | 44 / 2 / 54 / 0 | 20% |
-| Linn | 186 | 1,089 (420) | 183,198 | 42 / 5 / 53 / 0 | 37% |
+| Columbia | 192 | 1,119 (432) | 211,821 | 60 / 5 / 35 / 0 | 56% |
+| Mexico | 154 | 896 (346) | 150,705 | 44 / 2 / 54 / 0 | 21% |
+| Linn | 186 | 1,089 (420) | 182,734 | 41 / 4 / 54 / 0 | 36% |
 
-**Disclosure.** The area now includes the news term, which the travel-only measure (2026-10-24 to 10-26) kept out so that
-coverage did not shape the area coverage is measured in. The network-tie and travel-only cores overlap closely (Jaccard
-0.93 / 0.91 / 0.95), and the towns added are added by travel and news together. The travel-only figures, the same rule
-without the towns (home body and every piece within D90, specks included; `core50_travel_measured_hexes`):
+Before road stops were weighted (2026-10-26): Columbia 195 hexagons, 58 / 6 / 36, 54%; Mexico 157, 44 / 2 / 54, 20%;
+Linn 186, 42 / 5 / 53, 37%.
 
-| Area (travel-only, measured) | Hexagons | km² | People inside | Frequent / regular / sporadic / none | Balanced diet |
-|---|---:|---:|---:|---|---:|
-| Columbia | 182 | 1,061 | 163,560 | 49 / 6 / 45 / 0 | 49% |
-| Mexico | 146 | 849 | 111,443 | 35 / 4 / 61 / 0 | 12% |
-| Linn | 169 | 990 | 147,199 | 34 / 6 / 60 / 0 | 28% |
+**Disclosure: news ties and the measure.** Part of a place's news tie is how much the home town's outlets cover it, and
+coverage density counts those stories, so news ties can draw a well-covered place into the area that its coverage is then
+measured in. The size of it, road stops at half weight (frequent / regular / sporadic; balanced diet):
+
+| Area | Travel alone (ω = 0; home body and pieces within D90, `core50_travel_measured_hexes`) | With news ties, no whole towns | The area (with whole towns) |
+|---|---|---|---|
+| Columbia | 178 hexagons; 51 / 6 / 43; 51% | 168; 54 / 6 / 40; 54% | 192; 60 / 5 / 35; 56% |
+| Mexico | 144; 35 / 3 / 62; 12% | 139; 38 / 2 / 60; 14% | 154; 44 / 2 / 54; 21% |
+| Linn | 168; 35 / 5 / 61; 29% | 164; 34 / 5 / 62; 27% | 186; 41 / 4 / 54; 36% |
+
+News ties move frequent coverage by −1 to +3 points; whole towns add 6 to 7 (towns are covered more than countryside).
+
+### Road stops at half weight (authors, 2026-10-26)
+
+"Short stops should be devalued. They are still important but not as much as work, school, recreation, healthcare."
+`flows/build_stop_weights.py` -> `flows/reach/stop_weights.csv`; applied in `flows/travel_patterns.py` (`STOPS=0` off).
+A road stop is `build_road_stop_share.py`'s codes definition (gas stations, convenience stores, limited-service
+restaurants), Weekly Patterns Plus, March 2026. Neighborhood Patterns records residents seen in a block group, not why, so
+each destination block group is weighted for each home county by 1 − 0.5 × its road-stop share (shrunk toward the
+county's share, 200 visitors of prior weight). Road stops are 13% of Boone residents' visits outside their own block
+group, 23% of Audrain's, 20% of Osage's. Ashland's US 63 exit block group (290190017041) is 88% road stops (factor 0.56);
+its other three block groups 0.83–0.93. Travel patterns unchanged in number (K = 2) and share (Columbia 93%, Mexico 86%,
+Linn 84%). Ashland stays inside Columbia's area in every version: no block group has its centre inside Ashland, and its
+four rural block groups' travel -- Columbia residents at Highway AB, the airport and the US 63 exit -- is spread onto
+Ashland's hexagons, where their mapped destinations cluster (Columbia's tie per Ashland hexagon 42 -> 40, best 77 -> 70).
+
+**Rejected (authors, 2026-10-27): spreading by where visits are** (`SPREAD=visits`, `visit_points.csv`). Visits are far
+more concentrated than mapped destinations, so each unit's travel piled onto its busiest hexagons: Columbia's tie per
+Ashland hexagon 40 -> 55 (best 70 -> 99), Moberly's best hexagon 26 -> 99 (its commercial strip).
 
 "None" cannot occur: every hexagon lies in a county whose county-level stories reach all its hexagons. County-story
 weight per hexagon is capped at the story's weight; statewide, national and international stories add nothing, in the

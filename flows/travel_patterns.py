@@ -21,6 +21,7 @@ as a persistence diagnostic.
 Writes <region out>/patterns.json and patterns_halves.json (the odd- and even-month fits).
 """
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -45,6 +46,15 @@ if "home_counties" in CFG:
     f = f[f.home_cbg.str[:5].isin(CFG["home_counties"])]
 own = f[f.dest_cbg == f.home_cbg].set_index(["month", "home_cbg"]).device_home_areas
 f = f[f.dest_cbg != f.home_cbg]
+# ROAD STOPS COUNT HALF (authors, 2026-10-26; flows/build_stop_weights.py): residents seen in a destination block group are
+# weighted by its road-stop share for their home county; STOPS=0 turns it off. Columbia region only (the weights cover
+# its three study counties)
+_sw = here / "reach/stop_weights.csv"
+if os.environ.get("STOPS", "1") != "0" and REGION == "columbia" and _sw.exists():
+    _w = pd.read_csv(_sw, dtype={"home_county": str, "dest_cbg": str}).set_index(["home_county", "dest_cbg"]).factor
+    _raw = f.device_home_areas.sum()
+    f["device_home_areas"] = f.device_home_areas * pd.Series(list(zip(f.home_cbg.str[:5], f.dest_cbg))).map(_w).fillna(1.0).values
+    print(f"road stops weighted: residents seen outside home x {f.device_home_areas.sum() / _raw:.3f}", flush=True)
 __file__ = str(here / "build_cousub_shares.py")
 exec(open(here / "build_cousub_shares.py").read().split("\ndef cw(")[0])
 from shapely.strtree import STRtree
