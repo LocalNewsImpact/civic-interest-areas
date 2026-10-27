@@ -197,7 +197,8 @@ if stage figures; then
   "$CHROME" --headless=new --disable-gpu --no-pdf-header-footer --virtual-time-budget=40000 \
     --print-to-pdf=print/measures_flow.pdf "http://127.0.0.1:8765/measures_flow_print.html" 2>/dev/null
   for t in Columbia Mexico Linn; do
-    shot "market_pattern_print.html?town=$t&rank=1" "civic_area_${(L)t}.png" 900
+    shot "market_pattern_print.html?town=$t&rank=1" "civic_area_${(L)t}.png" 528
+    shot "market_pattern_print.html?town=$t&rank=1&measure=coverage" "civic_coverage_${(L)t}.png" 528   # Figure 7
   done
   kill $SRV
   cd $ROOT
