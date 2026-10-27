@@ -1,5 +1,5 @@
-"""QA DIAGNOSTIC (2026-10-24: supply figures belong to the next paper). A balanced diet of civic information in each
-civic interest area's travel-only footprint (authors, 2026-10-20): the ten CIN categories of the
+"""The balanced diet of civic information in each
+civic interest area (the hexagons the maps draw; authors, 2026-10-20, area 2026-10-26): the ten CIN categories of the
 codebook (the eight critical information needs of Friedland et al. 2012, plus Civic Life and Sports); a hexagon has a
 balanced diet when ANY 8 of the 10 reach the floor of 1 story a month each, by coverage density (scope areas, central 1,
 mention 0.5, Sports half, towns by the square root of size, counties and regions counted once by population; statewide
@@ -52,6 +52,11 @@ for town, rank in A["AREAS"]:
                       "all_outlets": round(float(diet.mean()), 3), "outlets": "; ".join(outlets[i] for i in best_set)})
         print(orows[-1], flush=True)
     mapdata.setdefault(town, {})[rank] = {k: int(n_met[j]) for j, k in enumerate(area)}
+    # the map's display hexagons (area_coverage_alignment.py "display": the area map's 10%+ hexagons) carry their breadth
+    # too, so a hexagon is drawn at the same size on every map; the shares above stay on the measured area
+    show = [k for k in layer[town][rank].get("display", {}) if k not in mapdata[town][rank]]
+    for k in show:
+        mapdata[town][rank][k] = int(sum(sum(COVCAT[c][o].get(k, 0.0) for o in COVCAT[c]) >= FLOOR for c in CATS))
 pd.DataFrame(rows).to_csv(root / f"analysis/cin_diet{A['SUFFIX']}.csv", index=False)
 pd.DataFrame(orows).to_csv(root / f"analysis/cin_diet_outlets{A['SUFFIX']}.csv", index=False)
 json.dump(mapdata, open(root / f"flows/reach/diet_{A['REGION']}.json", "w"))

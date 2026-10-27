@@ -1,8 +1,11 @@
 """Coverage density (RQ3; in this paper since 2026-10-26). How well news coverage lines up with where residents travel,
-in each civic interest area's travel-only footprint (Columbia, Mexico, Linn), and how many newsrooms it takes to supply
+in each civic interest area (Columbia, Mexico, Linn; the hexagons the maps draw), and how many newsrooms it takes to supply
 that coverage.
 
-AREA (2026-10-26): the TRAVEL-ONLY MEASURED AREA -- every hexagon drawn in half or more of the ensemble's travel-only
+AREA (authors, 2026-10-26, final): THE AREA BOTH MAPS DRAW -- every hexagon likely 0.5+ (with news ties) in the home
+  body or in a piece within the town's D90, and every town that half or more of the versions place inside their area
+  (flows/area_core.py core50_area_hexes); the maps and every figure use the same hexagons.
+Earlier the same day: the TRAVEL-ONLY MEASURED AREA -- every hexagon drawn in half or more of the ensemble's travel-only
   members (flows/area_ensemble.py p_travel) in the home body or in a piece of any size within the town's D90
   (flows/area_core.py core50_travel_measured_hexes; specks included, pieces beyond D90 out). 2026-10-25: the same core,
   specks out (core50_travel_part_hexes). Before: the hexagons whose centres lie inside the travel-only outline
@@ -222,13 +225,9 @@ print("stories with a local area:", len(story_area), "of", sum(1 for a in art_ou
 RDIR = flows / "reach" if REGION == "columbia" else flows / "reach" / REGION
 MAPS = json.load(open(RDIR / "market_pattern_maps.json"))
 CONF = json.load(open(RDIR / ("confidence_columbia.json" if REGION == "columbia" else "confidence.json")))
-# THE QA FOOTPRINT (authors, 2026-10-25): the TRAVEL-ONLY core of the settings ensemble -- hexagons drawn in half or more of
-# its members with travel-only ties (flows/area_ensemble.py p_travel) -- the same kind of object as the published area
 PROB = json.load(open(RDIR / ("probability_columbia.json" if REGION == "columbia" else "probability.json")))
-# the MEASURED area (area_core.py, authors 2026-10-26): the home body and every core piece within the town's D90, specks
-# included -- the 3-hexagon minimum shapes the outline, not what is measured
-travel_core = lambda town, rank: sorted(k for k in PROB[town][str(rank)].get("core50_travel_measured_hexes",
-                                        [k for k, v in PROB[town][str(rank)]["p_travel"].items() if v >= 0.5]) if k in MAPS["hexes"])
+# THE AREA (area_core.py core50_area_hexes, authors 2026-10-26): the hexagons both maps draw
+area_of = lambda town, rank: sorted(k for k in PROB[town][str(rank)]["core50_area_hexes"] if k in MAPS["hexes"])
 HOME_HEX = {t_: set(h_.get("hexes", [])) for t_, h_ in MAPS["home"].items()}
 # area on the ground (2026-10-25): a hexagon of the plane x = lon x 111.32 cos 38.7 is 5.85 x cos(lat) / cos(38.7) km2
 _hlat = lambda k: sum(c[1] for c in MAPS["hexes"][k][:6]) / 6
@@ -240,7 +239,7 @@ SUFFIX = "" if REGION == "columbia" else f"_{REGION}"
 rows = []
 for town, rank in ([] if os.environ.get("COV_LIB") == "1" else AREAS):
     m = next(x for x in MAPS["towns"][town] if x["rank"] == rank)
-    area = travel_core(town, rank)
+    area = area_of(town, rank)
     home = set(area) & HOME_HEX[town]                 # home flagged explicitly, never read from a tie of 100
     for scope in ("with home town", "outside home town"):
         hs = [k for k in area if scope == "with home town" or k not in home]
@@ -325,10 +324,17 @@ for o_, g_ in ns["HOME_TOWN"].items():
         c_ = pl_shapes[g_][1].representative_point()
         REG_LL[o_] = (c_.x, c_.y)
 for town, rank in AREAS:
-    area = travel_core(town, rank)
+    area = area_of(town, rank)
     layer.setdefault(town, {})[rank] = {kind: {k: round(sum(cov[kind][o].get(k, 0) for o in cov[kind]), 2) for k in area}
                                         for kind in ("all", "local")}
     layer[town][rank]["pop"] = {k: round(hex_pop.get(k, 0)) for k in area}
+    # THE DISPLAY (authors, 2026-10-26): the coverage map shows the same hexagons as the area map -- every hexagon in 10%+
+    # of the versions (p, with news ties) -- so the two maps cover the same ground. The shares above stay on the measured
+    # area; a hexagon's coverage does not depend on which area it is in
+    # (2026-10-26, option A) and every hexagon of the area, towns in it included
+    show = sorted(k for k, v in PROB[town][str(rank)]["p"].items() if (v >= 0.1 or k in set(PROB[town][str(rank)].get("core50_area_hexes", [])))
+                  and k in MAPS["hexes"])
+    layer[town][rank]["display"] = {k: round(sum(cov["all"][o].get(k, 0) for o in cov["all"]), 2) for k in show}
     # OUTLET CIRCLES (authors, 2026-10-20: sources are pinned to a place, so a circle for the statistical bounds of each one's
     # contribution): centred on the newsroom (registry office); radius = the distance from it holding half the outlet's
     # story weight, story by story (central location 1, each place or county mentioned 0.5; a county at its population
@@ -365,7 +371,7 @@ if os.environ.get("SYNDCHECK") == "1":
                "STL Public Radio", "The Kansas City Star", "KC Magazine", "KMBC News 9", "KHQA 7", "KTVO CBS", "North West Missourian"}
     allarea = set()
     for town, rank in AREAS:
-        allarea |= set(travel_core(town, rank))
+        allarea |= set(area_of(town, rank))
     out_rows = []
     for aid, hs in story_hexes.items():
         o = art_out[aid]

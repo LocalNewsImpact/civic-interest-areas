@@ -103,6 +103,27 @@ for rr in cp.itertuples():
     hs = bg_hexes.get(rr.STATEFP + rr.COUNTYFP + rr.TRACTCE + rr.BLKGRPCE) or [qr_ll(float(rr.LONGITUDE), float(rr.LATITUDE))]
     for c in hs:
         hex_pop[c] += float(rr.POPULATION) / len(hs)
+# a town's hexagons: those whose centres lie inside its 2020 boundary (market_patterns.py's hex_place rule); a town holding
+# no centre takes the hexagon of its interior point
+psf = shapefile.Reader(str(root / "census_dl/place/cb_2020_29_place_500k"))
+pfl = [f[0] for f in psf.fields[1:]]
+place_shape = {}
+for sr in psf.iterShapeRecords():
+    g_ = shape(sr.shape.__geo_interface__)
+    n_ = sr.record[pfl.index("NAME")]
+    if n_ not in place_shape or g_.area > place_shape[n_].area:
+        place_shape[n_] = g_
+
+
+def town_hexes(name):
+    g_ = place_shape.get(name)
+    if g_ is None:
+        return set()
+    x0_, y0_, x1_, y1_ = g_.bounds
+    a_, b_ = qr_ll(x0_, y0_), qr_ll(x1_, y1_)
+    cells = {(q, r) for r in range(min(a_[1], b_[1]) - 2, max(a_[1], b_[1]) + 3)
+             for q in range(min(a_[0], b_[0]) - 3, max(a_[0], b_[0]) + 4) if g_.contains(Point(*centre_of((q, r))))}
+    return cells or {qr_ll(*g_.representative_point().coords[0])}
 
 
 def pieces(cells):
@@ -170,6 +191,27 @@ for region in sys.argv[1:] or ["columbia"]:
             beyond = [p_ for p_ in big if from_c(p_) > D[LIMIT]]
             specks = [p_ for p_ in others if len(p_) <= 2]
             kept = body.union(*parts) if parts else set(body)
+            # ONE AREA FOR MAPS AND FIGURES (option 1, authors 2026-10-26, sample): the core with news ties, home body and every
+            # piece of any size within the limit -- the hexagons both maps draw and every figure is computed on
+            area1 = body.union(*[p_ for p_ in others if from_c(p_) <= D[LIMIT]]) if body else set()
+            # A TOWN IS IN THE AREA when the versions put it inside their area half the time or more (authors, 2026-10-26,
+            # option A): the versions draw a town on different grids and hexagons, so a town can be inside most versions'
+            # areas with no one hexagon at 0.5 (Moberly: 54% of versions, best hexagon 44%). Each version's own distance
+            # rule applies, so no further limit. A town's hexagons carry the larger of their own p and the town's share.
+            area_p = {key(c): rec["p"].get(key(c), 0.0) for c in area1}
+            towns_in = {}
+            for n_, t_ in (rec.get("towns_drawn") or {}).items():
+                if t_["in_area"] >= 0.5:
+                    th_ = town_hexes(n_)
+                    towns_in[n_] = {"in_area": t_["in_area"], "hexagons": len(th_), "added": len(th_ - area1)}
+                    for c in th_:
+                        area_p[key(c)] = max(area_p.get(key(c), 0.0), rec["p"].get(key(c), 0.0), t_["in_area"])
+                    area1 |= th_
+            rec["core50_area_towns"] = towns_in
+            rec["core50_area_p"] = {k: round(v, 4) for k, v in sorted(area_p.items())}
+            rec["core50_area_hexes"] = sorted(key(c) for c in area1)
+            rec["core50_area_outline"] = (mapping(unary_union([Polygon(corners(c)).buffer(1e-7) for c in area1]).simplify(0.0003))
+                                          if area1 else None)
             dist_ = lambda p_: round(min(hexdist(x, y) for x in p_ for y in body) * SP3, 1) if body else None
             desc = lambda p_, h=False: {"name": town if h else name_of(p_, M), "home": h, "hexagons": len(p_), "km2": round(km2(p_)),
                                         "people": round(sum(hex_pop.get(c, 0) for c in p_)), "km_from_home_body": 0.0 if h else dist_(p_),

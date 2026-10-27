@@ -135,7 +135,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
 .then((r) => { REGION = r; return Promise.all([d3.json("cousub_29.geojson"), d3.json(dataUrl(REGION)), (CONFM || CORRM || OUTM || COVM) ? d3.json(confUrl(REGION)) : Promise.resolve({}),
              COVM ? d3.json(`reach/coverage_${REGION}.json`) : Promise.resolve({}),
              COVM ? d3.json(`reach/diet_${REGION}.json`) : Promise.resolve({}),
-             d3.json(probUrl(REGION)).catch(() => null)]).then(([geo, mp, CONF, COV, DIET, PROB]) => {
+             d3.json(probUrl(REGION)).catch(() => d3.json(probUrl(REGION))).catch(() => null)]).then(([geo, mp, CONF, COV, DIET, PROB]) => {
   const data = { labels: mp.market.labels.slice(), block_groups: mp.market.block_groups };
   const P0 = mp.towns[TOWN].find((p) => p.rank === RANK);
   // the QA coverage maps are drawn on the travel-only footprint; the area map on the published (network-tie) outline
@@ -157,8 +157,20 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
   const liftOf = () => { const t = P0.index.travel || P0.index["0"], n = P0.index.net, o = {};
     for (const [k, v] of Object.entries(t)) if (v >= 5 && v < 100 && n[k]) o[k] = Math.max(0, 100 * (n[k] / v - 1));
     return o; };
-  const P = { ...P0, value: COVM ? COV[TOWN][RANK][COVK] : PRB ? Object.fromEntries(Object.entries(PR.p).map(([k, v]) => [k, 100 * v]))
+  const P = { ...P0, value: COVM ? (COVK === "all" && COV[TOWN][RANK].display ? COV[TOWN][RANK].display : COV[TOWN][RANK][COVK]) : PRB ? Object.fromEntries(Object.entries(PR.p).map(([k, v]) => [k, 100 * v]))
     : MEASURE === "travel" ? P0.value : LIFT ? liftOf() : P0.index[SX] };
+  // ?only=area (option 1 sample, 2026-10-26): both maps draw exactly the area -- the core with news ties, home body and
+  // every piece within the limit -- and every figure is computed on it
+  // the default since 2026-10-26 (authors); ?only=none draws the earlier 10%+ display
+  const ONLY = (q.get("only") || "area") === "area" && (PRB || COVM) && PR && PR.core50_area_hexes;
+  if (ONLY) { const keep = new Set(PR.core50_area_hexes); P.value = Object.fromEntries(Object.entries(P.value).filter(([k]) => keep.has(k))); }
+  // a town in the area (option A) shades its hexagons by the town's share of versions where that is larger
+  if (ONLY && PRB && PR.core50_area_p) P.value = Object.fromEntries(Object.entries(PR.core50_area_p).map(([k, v]) => [k, 100 * v]));
+  if (ONLY && PRB) { FLOOR = 50; CUTS = [60, 70, 80, 90]; }   // nothing under 50% is drawn, so the key starts there
+  // the area in square miles from its own hexagons, to the nearest 10
+  const SQMI = ONLY ? Math.round(PR.core50_area_hexes.reduce((s, id) => { const c = mp.hexes[id].slice(0, 6);
+    let a = 0; for (let i = 0; i < 6; i += 1) { const [x1, y1] = c[i], [x2, y2] = c[(i + 1) % 6]; a += x1 * y2 - x2 * y1; }
+    return s + (Math.abs(a) / 2) * 69.17 * 69.17 * Math.cos((d3.mean(c, (p) => p[1]) * Math.PI) / 180); }, 0) / 10) * 10 : 0;
   const val = (id) => P.value[id] || 0;
   const counties = geo.counties.features;   // all Missouri counties; the frame shows those in this town's market
   const ORD = ["primary", "secondary", "tertiary"][RANK - 1];
@@ -170,10 +182,18 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     : `${TOWN}'s civic interest area`;   // named 2026-10-20 (was "local information needs area", "information needs market", "revealed
     // news market"); no "toward" in the title; I, II, III only when the town has more than one area
   if (STORY_LAYER) document.getElementById("title").textContent = `Where ${TOWN}'s home-county news outlets report`;
-  if (COVM) document.getElementById("title").textContent = document.getElementById("title").textContent + ": coverage density (QA)";
+  if (COVM) document.getElementById("title").textContent = document.getElementById("title").textContent + (ONLY ? ": coverage density" : ": coverage density (QA)");
   if (LIFT) document.getElementById("title").textContent = TRI ? `What news ties add${dir ? "" : ""}` : `What news ties add to ${TOWN}'s civic interest area`;
   const covShare = (lo, hi) => { const v = Object.values(P.value); return Math.round(100 * v.filter((x) => x >= lo && x < hi).length / v.length); };
-  document.getElementById("subtitle").textContent = COVM
+  const BAL = () => Math.round(100 * Object.keys(P.value).filter((k) => ((((DIET[TOWN] || {})[RANK] || {})[k]) || 0) >= 8).length / Math.max(1, Object.keys(P.value).length));
+  if (COVM && ONLY) document.getElementById("note").textContent = `A story counts 1 in the hexagon where it is centered and 0.5 ` +
+    `where it is mentioned. A story about a whole town, county or region is spread across that place, so it adds less to each ` +
+    `hexagon the larger the place; a county or region is spread by where people live.`;
+  document.getElementById("subtitle").textContent = COVM && ONLY
+    ? `Local news stories a month about each 1.9-mile hexagon of the area, March 2026. Frequent coverage (9+ a month): ` +
+      `${covShare(9, 1e9)}% of the area; regular (2–8): ${covShare(2, 9)}%; sporadic (under 2): ${covShare(0.005, 2)}%. ` +
+      `Full-size hexagons: at least 8 of the 10 critical information needs categories get a story a month (${BAL()}% of the area)`
+    : COVM
     ? `Coverage density: local news stories a month whose area includes each 3 km hexagon, March 2026; a story centred there ` +
       `counts 1, one mentioning it 0.5; a story counts across the area its scope names (neighbourhood, town, region` +
       `${COVK === "local" ? "; stories placed only at county level left out" : ", county"}), less in each hexagon the ` +
@@ -183,7 +203,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
       (q.get("balance") !== "0" ? `. Colour shows how many stories; size shows breadth \u2013 full size only where at least 8 of the 10 civic ` +
         `information categories (public safety, civic information, politics, education, environment, health, ` +
         `transportation, economic development, civic life, sports) each get a story a month \u2013 ` +
-        `${Math.round(100 * Object.values((DIET[TOWN] || {})[RANK] || {}).filter((n) => n >= 8).length / Math.max(1, Object.keys(P.value).length))}% of the area` : "")
+        `${Math.round(100 * Object.keys(P.value).filter((k) => ((((DIET[TOWN] || {})[RANK] || {})[k]) || 0) >= 8).length / Math.max(1, Object.keys(P.value).length))}% of the area` : "")
     : STORY_LAYER
     ? `${mp.story[TOWN].stories.toLocaleString()} local stories, March 2026: counties shaded by stories mentioning them; circles ` +
       `sized by stories centred on a place`
@@ -207,6 +227,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
   const key = d3.select("#key");
   const ramp = key.append("span").attr("class", "dd-ramp");
   ramp.append("span").html(COVM ? `<span class="dd-swatch base"></span>under 2 a month &nbsp; Stories a month` : STORY_LAYER ? `Stories centred there` : LIFT ? `<span class="dd-swatch base"></span>under ${FLOOR}%`
+    : PRB && ONLY ? `How likely the place is part of the area`
     : PRB ? `How likely the place is part of the area&nbsp;&nbsp;<span class="dd-swatch base"></span>under 10%`
     : `<span class="dd-swatch base"></span>not shown: outside the ${Math.round(100 * (+(q.get("sel") || 0.5)))}% strongest ties`);
   if (STORY_LAYER) ramp.html(`Stories centred there<svg width="150" height="34" style="margin-left:.4rem;vertical-align:middle">` +
@@ -236,6 +257,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     }
     item(`Stories a month: rarely <span style="display:inline-block;width:120px;height:10px;margin:0 6px;vertical-align:middle;` +
       `background:linear-gradient(to right,${stops})"></span> several a week or more`);
+    if (!ONLY) item(`<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="#6f6d66" stroke-width="1"/></svg>The area: likely 50% or more`);
   }
   if (STORY_LAYER) item(`County in` + quantizeRamp("#d3ecfa", "#003a56", 5).slice(0, 4).map((c, i) =>
     `<span style="display:inline-block;width:16px;height:10px;background:${c};margin-left:${i ? 0 : 6}px;border:0.5px solid #d6d5cc"></span>`).join("") +
@@ -269,7 +291,22 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
       `${LIM_} km of the town's centre \u2013 the distance within which 90% of its residents' regular travel (places visited ` +
       `in every one of the seven months) lies; pieces ` +
       `of one or two hexagons are left out of the outline (their shading stays).`;
-    item(`<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="#6f6d66" stroke-width="1"/></svg>The area: likely 50% or more`);
+    if (ONLY) {
+      const TOWNS_ = Object.entries(PR.core50_area_towns || {}).filter(([, t_]) => t_.added > 0);   // towns the rule adds
+      document.getElementById("subtitle").textContent = `Across ${PR.members.toLocaleString()} equally plausible ways of ` +
+        `drawing the map: every place likely 50% or more to be part of the area (${SQMI.toLocaleString()} square miles)`;
+      document.getElementById("note").textContent = `About ${P.residents.toLocaleString()} residents of ${who} ` +
+        `(${Math.round(100 * P.share)}%) travel in this pattern, January–July 2026. A place's tie: their travel there, ` +
+        `strengthened by news ties – coverage each way, and places both visit and report on. A place's likelihood is ` +
+        `the share of ${PR.members.toLocaleString()} versions of the map that include it; the versions vary how the map is ` +
+        `drawn and how much the news ties count, from not at all to double. The area: every place likely 50% or more, ` +
+        `within ${Math.round(LIM_ / 1.609)} miles of the town's center – the distance within which 90% of its residents' ` +
+        `regular travel (places visited in every one of the seven months) lies` +
+        `${PARTN_.length ? `; it includes ${PARTN_.length > 1 ? `${PARTN_.slice(0, -1).join(", ")} and ${PARTN_.at(-1)}` : PARTN_[0]}` : ""}` +
+        `${TOWNS_.length ? `. A town is part of the area when half or more of the versions place it inside the area: ` +
+          TOWNS_.map(([n_, t_]) => `${n_} (${Math.round(100 * t_.in_area)}%)`).join(", ") : ""}.`;
+    }
+    if (!ONLY) item(`<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="#6f6d66" stroke-width="1"/></svg>The area: likely 50% or more`);
   } else if (OUTM && !COVM) {
     document.getElementById("subtitle").textContent += `. Shown as one connected area: the places whose ties hold in both halves of the year, and the ground between them`;
   }
@@ -291,7 +328,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
   // DMA-SIZED for legibility: only hexagons of 10+ count toward crossing (occasional long trips do not), and an extended
   // frame is capped at 1.5x the TV market's width and height, kept around the home county
   // the frame comes from the area's own index on every measure, so a coverage map frames exactly as its area map does
-  const FRAMEV = (LIFT || COVM) ? P0.index[COVM && P0.index.travel ? "travel" : "net"] : PRB ? P0.index.net : P.value;
+  const FRAMEV = (LIFT || COVM) ? P0.index.net : PRB ? P0.index.net : P.value;   // coverage maps frame as the area map does (2026-10-26)
   const shaded = Object.entries(FRAMEV).filter(([, v]) => v >= 20);   // only 20+ counts as crossing
   const inMarket = new Set(mp.in_market);
   const outside = d3.sum(shaded, ([id, v]) => (inMarket.has(id) ? 0 : v)) / d3.sum(shaded, ([, v]) => v);
@@ -541,7 +578,9 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     .attr("fill", "none").attr("stroke", COVM ? COV_LINE : T.muted).attr("stroke-width", COVM ? 0.5 : 0.75);
   // THE AREA'S PARTS (the core, p >= 0.5; home body and every piece of 3+ hexagons): an indicator, not a dominant line --
   // mid-grey plain ink, about half the earlier weight, no casing (authors, 2026-10-25), visible over the darkest hexagons
-  if (PRB && PR.core50_outline) g.append("path").datum(PR.core50_outline).attr("d", path).attr("fill", "none")
+  // coverage maps draw the same outline as the area map (2026-10-26), over the same hexagons
+  // NO OUTLINE when the map draws only the area (authors, 2026-10-26): the shaded hexagons define it
+  if ((PRB || COVM) && !ONLY && PR && PR.core50_outline) g.append("path").datum(ONLY && PR.core50_area_outline ? PR.core50_area_outline : PR.core50_outline).attr("d", path).attr("fill", "none")
     .attr("stroke", "#6f6d66").attr("stroke-width", 0.8).attr("stroke-linejoin", "round");
   g.append("path").datum(mp.market.outline).attr("d", path).attr("fill", "none").attr("stroke", COVM ? T.muted : T.ink)
     .attr("stroke-width", COVM ? 0.7 : 1.05).attr("stroke-dasharray", "3.4 2");
@@ -739,7 +778,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
       scale: COVM ? { kind: "log", cap: 9, tiers: { frequent: 9, regular: 2 }, breadth_full: 8 }
                   : { kind: "bands", floor: FLOOR, cuts: CUTS },
       shares: COVM ? { frequent: covShare(9, 1e9), regular: covShare(2, 9), sporadic: covShare(0.005, 2), none: covShare(-1, 0.005),
-        balanced: Math.round(100 * Object.values((DIET[TOWN] || {})[RANK] || {}).filter((n) => n >= 8).length / Math.max(1, Object.keys(P.value).length)) } : null,
+        balanced: Math.round(100 * Object.keys(P.value).filter((k) => ((((DIET[TOWN] || {})[RANK] || {})[k]) || 0) >= 8).length / Math.max(1, Object.keys(P.value).length)) } : null,
       source: (document.querySelector(".dd-footer") || {}).textContent || "",
     };
     const pre = document.createElement("pre"); pre.id = "figure"; pre.textContent = JSON.stringify(fig); document.body.appendChild(pre);
