@@ -83,7 +83,7 @@ if (STORY_LAYER) { T.seqLow = "#8cc47e"; T.seqHigh = "#0b3a1c"; FLOOR = 1; CUTS 
 const COVM = new URLSearchParams(location.search).get("measure") === "coverage";
 const COVK = new URLSearchParams(location.search).get("cov") || "all";
 // below the weekly floor is not shaded: under 2 stories a month is not coverage (authors, 2026-10-20)
-// TIERS NAMED BY FREQUENCY -- frequent, regular, sporadic, none -- never daily/weekly, which name publications (authors,
+// TIERS NAMED BY FREQUENCY -- frequent, regular, infrequent (authors, 2026-10-28; was "sporadic"), none -- never daily/weekly, which name publications (authors,
 // 2026-10-20: the two "collide semantically and visually"). TIERS, NOT ONE RAMP (authors, 2026-10-20: "one continuous color scale might be a mistake"): daily in greens whose steps
 // show volume (9-29, 30-99, 100+), weekly in ochre, occasional (under 2) in light grey, none empty
 if (COVM) { FLOOR = 0.005; CUTS = [2, 9, 30, 100]; }
@@ -191,7 +191,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     `hexagon the larger the place; a county or region is spread by where people live.`;
   document.getElementById("subtitle").textContent = COVM && ONLY
     ? `Local news stories a month about each 1.9-mile hexagon of the area, March 2026. Frequent coverage (9+ a month): ` +
-      `${covShare(9, 1e9)}% of the area; regular (2–8): ${covShare(2, 9)}%; sporadic (under 2): ${covShare(0.005, 2)}%. ` +
+      `${covShare(9, 1e9)}% of the area; regular (2–8): ${covShare(2, 9)}%; infrequent (under 2): ${covShare(0.005, 2)}%. ` +
       `Full-size hexagons: at least 8 of the 10 critical information needs (CIN) categories get a story a month (${BAL()}% of the area)`
     : COVM
     ? `Coverage density: local news stories a month whose area includes each 3 km hexagon, March 2026; a story centred there ` +
@@ -199,7 +199,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
       `${COVK === "local" ? "; stories placed only at county level left out" : ", county"}), less in each hexagon the ` +
       `larger that area (a town by the square root of its size; a county or region counted once, by where people live). ` +
       `Frequent coverage (9+ a month): ${covShare(9, 1e9)}% of the area; regular (2\u20138): ${covShare(2, 9)}%; ` +
-      `sporadic (under 2): ${covShare(0.005, 2)}%; none: ${covShare(-1, 0.005)}%` +
+      `infrequent (under 2): ${covShare(0.005, 2)}%; none: ${covShare(-1, 0.005)}%` +
       (q.get("balance") !== "0" ? `. Colour shows how many stories; size shows breadth \u2013 full size only where at least 8 of the 10 civic ` +
         `information categories (public safety, civic information, politics, education, environment, health, ` +
         `transportation, economic development, civic life, sports) each get a story a month \u2013 ` +
