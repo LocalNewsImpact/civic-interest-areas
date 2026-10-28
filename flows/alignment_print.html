@@ -78,7 +78,7 @@ Promise.all([d3.json("cousub_29.geojson"), d3.json("alignment_2026_03.json")]).t
   // the method is in the article text, not on the figure
   document.getElementById("subtitle").textContent =
     `Share of residents' visits outside the county (January\u2013September 2026) and of ${who}' stories about ` +
-    `other counties (March 2026)`;
+    `other counties (March 2026; mentions and sports stories count half)`;
   document.getElementById("source").textContent =
     `Source: visits, Advan Research, Neighborhood Patterns Plus (Dewey Data); coverage, Missouri School of ` +
     `Journalism analysis of ${name} County newsrooms' stories. U.S. Census Bureau 2020 boundaries; Nielsen DMA.`;
@@ -187,7 +187,7 @@ Promise.all([d3.json("cousub_29.geojson"), d3.json("alignment_2026_03.json")]).t
   for (const [id, r] of Object.entries(rows).sort((a, b) => Math.max(b[1].travel, b[1].coverage) - Math.max(a[1].travel, a[1].coverage))) {
     label(counties.find((f) => f.id === id),
       [[id === home ? `${r.name} (home)` : r.name, 600], [`visits ${r.travel.toFixed(1)}%`, 400],
-       [`${r.stories} ${r.stories === 1 ? "story" : "stories"} (${r.coverage.toFixed(1)}%)`, 400]],
+       [`stories ${r.coverage.toFixed(1)}%`, 400]],   // the weighted share (Table 1), not a count of stories
       6.5, dark(r) ? "#ffffff" : T.ink);
   }
   document.body.dataset.height = Math.ceil(document.querySelector("figure").getBoundingClientRect().height);
