@@ -192,7 +192,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
   document.getElementById("subtitle").textContent = COVM && ONLY
     ? `Local news stories a month about each 1.9-mile hexagon of the area, March 2026. Frequent coverage (9+ a month): ` +
       `${covShare(9, 1e9)}% of the area; regular (2–8): ${covShare(2, 9)}%; sporadic (under 2): ${covShare(0.005, 2)}%. ` +
-      `Full-size hexagons: at least 8 of the 10 critical information needs categories get a story a month (${BAL()}% of the area)`
+      `Full-size hexagons: at least 8 of the 10 critical information needs (CIN) categories get a story a month (${BAL()}% of the area)`
     : COVM
     ? `Coverage density: local news stories a month whose area includes each 3 km hexagon, March 2026; a story centred there ` +
       `counts 1, one mentioning it 0.5; a story counts across the area its scope names (neighbourhood, town, region` +
@@ -253,7 +253,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
       const hx = (cx, r) => d3.range(6).map((i) => { const a = Math.PI / 180 * (60 * i - 30);
         return `${(cx + r * Math.cos(a)).toFixed(2)},${(7 + r * Math.sin(a)).toFixed(2)}`; }).join(" ");
       item(`Breadth <svg width="66" height="14" style="vertical-align:middle;margin:0 4px"><polygon points="${hx(8, 2.8)}" fill="#2f6b2f"/>` +
-        `<polygon points="${hx(30, 4.6)}" fill="#2f6b2f"/><polygon points="${hx(54, 7)}" fill="#2f6b2f"/></svg>few kinds \u2192 8+ of 10 kinds of civic information`);
+        `<polygon points="${hx(30, 4.6)}" fill="#2f6b2f"/><polygon points="${hx(54, 7)}" fill="#2f6b2f"/></svg>few \u2192 8+ of 10 CIN categories`);
     }
     item(`Stories a month: rarely <span style="display:inline-block;width:120px;height:10px;margin:0 6px;vertical-align:middle;` +
       `background:linear-gradient(to right,${stops})"></span> several a week or more`);
