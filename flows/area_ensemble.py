@@ -60,16 +60,30 @@ here = Path(__file__).resolve().parent
 root = here.parent
 region = sys.argv[1] if len(sys.argv) > 1 else "columbia"
 ALL = len(sys.argv) > 2 and sys.argv[2] == "all"
-# BUSIEST=hexagon is a sensitivity (market_patterns.norm_hex): it never writes over the adopted ensemble
-SENS = os.environ.get("BUSIEST", "place") == "hexagon"
+# SENSITIVITIES of the constants held fixed in every version; none writes over the adopted ensemble:
+#   BUSIEST=hexagon   the busiest hexagon = 50 instead of the busiest place (market_patterns.norm_hex)
+#   TIE_W=o,i,p,q     the four news-tie weights (adopted 0.3,0.3,0.7,0.7: out, in, shared places, shared coverage)
+#   GAMMA=g           the strength of the direction boost (adopted 0.5)
+TIE_W = tuple(float(x) for x in os.environ["TIE_W"].split(",")) if os.environ.get("TIE_W") else None
+GAMMA_S = float(os.environ["GAMMA"]) if os.environ.get("GAMMA") else None
+SENS = os.environ.get("BUSIEST", "place") == "hexagon" or TIE_W is not None or GAMMA_S is not None
 if SENS and (not (os.environ.get("OUT") or os.environ.get("SMOKE")) or Path(os.environ.get("SMOKE") or os.environ["OUT"]).name
              in ("probability_columbia.json", "probability.json")):
-    raise SystemExit("BUSIEST=hexagon: set OUT to a separate file; the adopted ensemble is not overwritten")
+    raise SystemExit("a sensitivity: set OUT to a separate file; the adopted ensemble is not overwritten")
+
+
+def held_constants(G):
+    """apply a sensitivity's tie weights and direction strength to a loaded grid's namespace"""
+    if TIE_W is not None:
+        G["BASE_W"] = TIE_W
+    if GAMMA_S is not None:
+        G["GAMMA"] = GAMMA_S
+    return G
 os.environ.pop("HEX_KM", None)
 sys.argv = ["confidence_layer.py", region]
 C = runpy.run_path(str(root / "analysis/confidence_layer.py"), run_name="confidence_lib")
 ns, P, MAPS, HALVES = C["ns"], C["P"], C["MAPS"], C["HALVES"]
-G3 = ns["tie_map"].__globals__
+G3 = held_constants(ns["tie_map"].__globals__)
 BUILT = {"columbia": ("Columbia", "Mexico", "Linn")}     # the Columbia-Jefferson City TV market only
 towns = list(MAPS["towns"]) if ALL else list(BUILT.get(region, ()))
 if os.environ.get("TOWNS"):                # one process per subset of towns (merged afterwards; the members are the same)
@@ -288,7 +302,7 @@ for hk in HEX_KMS:
     else:
         os.environ["HEX_KM"] = str(hk)
         sys.argv = ["network_tie.py", region]
-        G = runpy.run_path(str(root / "analysis/network_tie.py"), run_name="tie_lib")["tie_map"].__globals__
+        G = held_constants(runpy.run_path(str(root / "analysis/network_tie.py"), run_name="tie_lib")["tie_map"].__globals__)
         os.environ.pop("HEX_KM", None)
     sp = math.sqrt(3) * hk / 2                                # this grid's centre spacing, km
     r_in, r_out = 4 * SP3 / sp, 2 * SP3 / sp                  # the distance rule in km

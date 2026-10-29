@@ -307,7 +307,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
       document.getElementById("note").textContent = `About ${P.residents.toLocaleString()} residents of ${who} ` +
         `(${Math.round(100 * P.share)}%) travel in this pattern, January–July 2026. A place's tie: their travel there, ` +
         `strengthened by news ties – coverage each way, and places both visit and report on. A place's likelihood is ` +
-        `the share of ${PR.members.toLocaleString()} versions of the map that include it; the versions vary how the map is ` +
+        `the share of it included, averaged over ${PR.members.toLocaleString()} versions of the map; the versions vary how the map is ` +
         `drawn and how much the news ties count, from not at all to double. The area: every place likely 50% or more, ` +
         `within ${Math.round(LIM_ / 1.609)} miles of the town's center – the distance within which 90% of its residents' ` +
         `regular travel (places visited in every one of the seven months) lies` +

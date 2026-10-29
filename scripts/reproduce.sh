@@ -4,10 +4,11 @@
 #   zsh scripts/reproduce.sh                    # every stage
 #   STAGES="travel coverage" zsh scripts/reproduce.sh
 #
-# Stages: data travel coverage spillover factors public areas figures. Logs: logs/reproduce/<step>.log.
+# Stages: data travel coverage spillover factors public areas sensitivity figures. Logs: logs/reproduce/<step>.log.
 # Requires the Python environment in requirements.txt at .venv/, the Advan files under neighborhood/ and weekly/
 # (Dewey Data, academic licence) and the inputs listed in README.md (Inputs). The figures stage requires Google Chrome.
-# Runtime on one laptop core per process: about 7 hours, most of it in the travel patterns and the drawing ensembles.
+# Runtime on one laptop core per process: about 7 hours, most of it in the travel patterns and the drawing ensembles;
+# the sensitivity stage adds about 2 hours on six cores.
 set -e
 ROOT=${0:A:h:h}
 cd $ROOT
@@ -17,7 +18,7 @@ CHROME=${CHROME:-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}
 REGIONS=(columbia)        # Columbia-Jefferson City television market: the study's civic interest areas
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 MKL_NUM_THREADS=1 PYTHONHASHSEED=0
 mkdir -p $LOG
-stage() { [[ " ${STAGES:-data travel coverage spillover factors public areas figures} " == *" $1 "* ]]; }
+stage() { [[ " ${STAGES:-data travel coverage spillover factors public areas sensitivity figures} " == *" $1 "* ]]; }
 step() {   # step <name> [VAR=value ...] <script> [args]
   local name=$1; shift
   local envs=(); while [[ $1 == *=* ]]; do envs+=$1; shift; done
@@ -133,6 +134,22 @@ if stage areas; then
     step coverage_density_$r   REGION=$r analysis/area_coverage_alignment.py
     step diet_$r               REGION=$r DIET_K=0 analysis/cin_diet.py
   done
+fi
+
+# Table S2: the constants set by judgment (direct and shared-place news-tie weights, direction strength) halved and
+# doubled. Six full 6,912-version ensembles in parallel, each with the area rule applied; never over the adopted one.
+if stage sensitivity; then
+  SENS=$ROOT/flows/reach/sensitivity; mkdir -p $SENS
+  typeset -A V
+  V=(direct_half "TIE_W=0.15,0.15,0.7,0.7" direct_double "TIE_W=0.6,0.6,0.7,0.7" shared_half "TIE_W=0.3,0.3,0.35,0.35"
+     shared_double "TIE_W=0.3,0.3,1.4,1.4" gamma_quarter "GAMMA=0.25" gamma_one "GAMMA=1.0")
+  for k e in ${(kv)V}; do
+    ( step ensemble_$k $e OUT=$SENS/prob_$k.json flows/area_ensemble.py columbia &&
+      step area_core_$k PROB=$SENS/prob_$k.json flows/area_core.py columbia ) &
+  done
+  wait
+  for k in ${(k)V}; do [[ -f $SENS/prob_$k.json ]] || { echo "sensitivity $k FAILED"; exit 1; }; done
+  step judgment_constants      analysis/judgment_constants.py
 fi
 
 # Figures 2-4: the data-to-measures flow and the area and coverage maps (300 dpi PNG; Figure 2 also as PDF).
