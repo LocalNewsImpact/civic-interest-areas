@@ -197,18 +197,29 @@ if stage figures; then
   shot "measures_flow_print.html?paper=1" measures_flow.png 528
   "$CHROME" --headless=new --disable-gpu --no-pdf-header-footer --virtual-time-budget=40000 \
     --print-to-pdf=print/measures_flow.pdf "http://127.0.0.1:8765/measures_flow_print.html?paper=1" 2>/dev/null
+  # triptych panels: ls=1.9 sets place labels at about 6 pt once a panel is a third of the page width
   for t in Columbia Mexico Linn; do
-    shot "market_pattern_print.html?town=$t&rank=1&paper=1&panel=1" "civic_area_${(L)t}.png" 528   # Figure 4
-    shot "market_pattern_print.html?town=$t&rank=1&measure=coverage&paper=1&panel=1" "civic_coverage_${(L)t}.png" 528   # Figure 5
+    shot "market_pattern_print.html?town=$t&rank=1&paper=1&panel=1&ls=1.9" "civic_area_${(L)t}.png" 528   # Figure 4
+    shot "market_pattern_print.html?town=$t&rank=1&measure=coverage&paper=1&panel=1&ls=1.9" "civic_coverage_${(L)t}.png" 528   # Figure 5
   done
+  key() {   # key <page and query> <png>: the triptych's shared key, 660 CSS px drawn to the triptych's 5,130 px
+    "$CHROME" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=7.773 --window-size=660,600 \
+      --virtual-time-budget=40000 --screenshot="print/$2" "http://127.0.0.1:8765/$1" 2>/dev/null
+    echo "print/$2"
+  }
+  key "market_pattern_print.html?town=Columbia&rank=1&paper=1&keyonly=1" civic_area_key.png
+  key "market_pattern_print.html?town=Columbia&rank=1&measure=coverage&paper=1&keyonly=1" civic_coverage_key.png
   kill $SRV
-  ${=PY} - <<'PYEOF'   # Figures 4 and 5: the three area maps, and the three coverage maps, side by side
-from PIL import Image
+  ${=PY} - <<'PYEOF'   # Figures 4 and 5: the shared key over the three area maps, and over the three coverage maps
+from PIL import Image, ImageChops
 for kind in ("area", "coverage"):
     ims = [Image.open(f"print/civic_{kind}_{t}.png").convert("RGB") for t in ("columbia", "mexico", "linn")]
-    gap = 90; out = Image.new("RGB", (sum(i.width for i in ims) + gap * 2, max(i.height for i in ims)), "white"); x = 0
+    gap = 90; w = sum(i.width for i in ims) + gap * 2; h = max(i.height for i in ims)
+    k = Image.open(f"print/civic_{kind}_key.png").convert("RGB")
+    k = k.crop((0, 0, w, ImageChops.difference(k, Image.new("RGB", k.size, "white")).getbbox()[3] + 12))
+    out = Image.new("RGB", (w, k.height + 40 + h), "white"); out.paste(k, (0, 0)); x = 0
     for i in ims:
-        out.paste(i, (x, 0)); x += i.width + gap
+        out.paste(i, (x, k.height + 40)); x += i.width + gap
     out.save(f"print/civic_{kind}_triptych.png", dpi=(300, 300)); print(f"print/civic_{kind}_triptych.png", out.size)
 PYEOF
   cd $ROOT

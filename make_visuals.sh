@@ -33,20 +33,30 @@ shot() {   # shot <url path> <png name>
   sips -s dpiWidth 300 -s dpiHeight 300 "print/$2" >/dev/null
   echo "print/$2"
 }
-# paper=1&panel=1: the triptych panels as Journalism Studies sets them -- map, key and county name; the rest is the caption
+# paper=1&panel=1: the triptych panels as Journalism Studies sets them -- map and county name; the key is drawn once, above
 for v in audrain_all boone_all osage_all; do shot "alignment_print.html?v=$v&paper=1&panel=1" "alignment_${v}_2026_03.png"; done
 shot "alignment_print.html?v=boone_no_broadcast" "alignment_boone_no_broadcast_2026_03.png"
+# the triptych's shared key, 660 CSS px drawn to the triptych's 5,130 px; the county labels stay at full size, since
+# larger labels no longer fit inside the smaller counties and would drop their percentages
+"$CHROME" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=7.773 --window-size=660,600 \
+  --virtual-time-budget=40000 --screenshot="print/alignment_key_2026_03.png" "http://127.0.0.1:8765/alignment_print.html?v=boone_all&paper=1&keyonly=1" 2>/dev/null
 shot "outlet_spillover_print.html" "outlet_spillover_2026_03.png"
 shot "model_diagram_print.html?paper=1" "model_diagram.png"
 kill $SRV
 cd print && eval $PY - <<'PYEOF'
-from PIL import Image
+from PIL import Image, ImageChops
 for name, files in (("travel_triptych_2026_jan_sep.png", [f"travel_{c}_2026_jan_sep.png" for c in ("audrain", "boone", "osage")]),
                     ("alignment_triptych_2026_03.png", [f"alignment_{c}_all_2026_03.png" for c in ("audrain", "boone", "osage")])):
     ims = [Image.open(f).convert("RGB") for f in files]
     gap = 90; w = sum(i.width for i in ims) + gap * 2; h = max(i.height for i in ims)
-    out = Image.new("RGB", (w, h), "white"); x = 0
+    top = 0
+    if name.startswith("alignment"):   # Figure 3: the shared key above the three panels
+        k = Image.open("alignment_key_2026_03.png").convert("RGB")
+        k = k.crop((0, 0, w, ImageChops.difference(k, Image.new("RGB", k.size, "white")).getbbox()[3] + 12)); top = k.height + 40
+    out = Image.new("RGB", (w, top + h), "white"); x = 0
+    if top:
+        out.paste(k, (0, 0))
     for i in ims:
-        out.paste(i, (x, 0)); x += i.width + gap
+        out.paste(i, (x, top)); x += i.width + gap
     out.save(name, dpi=(300, 300)); print(name, out.size)
 PYEOF
