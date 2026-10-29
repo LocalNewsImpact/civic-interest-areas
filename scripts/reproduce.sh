@@ -61,8 +61,8 @@ if stage spillover; then
   step spillover_population    analysis/spillover_population_test.py
   step county_collection_quality analysis/county_collection_quality.py
   step spillover_quality       analysis/collection_quality_robustness.py
-  # Figure 3 and Table 2's story counts: county story files from the statewide export, then each study county's
-  # shares of travel and of stories by destination county
+  # Table 2's story counts and the stories reaching another county: county story files from the statewide export, then
+  # each study county's stories and travel by destination county
   step county_story_files      coverage/storymap/rebuild_county_files.py
   step alignment               coverage/build_alignment.py
 fi
@@ -114,8 +114,8 @@ if stage public; then
 fi
 
 # Civic interest areas, Columbia-Jefferson City television market: homes, travel patterns (non-negative matrix
-# factorization), the network tie, the 6,912-version drawing ensemble, the multi-part areas (Table 3, Figure 4), and
-# coverage density and the balanced diet on the areas (Figure 5).
+# factorization), the network tie, the 6,912-version drawing ensemble, the multi-part areas (Table 3, Figure 3), and
+# coverage density and the balanced diet on the areas (Figure 4).
 if stage areas; then
   step stop_weights           flows/build_stop_weights.py   # road stops at half weight (Columbia market)
   for r in $REGIONS; do
@@ -135,7 +135,7 @@ if stage areas; then
   done
 fi
 
-# Figures 2-5 and S1: the data-to-measures flow, the county alignment maps, the area and coverage maps and the
+# Figures 2-4 and S1: the data-to-measures flow, the area and coverage maps and the
 # calculation diagram (300 dpi PNG; the diagrams also as PDF).
 if stage figures; then
   cd $ROOT/flows
@@ -160,13 +160,8 @@ if stage figures; then
     --print-to-pdf=print/measures_flow.pdf "http://127.0.0.1:8765/measures_flow_print.html?paper=1" 2>/dev/null
   # triptych panels: ls=1.9 sets place labels at about 6 pt once a panel is a third of the page width
   for t in Columbia Mexico Linn; do
-    shot "market_pattern_print.html?town=$t&rank=1&paper=1&panel=1&ls=1.9" "civic_area_${(L)t}.png" 528   # Figure 4
-    shot "market_pattern_print.html?town=$t&rank=1&measure=coverage&paper=1&panel=1&ls=1.9" "civic_coverage_${(L)t}.png" 528   # Figure 5
-  done
-  # Figure 3 panels: counties named only (the shares are the shading); ls=1.7 is the largest size at which every
-  # compared county keeps its name (Montgomery, beside its county on a hairline)
-  for c in audrain boone osage; do
-    shot "alignment_print.html?v=${c}_all&paper=1&panel=1&names=1&ls=1.7" "alignment_${c}_all_2026_03.png" 528
+    shot "market_pattern_print.html?town=$t&rank=1&paper=1&panel=1&ls=1.9" "civic_area_${(L)t}.png" 528   # Figure 3
+    shot "market_pattern_print.html?town=$t&rank=1&measure=coverage&paper=1&panel=1&ls=1.9" "civic_coverage_${(L)t}.png" 528   # Figure 4
   done
   key() {   # key <page and query> <png>: the triptych's shared key, 660 CSS px drawn to the triptych's 5,130 px
     "$CHROME" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=7.773 --window-size=660,600 \
@@ -175,12 +170,10 @@ if stage figures; then
   }
   key "market_pattern_print.html?town=Columbia&rank=1&paper=1&keyonly=1" civic_area_key.png
   key "market_pattern_print.html?town=Columbia&rank=1&measure=coverage&paper=1&keyonly=1" civic_coverage_key.png
-  key "alignment_print.html?v=boone_all&paper=1&keyonly=1" alignment_key_2026_03.png
   kill $SRV
-  ${=PY} - <<'PYEOF'   # Figures 3, 4 and 5: each triptych's shared key over its three panels
+  ${=PY} - <<'PYEOF'   # Figures 3 and 4: each triptych's shared key over its three panels
 from PIL import Image, ImageChops
-FIGS = {"alignment_triptych_2026_03.png": ("alignment_key_2026_03.png", [f"alignment_{c}_all_2026_03.png" for c in ("audrain", "boone", "osage")]),
-        "civic_area_triptych.png": ("civic_area_key.png", [f"civic_area_{t}.png" for t in ("columbia", "mexico", "linn")]),
+FIGS = {"civic_area_triptych.png": ("civic_area_key.png", [f"civic_area_{t}.png" for t in ("columbia", "mexico", "linn")]),
         "civic_coverage_triptych.png": ("civic_coverage_key.png", [f"civic_coverage_{t}.png" for t in ("columbia", "mexico", "linn")])}
 for name, (key, panels) in FIGS.items():
     ims = [Image.open(f"print/{f}").convert("RGB") for f in panels]

@@ -55,9 +55,8 @@ Figure 1, the locator map of the Columbia–Jefferson City DMA, reports no resul
 | Figure | Step | Page | Output (`flows/print/`) |
 |---|---|---|---|
 | Figure 2. From data to measures | `figures` | `flows/measures_flow_print.html` | `measures_flow.png`, `.pdf` |
-| Figure 3. Travel and coverage by destination county | `alignment`, `figures` | `flows/alignment_print.html` | `alignment_triptych_2026_03.png` |
-| Figure 4. Civic interest areas | `area_core`, `figures` | `flows/market_pattern_print.html` | `civic_area_triptych.png` |
-| Figure 5. Coverage density and balance | `coverage_density_columbia`, `diet_columbia`, `figures` | `flows/market_pattern_print.html?measure=coverage` | `civic_coverage_triptych.png` |
+| Figure 3. Civic interest areas | `area_core`, `figures` | `flows/market_pattern_print.html` | `civic_area_triptych.png` |
+| Figure 4. Coverage density and balance | `coverage_density_columbia`, `diet_columbia`, `figures` | `flows/market_pattern_print.html?measure=coverage` | `civic_coverage_triptych.png` |
 | Figure S1. How the measures are calculated (fitted values from `travel_model`, `coverage_model`, `spillover_outlets`, `crossover_compare`) | `figures` | `flows/model_diagram_print.html` | `model_diagram.png`, `.pdf` |
 
 ## Supplementary material S3

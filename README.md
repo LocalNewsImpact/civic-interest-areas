@@ -66,11 +66,11 @@ STAGES="travel coverage" zsh scripts/reproduce.sh
 | `data` | Visits by home and destination county, population calibration, distinct residents, pass-through discount, crossover; county covariates, the study counties' block-group flows, boundaries, OpenStreetMap destinations | Advan files, public data |
 | `travel` | County classes, gravity model of travel | `data` |
 | `coverage` | Coverage model | `travel`, story data |
-| `spillover` | Outlet model, outlet type and print outlets, crossover-spillover correlation, county story shares (Figure 3, Table 2) | `data`, story data |
+| `spillover` | Outlet model, outlet type and print outlets, crossover-spillover correlation, county story counts (Table 2) | `data`, story data |
 | `factors` | Factors tested and not adopted (`analysis/factor_search/`) | `travel`, `coverage`, `spillover` |
 | `public` | Public-data travel model, nested Stage 1 score against the Advan-fitted model (`scripts/public_model.sh`) | `travel`, public data |
 | `areas` | Travel patterns, network tie, 6,912-version drawing ensemble, multi-part areas, coverage density and balanced diet | Advan files, story data |
-| `figures` | Figures 2–5 and S1 (`flows/print/`) | `spillover`, `areas` |
+| `figures` | Figures 2–4 and S1 (`flows/print/`) | `spillover`, `areas` |
 
 A full run takes about 6 hours on one processor core per process. The travel patterns and the drawing ensembles take
 most of the time. Every random step uses a fixed seed; repeated runs produce identical outputs.
