@@ -16,8 +16,8 @@ for news stories.
 | Spillover | Share of an outlet's stories about counties other than its own | `analysis/spillover_outlets.py` |
 | Civic interest area | Places a town's residents share through travel, strengthened by news ties; each place shaded by how likely it is to be part of the area | `flows/area_ensemble.py`, `flows/area_core.py` |
 
-`flows/model_diagram_print.html` renders the calculation for each measure: the question it answers, the equation,
-the inputs and the output.
+Supplementary material S2 sets out the calculation for each measure: the question it answers, the equation, its
+terms with fitted values and its output (`RESULTS.md` names the script that prints each value).
 
 ## Results
 
@@ -70,7 +70,7 @@ STAGES="travel coverage" zsh scripts/reproduce.sh
 | `factors` | Factors tested and not adopted (`analysis/factor_search/`) | `travel`, `coverage`, `spillover` |
 | `public` | Public-data travel model, nested Stage 1 score against the Advan-fitted model (`scripts/public_model.sh`) | `travel`, public data |
 | `areas` | Travel patterns, network tie, 6,912-version drawing ensemble, multi-part areas, coverage density and balanced diet | Advan files, story data |
-| `figures` | Figures 2–4 and S1 (`flows/print/`) | `spillover`, `areas` |
+| `figures` | Figures 2–4 (`flows/print/`) | `spillover`, `areas` |
 
 A full run takes about 6 hours on one processor core per process. The travel patterns and the drawing ensembles take
 most of the time. Every random step uses a fixed seed; repeated runs produce identical outputs.
@@ -103,7 +103,7 @@ Code: MIT (`LICENSE`). Data created by the project: CC BY 4.0 (`LICENSE-DATA.md`
 ## Map pages
 
 `make serve` serves the map pages at `http://127.0.0.1:8765`. The civic interest area map for a town:
-`market_pattern_print.html?town=Columbia&rank=1`. The calculation diagram: `model_diagram_print.html`.
+`market_pattern_print.html?town=Columbia&rank=1`.
 
 ## Credentials
 

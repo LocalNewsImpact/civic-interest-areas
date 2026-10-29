@@ -135,8 +135,7 @@ if stage areas; then
   done
 fi
 
-# Figures 2-4 and S1: the data-to-measures flow, the area and coverage maps and the
-# calculation diagram (300 dpi PNG; the diagrams also as PDF).
+# Figures 2-4: the data-to-measures flow and the area and coverage maps (300 dpi PNG; Figure 2 also as PDF).
 if stage figures; then
   cd $ROOT/flows
   python3 -m http.server 8765 --bind 127.0.0.1 > /dev/null 2>&1 &
@@ -152,9 +151,6 @@ if stage figures; then
     echo "print/$2"
   }
   # paper=1: the image as Journalism Studies sets it -- graphic and key only; title, notes and source are the caption
-  shot "model_diagram_print.html?paper=1" model_diagram.png 528
-  "$CHROME" --headless=new --disable-gpu --no-pdf-header-footer --virtual-time-budget=40000 \
-    --print-to-pdf=print/model_diagram.pdf "http://127.0.0.1:8765/model_diagram_print.html?paper=1" 2>/dev/null
   shot "measures_flow_print.html?paper=1" measures_flow.png 528
   "$CHROME" --headless=new --disable-gpu --no-pdf-header-footer --virtual-time-budget=40000 \
     --print-to-pdf=print/measures_flow.pdf "http://127.0.0.1:8765/measures_flow_print.html?paper=1" 2>/dev/null
