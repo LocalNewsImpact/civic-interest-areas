@@ -25,9 +25,8 @@ import numpy as np
 
 root = Path(__file__).resolve().parents[1]
 region = sys.argv[1] if len(sys.argv) > 1 else "columbia"
-os.environ["TIE_LIB"] = "1"
-argv, sys.argv = sys.argv, ["tie_footprint.py", region]
-ns = runpy.run_path(str(root / "analysis/tie_footprint.py"), run_name="tie_lib")
+argv, sys.argv = sys.argv, ["network_tie.py", region]
+ns = runpy.run_path(str(root / "analysis/network_tie.py"), run_name="tie_lib")
 sys.argv = argv
 P = ns["P"]
 HALVES = json.load(open(ns["R"] / "patterns_halves.json"))
@@ -250,7 +249,7 @@ def replicability(half, town):
             "shown_odd": len(on_["odd"]), "shown_even": len(on_["even"])}
 
 
-if __name__ == "__main__":   # imported by selection_sensitivity.py for its functions only
+if __name__ == "__main__":   # area_ensemble.py runs this file for its functions only
     out = {}
     MAPS_T = {t_: {m_["rank"]: m_ for m_ in ms} for t_, ms in MAPS["towns"].items()}
     for town in (argv[2:] or list(ns["STUDY"])):

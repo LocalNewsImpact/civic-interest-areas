@@ -17,7 +17,6 @@
 !data/stories/march_2026_three_counties_articles.csv
 !data/stories/march_2026_three_counties_places.csv
 !flows/d3.min.js
-!flows/topojson-client.min.js
 
 # Scratch captures of rendered maps.
 flows/probe.html

@@ -1,6 +1,7 @@
 #!/bin/bash
-# Public-data travel model, Missouri: rebuilds the Stage 1 builds, the Advan-learned corrections (Stage 2) and
-# public_adjusted_pairs_trnear.csv, with every environment setting each step needs.
+# Public-data travel model, Missouri: the Stage 1 builds, the Advan-fitted benchmark on the same outcome, and the
+# nested Stage 1 score (the article's 4.6 points against 3.3 for the Advan-fitted model), with every environment
+# setting each step needs.
 # Called by scripts/reproduce.sh (stage public); runs from any directory; at most 2 processes; BLAS single-threaded.
 # Inputs from the travel stage: gravity_terms.py outcome visits_statewide, road_stop_share.csv `discount`,
 # LODES 2023 primary jobs (JT01), distance terms centred at 25 miles.
@@ -9,11 +10,8 @@ cd "$(dirname "$0")/.."
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 MKL_NUM_THREADS=1
 PY=".venv/bin/python -I"
 mkdir -p logs
-step() { [[ " ${STEPS:-1 9 2 3 4 5 10 6 7 8} " == *" $1 "* ]]; }   # STEPS="2 3" runs only those steps
+step() { [[ " ${STEPS:-1 9 2 3 4} " == *" $1 "* ]]; }   # STEPS="2 3" runs only those steps
 
-# Round 3 (2026-10-25): free/mo_residents_od_JT01_2023.csv.gz (travel model; Missouri main + Missouri-home rows of the
-# 8 aux files) is read by public_work_model.py and public_adjusted_model.py. For the work model it holds exactly the rows read before (2,621,217 jobs, every tract->county
-# cell equal), so steps 1-2 need no rerun after the switch; run STEPS="3 4 5 6 7 8".
 # ---- 0. LODES 2023 JT01 files (LEHD LODES8), once -----------------------------------------------------------------------
 # free/mo_residents_od_JT01_2023.csv.gz (travel model: free/mo_od_main_JT01_2023.csv.gz + the Missouri-home rows of
 # free/{il,ks,ia,ar,ok,ne,tn,ky}_od_aux_JT01_2023.csv.gz):
@@ -24,30 +22,15 @@ if step 1; then
 DIST=pop TAG=_v1 $PY analysis/public_work_model.py > logs/work_v1_mo.log 2>&1
 fi
 
-# ---- 9. Work + non-work builds (public_nonwork_model.py), one factor at a time against v1; the baseline public build
-#         (_base, read by public_vs_advan_compare.py and public_segment_weights.py) and its survey-subgroup decays.
-#         Work part: the step 1 work model (_v1); the job-centre-distance variant reads the job-centre work model.
-#         Recipes reproduce the 2026-10-18 non-work shares exactly (max difference 3e-16).
+# ---- 9. Work + non-work baseline (public_nonwork_model.py, _base: employment draw, likelihood loss), read by
+#         public_vs_advan_compare.py; and the four-kinds build (public_travel_components.py, _share), read there too.
 if step 9; then
-DIST=hub TAG= $PY analysis/public_work_model.py > logs/work_hub_mo.log 2>&1
-NW=$(cat <<EOF
-_v1|DRAW=est DIST=pop CLASS=rucc LOSS=sq
-_emp|DRAW=emp DIST=pop CLASS=rucc LOSS=sq
-_hub|DRAW=est DIST=hub CLASS=rucc LOSS=sq
-_msa|DRAW=est DIST=pop CLASS=msa LOSS=sq
-_ll|DRAW=est DIST=pop CLASS=rucc LOSS=ll
-_base|DRAW=emp DIST=pop CLASS=rucc LOSS=ll
-_nw_income|DRAW=emp DIST=pop CLASS=rucc LOSS=ll SUBGROUP=income
-_nw_degree|DRAW=emp DIST=pop CLASS=rucc LOSS=ll SUBGROUP=degree
-_nw_tenure|DRAW=emp DIST=pop CLASS=rucc LOSS=ll SUBGROUP=tenure
-EOF
-)
-echo "$NW" | while IFS='|' read -r tag e; do
-  env $e TAG=$tag $PY analysis/public_nonwork_model.py > logs/nonwork$tag.log 2>&1 || echo "FAIL nonwork$tag"
-done
+DRAW=emp DIST=pop CLASS=rucc LOSS=ll TAG=_base $PY analysis/public_nonwork_model.py > logs/nonwork_base.log 2>&1
+TAG=_share $PY analysis/public_travel_components.py > logs/components_share.log 2>&1
 fi
 
-# ---- 2. Stage 1 candidate builds: public_travel_tiers.py, one per setting (53, Missouri) ---------------------------------
+# ---- 2. Stage 1 candidate builds: public_travel_tiers.py, one per setting (53, Missouri); public_stage1_nested.py
+#         chooses among them --------------------------------------------------------------------------------------------
 # TAG|environment. Shared bases:
 S="RETAIL=tac DRAWMODE=cap REC_CODES=71----"                # trade area builds
 G="$S CHAIN=1 WORK_HYBRID=90"                               # observed LODES within 90 miles, chained errands
@@ -90,8 +73,6 @@ _g_10_sales|$G WORK_DAYS=10 HUFF=sales
 _g_10_surplus|$G WORK_DAYS=10 HUFF=surplus
 _g_15_sales|$G WORK_DAYS=15 HUFF=sales
 _g_15_surplus|$G WORK_DAYS=15 HUFF=surplus
-_g_20_sales|$G WORK_DAYS=20 HUFF=sales
-_g_20_surplus|$G WORK_DAYS=20 HUFF=surplus
 _g_25_sales|$G WORK_DAYS=25 HUFF=sales
 _g_25_surplus|$G WORK_DAYS=25 HUFF=surplus
 _g_30_sales|$G WORK_DAYS=30 HUFF=sales
@@ -100,12 +81,9 @@ _g_40_sales|$G WORK_DAYS=40 HUFF=sales
 _g_40_surplus|$G WORK_DAYS=40 HUFF=surplus
 _c_10_l6|$G HUFF=sales WORK_DAYS=10 LAMBDA=retail:6
 _c_10_l8|$G HUFF=sales WORK_DAYS=10 LAMBDA=retail:8
-_c_20_l6|$G HUFF=sales WORK_DAYS=20 LAMBDA=retail:6
-_c_20_l8|$G HUFF=sales WORK_DAYS=20 LAMBDA=retail:8
 _c_40_l6|$G HUFF=sales WORK_DAYS=40 LAMBDA=retail:6
 _c_40_l8|$G HUFF=sales WORK_DAYS=40 LAMBDA=retail:8
 _c_10_l6all|$G HUFF=sales WORK_DAYS=10 LAMBDA=retail:6,medical:6,specialty:6
-_c_20_l6all|$G HUFF=sales WORK_DAYS=20 LAMBDA=retail:6,medical:6,specialty:6
 _c_40_l6all|$G HUFF=sales WORK_DAYS=40 LAMBDA=retail:6,medical:6,specialty:6
 _c_grav20|$C WORK_DAYS=20
 _c_grav40|$C WORK_DAYS=40
@@ -132,49 +110,3 @@ fi
 if step 4; then
 $PY analysis/public_stage1_nested.py > logs/public_stage1_nested.log 2>&1
 fi
-
-# ---- 5. Stage 2, outer loop (245 structures x 3 modes, 2 workers) ---------------------------------------------------------
-if step 5; then
-PROCS=2 $PY analysis/public_adjusted_nested.py > logs/adj_nested.log 2>&1
-$PY analysis/score_segments.py > logs/score_segments_nested.log 2>&1
-fi
-
-# ---- 10. Regular-travel builds with observed LODES within 45 and 90 miles (REGULAR=1: no long-distance kinds), by class,
-#          with the 2026-10-18 corrections structure: public_adjusted_pairs_reg45.csv / _reg90.csv (tie_footprint.py PUBFILE;
-#          Mexico's false Jefferson City market). Recipes reproduce the 2026-10-18 builds exactly on that day's work model.
-#          Before step 6, which writes public_adjustments.csv last.
-if step 10; then
-for b in "_r45g_40_sales|WORK_HYBRID=45 WORK_DAYS=40 HUFF=sales" "_r45c_40_l6all|WORK_HYBRID=45 HUFF=sales WORK_DAYS=40 LAMBDA=retail:6,medical:6,specialty:6" \
-         "_r45g_20_surplus|WORK_HYBRID=45 WORK_DAYS=20 HUFF=surplus" "_rc_grav20|HUFF=sales WORK_DAYS=20" \
-         "_rg_40_sales|WORK_HYBRID=90 WORK_DAYS=40 HUFF=sales" "_rc_40_l6all|WORK_HYBRID=90 HUFF=sales WORK_DAYS=40 LAMBDA=retail:6,medical:6,specialty:6" \
-         "_rg_20_surplus|WORK_HYBRID=90 WORK_DAYS=20 HUFF=surplus"; do
-  tag=${b%%|*}; e=${b#*|}
-  env $S CHAIN=1 REGULAR=1 $e TAG=$tag $PY analysis/public_travel_tiers.py > logs/tiers_29$tag.log 2>&1 || echo "FAIL $tag"
-done
-REGULAR=1 HYB=45 CLASS5=_r45g_40_sales OUTTAG=_regular45 $PY analysis/assemble_public_by_class.py
-REGULAR=1 CLASS5=_rg_40_sales OUTTAG=_regular $PY analysis/assemble_public_by_class.py
-for r in "45|_regular45" "90|_regular"; do
-  BASE=public_model_pairs_tiers_byclass${r#*|}.csv SPLIT3=1 C5AS="class 2" DIST_BY_RANK=1 CORE= CORE_NEAR=1 TRANSFER=1 \
-    RC_PF=1.0 COMMUTE=commute_rank,dest_order,dest_class POOLED= OUTTAG=_reg${r%%|*} $PY analysis/public_adjusted_model.py \
-    > logs/adj_reg${r%%|*}.log 2>&1
-done
-fi
-
-# ---- 6. public_adjusted_pairs_trnear.csv: the 2026-10-18 structure on the 2026-10-18 base (read by tie_footprint.py,
-if step 6; then
-#         public_activity_space.py, directions_per_tract.py) ------------------------------------------------------------------
-LEGACY=1 CLASS5=_g_40_sales OUTTAG=_c5_g_40_sales $PY analysis/assemble_public_by_class.py
-BASE=public_model_pairs_tiers_byclass_c5_g_40_sales.csv SPLIT3=1 C5AS="class 2" DIST_BY_RANK=1 CORE= CORE_NEAR=1 TRANSFER=1 \
-  RC_PF=1.0 COMMUTE=commute_rank,dest_order,dest_class POOLED= OUTTAG=_trnear $PY analysis/public_adjusted_model.py > logs/adj_trnear.log 2>&1
-fi
-
-# ---- 7. The public model assembled with the settings chosen on all Missouri counties ---------------------------------------
-if step 7; then
-OUTTAG=_nested $PY analysis/assemble_public_by_class.py
-fi
-
-# ---- 8. travel_tier_pull_cv.py (adopted 8 FACTORS baseline; nested guard) ----------------------------------------------------
-if step 8; then
-$PY analysis/travel_tier_pull_cv.py > logs/travel_tier_pull_cv.log 2>&1
-fi
-

@@ -349,7 +349,7 @@ for mw in (0.25, 0.5, 1.0):
               f"{k['skill']:+.3f} | {k['r2']:+.3f} | " + " | ".join(cty) + " |")
 
 # ---- outputs: written once, after every column exists ---------------------------------------------------------------------
-# QUOTED ROWS: the three counties' county and outlet actual / expected figures that MODEL_CHANGES.md quotes, from
+# QUOTED ROWS: the three counties' county and outlet actual / expected figures that RESULTS.md quotes, from
 # d.expected (held out).
 QUOTED = ["Vandalia Leader", "Boone County Journal", "Centralia Fireside Guard", "The Mexico Ledger", "Columbia Missourian",
           "Columbia Daily Tribune"]

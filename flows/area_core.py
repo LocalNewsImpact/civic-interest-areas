@@ -194,6 +194,7 @@ for region in sys.argv[1:] or ["columbia"]:
             # ONE AREA FOR MAPS AND FIGURES (option 1, authors 2026-10-26, sample): the core with news ties, home body and every
             # piece of any size within the limit -- the hexagons both maps draw and every figure is computed on
             area1 = body.union(*[p_ for p_ in others if from_c(p_) <= D[LIMIT]]) if body else set()
+            rec["core50_area_before_towns_hexes"] = sorted(key(c) for c in area1)   # supplement S3: before towns are whole
             # A TOWN IS IN THE AREA when the versions put it inside their area half the time or more (authors, 2026-10-26,
             # option A): the versions draw a town on different grids and hexagons, so a town can be inside most versions'
             # areas with no one hexagon at 0.5 (Moberly: 54% of versions, best hexagon 44%). Each version's own distance

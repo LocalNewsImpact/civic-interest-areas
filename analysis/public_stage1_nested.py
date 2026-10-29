@@ -25,7 +25,7 @@ import pandas as pd
 here = Path(__file__).resolve().parent
 sys.path.insert(0, str(here))
 os.environ.setdefault("BASE", "public_model_pairs_tiers_g_40_sales.csv")
-import public_adjusted_model as M  # noqa: E402
+import public_frame as M  # noqa: E402
 from public_scoring import per_county  # noqa: E402
 
 CACHE = M.A_ / "public_stage1_variants.npz"

@@ -40,9 +40,14 @@
 const q = new URLSearchParams(location.search);
 // ?paper=1: the image as the journal sets it -- map and key only; the title, notes and source are the manuscript's caption
 // (Journalism Studies style, authors 2026-10-29). ?panel=1 keeps a one-line panel name for a triptych
-const PAPER = q.get("paper") === "1", PANEL = q.get("panel") === "1";
+// A triptych panel prints at about 0.29 of its drawn size, so ?panel=1 drops the key (?keyonly=1 draws it once, above
+// the three panels), enlarges the panel name, and ?ls= scales the county labels. ?names=1 labels each county by name
+// only (Figure 3, authors 2026-10-29): the shares stay in the shading, and a name alone fits at the larger size
+const PAPER = q.get("paper") === "1", PANEL = q.get("panel") === "1", KEYONLY = q.get("keyonly") === "1", LS = +(q.get("ls") || 1);
+const NAMES = q.get("names") === "1";
 if (PAPER) document.head.insertAdjacentHTML("beforeend", "<style>.dd-subtitle,.dd-footer{display:none}" +
-  (PANEL ? ".dd-title{font-size:11px;margin-bottom:4px}" : ".dd-title{display:none}") + "</style>");
+  (PANEL ? ".dd-title{font-size:22px;margin-bottom:6px}.dd-legend{display:none}" : ".dd-title{display:none}") +
+  (KEYONLY ? ".dd-title{display:none}.dd-chart{height:0;overflow:hidden}body{width:660px}.dd-legend{margin:0}" : "") + "</style>");
 const V = q.get("v") || "osage_all";
 const DMA = ["29007","29019","29027","29041","29051","29053","29089","29125","29131","29135","29139","29141","29151","29175"];
 const T = { seqLow: "#d3ecfa", seqHigh: "#003a56", boundary: "#c3c2b7", ink: "#0b0b0b", muted: "#898781",
@@ -102,8 +107,10 @@ Promise.all([d3.json("cousub_29.geojson"), d3.json("alignment_2026_03.json")]).t
   item(`<span class="dd-swatch" style="background:${STORIES_ONLY}"></span>stories, visits under ${FL}%`);
   item(`<span class="dd-swatch base"></span>neither`);
   // the home county is not compared (residents live there); its story counts are given for reference
-  item(`<span class="dd-swatch home"></span>${name} County (home): ${d.stories_home} stories about ${name}, ` +
-    `${d.stories_away} about other counties`);
+  // the shared key of a triptych serves all three counties; the counts are in Table 2
+  item(KEYONLY ? `<span class="dd-swatch home"></span>Home county`
+    : `<span class="dd-swatch home"></span>${name} County (home): ${d.stories_home} stories about ${name}, ` +
+      `${d.stories_away} about other counties`);
   item(`<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="${T.ink}" stroke-width="1.6" stroke-dasharray="5 3"/></svg>Columbia–Jefferson City TV market`);
 
   const W = 354, H = 338, OUT = 528;
@@ -127,6 +134,7 @@ Promise.all([d3.json("cousub_29.geojson"), d3.json("alignment_2026_03.json")]).t
   const placed = [];
   const filled = counties.filter((f) => f.id === home || rows[f.id]);
   const label = (f, lines, size, colour) => {
+    size *= LS;
     const t = g.append("text").attr("text-anchor", "middle").attr("font-size", size).attr("fill", colour);
     lines.forEach(([l, wt], i) => t.append("tspan").attr("x", 0).attr("dy", i ? size * 1.15 : 0).attr("font-weight", wt).text(l));
     const w = t.node().getBBox().width, h = size * 1.15 * lines.length;
@@ -191,7 +199,7 @@ Promise.all([d3.json("cousub_29.geojson"), d3.json("alignment_2026_03.json")]).t
   label(counties.find((f) => f.id === home), [[name, 600], ["County", 600]], 7, T.ink);
   for (const [id, r] of Object.entries(rows).sort((a, b) => Math.max(b[1].travel, b[1].coverage) - Math.max(a[1].travel, a[1].coverage))) {
     label(counties.find((f) => f.id === id),
-      [[id === home ? `${r.name} (home)` : r.name, 600], [`visits ${r.travel.toFixed(1)}%`, 400],
+      NAMES ? [[r.name, 600]] : [[id === home ? `${r.name} (home)` : r.name, 600], [`visits ${r.travel.toFixed(1)}%`, 400],
        [`stories ${r.coverage.toFixed(1)}%`, 400]],   // the weighted share (Table 1), not a count of stories
       6.5, dark(r) ? "#ffffff" : T.ink);
   }

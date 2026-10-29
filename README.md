@@ -1,7 +1,7 @@
 # Civic interest areas
 
-Code for the Missouri School of Journalism analysis of local news in Missouri. The analysis measures where county
-residents travel, where local news outlets report, and how the two align. The travel, coverage and spillover models
+Replication code for "Beyond Counties: Mapping Civic Interest Areas" (Missouri School of Journalism). The analysis
+measures where county residents travel, where local news outlets report, and how the two align. The travel, coverage and spillover models
 are fitted on all Missouri counties; results are reported for Audrain, Boone and Osage counties. Civic interest areas
 cover the Columbia–Jefferson City television market. Results cover January–September 2026 for travel and March 2026
 for news stories.
@@ -19,17 +19,17 @@ for news stories.
 `flows/model_diagram_print.html` renders the calculation for each measure: the question it answers, the equation,
 the inputs and the output.
 
-## Method record
+## Results
 
-`MODEL_CHANGES.md` records the method. The section "Current results" lists every figure with the script that
-prints it. The remaining sections record the selection procedure, every specification tested, every sensitivity
-analysis and every figure that a later version replaced (appendix "Superseded figures").
+`RESULTS.md` lists every number, table and figure in the article with the step and script that produce it. The
+repository holds only the code those results need. The factors tested and not adopted, which the article's Methods
+summarize, are in `analysis/factor_search/` with their own README.
 
 ## Requirements
 
 - Python 3.11 with the packages in `requirements.txt`, installed in `.venv/`:
   `python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt`.
-- zsh (macOS default) for `scripts/reproduce.sh` and `make_visuals.sh`; bash for `scripts/public_model.sh`.
+- zsh (macOS default) for `scripts/reproduce.sh`; bash for `scripts/public_model.sh`.
 - Google Chrome for the figures (path set by the `CHROME` environment variable).
 - The datadesk style sheets and fonts in `flows/dd/` for the map pages (copied from datadesk's `static/css` and
   `static/fonts`; not in this repository).
@@ -53,7 +53,7 @@ excludes every one of these folders' data files.
 
 ## Reproducing the results
 
-`scripts/reproduce.sh` rebuilds every result in "Current results" in dependency order and writes one log per step to
+`scripts/reproduce.sh` rebuilds every result in `RESULTS.md` in dependency order and writes one log per step to
 `logs/reproduce/`.
 
 ```sh
@@ -63,26 +63,25 @@ STAGES="travel coverage" zsh scripts/reproduce.sh
 
 | Stage | Steps | Reads |
 |---|---|---|
-| `data` | Visits by home and destination county, population calibration, distinct residents, pass-through discount, crossover | Advan files, ACS population |
-| `travel` | Gravity model, block tests, nested test of exploratory terms | `data` |
-| `coverage` | Coverage model, saturation test, border test | `travel`, story data |
-| `spillover` | Outlet model, nested selection, television-market and regional holdouts, collection-quality subsets | `data`, story data |
-| `public` | Public-data travel model and its Advan-learned corrections (`scripts/public_model.sh`) | `travel`, public data |
-| `areas` | Travel patterns, network tie, 6,912-version drawing ensemble, multi-part areas, tie-market accuracy | Advan files, story data, `public` |
-| `qa` | Coverage density and balanced diet on the travel-only footprint (diagnostics for later work) | `areas` |
-| `figures` | Area table, calculation diagram, area maps for Columbia, Mexico and Linn (`flows/print/`) | `areas` |
+| `data` | Visits by home and destination county, population calibration, distinct residents, pass-through discount, crossover; county covariates, the study counties' block-group flows, boundaries, OpenStreetMap destinations | Advan files, public data |
+| `travel` | County classes, gravity model of travel | `data` |
+| `coverage` | Coverage model | `travel`, story data |
+| `spillover` | Outlet model, outlet type and print outlets, crossover-spillover correlation, county story shares (Figure 3, Table 2) | `data`, story data |
+| `factors` | Factors tested and not adopted (`analysis/factor_search/`) | `travel`, `coverage`, `spillover` |
+| `public` | Public-data travel model, nested Stage 1 score against the Advan-fitted model (`scripts/public_model.sh`) | `travel`, public data |
+| `areas` | Travel patterns, network tie, 6,912-version drawing ensemble, multi-part areas, coverage density and balanced diet | Advan files, story data |
+| `figures` | Figures 2–5 and S1 (`flows/print/`) | `spillover`, `areas` |
 
 A full run takes about 6 hours on one processor core per process. The travel patterns and the drawing ensembles take
 most of the time. Every random step uses a fixed seed; repeated runs produce identical outputs.
-
-`make_visuals.sh` rebuilds the county-level figures: travel maps, alignment maps and outlet spillover charts.
 
 ## Repository layout
 
 | Folder | Contents |
 |---|---|
-| `analysis/` | Data build, travel, coverage, spillover and public-data models, tests of candidate terms, tie markets |
-| `flows/` | Travel patterns, network tie, drawing ensemble, area outlines, map pages and figure exports |
+| `analysis/` | Data build, travel, coverage, spillover and public-data models, coverage density and balanced diet |
+| `analysis/factor_search/` | Factors tested and not adopted |
+| `flows/` | Travel patterns, drawing ensemble, area outlines, figure pages |
 | `coverage/` | Story exports and collection-quality tables |
 | `scripts/` | `reproduce.sh`, `public_model.sh`, and the pre-commit data guard `check_commit.sh` |
 | `data/` | Committed story data and the pinned outlet registry |
