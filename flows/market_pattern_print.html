@@ -94,6 +94,11 @@ if (COVM) { FLOOR = 0.005; CUTS = [2, 9, 30, 100]; }
 const COV_DAILY = ["#3f7d3a"], COV_WEEKLY = "#d9a441", COV_OCC = "#e4e2da", COV_LINE = "#c9c7be";
 const covFill = (v) => v >= 9 ? COV_DAILY[0] : v >= 2 ? COV_WEEKLY : COV_OCC;
 if (BARE) document.head.insertAdjacentHTML("beforeend", "<style>.dd-title,.dd-subtitle,.dd-legend,.dd-footer{display:none}</style>");
+// ?paper=1: the image as the journal sets it -- map and key only; the title, notes and source are the manuscript's caption
+// (Journalism Studies style, authors 2026-10-29). ?panel=1 keeps a one-line panel name for a triptych
+const PAPER = new URLSearchParams(location.search).get("paper") === "1", PANEL = new URLSearchParams(location.search).get("panel") === "1";
+if (PAPER) document.head.insertAdjacentHTML("beforeend", "<style>.dd-subtitle,.dd-note,.dd-footer{display:none}" +
+  (PANEL ? ".dd-title{font-size:11px;margin-bottom:4px}" : ".dd-title{display:none}") + "</style>");
 function quantizeRamp(low, high, n) {   // datadesk-chart.js: steps spaced evenly in luminance
   const parse = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   const [a, b] = [parse(low), parse(high)];
@@ -786,6 +791,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     };
     const pre = document.createElement("pre"); pre.id = "figure"; pre.textContent = JSON.stringify(fig); document.body.appendChild(pre);
   }
+  if (PAPER && PANEL) document.getElementById("title").textContent = TOWN;
   document.body.dataset.height = Math.ceil(document.querySelector("figure").getBoundingClientRect().height);
   document.body.dataset.ready = "1";
 });

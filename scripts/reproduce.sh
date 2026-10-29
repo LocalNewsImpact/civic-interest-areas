@@ -190,17 +190,26 @@ if stage figures; then
       "http://127.0.0.1:8765/$1" 2>/dev/null
     echo "print/$2"
   }
-  shot "model_diagram_print.html" model_diagram.png 528
+  # paper=1: the image as Journalism Studies sets it -- graphic and key only; title, notes and source are the caption
+  shot "model_diagram_print.html?paper=1" model_diagram.png 528
   "$CHROME" --headless=new --disable-gpu --no-pdf-header-footer --virtual-time-budget=40000 \
-    --print-to-pdf=print/model_diagram.pdf "http://127.0.0.1:8765/model_diagram_print.html" 2>/dev/null
-  shot "measures_flow_print.html" measures_flow.png 528
+    --print-to-pdf=print/model_diagram.pdf "http://127.0.0.1:8765/model_diagram_print.html?paper=1" 2>/dev/null
+  shot "measures_flow_print.html?paper=1" measures_flow.png 528
   "$CHROME" --headless=new --disable-gpu --no-pdf-header-footer --virtual-time-budget=40000 \
-    --print-to-pdf=print/measures_flow.pdf "http://127.0.0.1:8765/measures_flow_print.html" 2>/dev/null
+    --print-to-pdf=print/measures_flow.pdf "http://127.0.0.1:8765/measures_flow_print.html?paper=1" 2>/dev/null
   for t in Columbia Mexico Linn; do
-    shot "market_pattern_print.html?town=$t&rank=1" "civic_area_${(L)t}.png" 528
-    shot "market_pattern_print.html?town=$t&rank=1&measure=coverage" "civic_coverage_${(L)t}.png" 528   # Figure 7
+    shot "market_pattern_print.html?town=$t&rank=1&paper=1" "civic_area_${(L)t}.png" 528
+    shot "market_pattern_print.html?town=$t&rank=1&measure=coverage&paper=1&panel=1" "civic_coverage_${(L)t}.png" 528   # Figure 7
   done
   kill $SRV
+  ${=PY} - <<'PYEOF'   # Figure 7: the three coverage maps side by side
+from PIL import Image
+ims = [Image.open(f"print/civic_coverage_{t}.png").convert("RGB") for t in ("columbia", "mexico", "linn")]
+gap = 90; out = Image.new("RGB", (sum(i.width for i in ims) + gap * 2, max(i.height for i in ims)), "white"); x = 0
+for i in ims:
+    out.paste(i, (x, 0)); x += i.width + gap
+out.save("print/civic_coverage_triptych.png", dpi=(300, 300)); print("print/civic_coverage_triptych.png", out.size)
+PYEOF
   cd $ROOT
 fi
 echo "done: logs in $LOG"
