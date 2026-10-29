@@ -227,7 +227,7 @@ def piece_name(G, piece):
 
 
 def amps(G, town, Hk):
-    """the network tie's amplification by hexagon (tie_footprint.tie_map's terms, BASE_W), which no drawing setting
+    """the network tie's amplification by hexagon (network_tie.tie_map's terms, BASE_W), which no drawing setting
     changes -- computed once per grid, town and travel input"""
     cu = G["COV"][town]
     own_u = {G["P"]["bg_unit"].get(h) for h in G["town_bgs"](town)} | {G["HOME_PLACE"][town]}
@@ -250,7 +250,7 @@ def amps(G, town, Hk):
 
 
 def tie(G, town, Hk, amp, news, nw=1.0):
-    """the tie (network or travel only) under G's current TRAVEL_TOP, DW, LAMBDA: tie_footprint.tie_map, cached terms;
+    """the tie (network or travel only) under G's current TRAVEL_TOP, DW, LAMBDA: network_tie.tie_map, cached terms;
     nw multiplies all four news weights (the amplification less 1)"""
     top, DW, DC = G["TRAVEL_TOP"], G["DW"], G["DCAP"]
     Hk = G["norm_hex"](Hk)                   # busiest hexagon = 1 under this member's spread
@@ -286,9 +286,9 @@ for hk in HEX_KMS:
     if hk == 3:
         G = G3
     else:
-        os.environ["HEX_KM"], os.environ["TIE_LIB"] = str(hk), "1"
-        sys.argv = ["tie_footprint.py", region]
-        G = runpy.run_path(str(root / "analysis/tie_footprint.py"), run_name="tie_lib")["tie_map"].__globals__
+        os.environ["HEX_KM"] = str(hk)
+        sys.argv = ["network_tie.py", region]
+        G = runpy.run_path(str(root / "analysis/network_tie.py"), run_name="tie_lib")["tie_map"].__globals__
         os.environ.pop("HEX_KM", None)
     sp = math.sqrt(3) * hk / 2                                # this grid's centre spacing, km
     r_in, r_out = 4 * SP3 / sp, 2 * SP3 / sp                  # the distance rule in km

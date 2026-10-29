@@ -40,7 +40,6 @@ leaving_unique_mo_2026.csv: month, county (as coded; 29510 and 29189 separate ro
 crossover_b_grid.csv: county (unit), b, crossover (county figure R(b), averaged over months), b_adopted, b_lo, b_hi --
   the crossover bounds (crossover_compare.py) are the min / max of R over b in [0, 1] and over [b_lo, b_hi]
 crossover_bg_month_mo_2026.csv: month, home_bg, own, expected_units, denominator_calibrated (D_h), acs_population, b
-  (read by residents_leaving.py, residents_leaving_tracts.py, unique_people_by_county.py)
   detection_slope_b, detection_slope_b_lo, detection_slope_b_hi   b and its 95% interval (same in every row)
 """
 import csv

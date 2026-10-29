@@ -275,6 +275,18 @@ for town, rank in ([] if os.environ.get("COV_LIB") == "1" else AREAS):
                 row[f"{kind}: {tier} outlets"] = "; ".join(chosen[:steps.get(1.0, len(chosen))])
         rows.append(row)
         print(row)
+# SUPPLEMENT S3, news ties and the measure: frequent coverage on the area drawn from travel alone
+# (core50_travel_measured_hexes), with news ties before towns are added whole (core50_area_before_towns_hexes), and the area
+if rows:
+    print("\nfrequent coverage (all stories), % of hexagons: travel alone / news ties, no whole towns / the area")
+    for town, rank in AREAS:
+        r_ = PROB[town][str(rank)]
+        sh = []
+        for set_ in ("core50_travel_measured_hexes", "core50_area_before_towns_hexes", "core50_area_hexes"):
+            hs = [k for k in r_.get(set_, []) if k in MAPS["hexes"]]
+            cv = {k: sum(cov["all"][o].get(k, 0) for o in cov["all"]) for k in hs}
+            sh.append(f"{len(hs)} hexagons {round(100 * sum(1 for k in hs if cv[k] >= TIERS['frequent']) / max(1, len(hs)))}%")
+        print(f"  {town}: " + " / ".join(sh))
 if rows:
     with open(root / f"analysis/area_coverage_alignment{SUFFIX}{'' if ALPHA == 0.5 else f'_alpha{ALPHA:g}'}.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)

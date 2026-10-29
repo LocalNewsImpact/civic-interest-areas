@@ -55,7 +55,7 @@ FACTORS = ["log_dist", "log_dist_sq", "rural_i_x_log_dist", "rural_i_x_log_dist_
 # SELECTION (authors, final, 2026-10-24): the three blocks -- distance (first five), border, commuting (out + in) -- are
 # core gravity terms by theory, tested as blocks against the model without them (travel_model_dc_test.py selection,
 # held out, county-paired intervals); never dropped one term at a time. Exploratory additions only through the nested
-# procedure (combined_marginal_test.py travel_nested_all). Results: MODEL_CHANGES.md, Travel model.
+# procedure (factor_search/combined_marginal_test.py travel_nested_all).
 DIST_TERMS = FACTORS[:5]
 REF_MILES = 25.0                                   # centring point of every distance term
 LOG_D0 = math.log(REF_MILES)

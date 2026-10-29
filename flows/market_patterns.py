@@ -65,7 +65,7 @@ hm_ = pd.read_csv(R / "homes.csv", dtype={"home_cbg": str, "place": str}).set_in
 # here, and their units are home (100) on the map
 town_bgs = lambda town: [h for h in hm_.index if hm_.town.get(h) == town or hm_.place.get(h) == HOME_PLACE[town]]
 # the town's own units: its block groups' towns and rural block groups, and the town itself -- home on the map, so masked
-# from its travel before the busiest place is set to 50 and before county shares (as tie_footprint.py, 2026-10-24)
+# from its travel before the busiest place is set to 50 and before county shares (as network_tie.py, 2026-10-24)
 own_units_of = lambda town: ({P["bg_unit"].get(h) for h in town_bgs(town)} | {"rural:" + h for h in town_bgs(town)}
                              | {HOME_PLACE[town]})
 people_a, member_a = np.array(P["people"]), np.array(P["member"])
