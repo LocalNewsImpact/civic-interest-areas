@@ -198,17 +198,18 @@ if stage figures; then
   "$CHROME" --headless=new --disable-gpu --no-pdf-header-footer --virtual-time-budget=40000 \
     --print-to-pdf=print/measures_flow.pdf "http://127.0.0.1:8765/measures_flow_print.html?paper=1" 2>/dev/null
   for t in Columbia Mexico Linn; do
-    shot "market_pattern_print.html?town=$t&rank=1&paper=1" "civic_area_${(L)t}.png" 528
-    shot "market_pattern_print.html?town=$t&rank=1&measure=coverage&paper=1&panel=1" "civic_coverage_${(L)t}.png" 528   # Figure 7
+    shot "market_pattern_print.html?town=$t&rank=1&paper=1&panel=1" "civic_area_${(L)t}.png" 528   # Figure 4
+    shot "market_pattern_print.html?town=$t&rank=1&measure=coverage&paper=1&panel=1" "civic_coverage_${(L)t}.png" 528   # Figure 5
   done
   kill $SRV
-  ${=PY} - <<'PYEOF'   # Figure 7: the three coverage maps side by side
+  ${=PY} - <<'PYEOF'   # Figures 4 and 5: the three area maps, and the three coverage maps, side by side
 from PIL import Image
-ims = [Image.open(f"print/civic_coverage_{t}.png").convert("RGB") for t in ("columbia", "mexico", "linn")]
-gap = 90; out = Image.new("RGB", (sum(i.width for i in ims) + gap * 2, max(i.height for i in ims)), "white"); x = 0
-for i in ims:
-    out.paste(i, (x, 0)); x += i.width + gap
-out.save("print/civic_coverage_triptych.png", dpi=(300, 300)); print("print/civic_coverage_triptych.png", out.size)
+for kind in ("area", "coverage"):
+    ims = [Image.open(f"print/civic_{kind}_{t}.png").convert("RGB") for t in ("columbia", "mexico", "linn")]
+    gap = 90; out = Image.new("RGB", (sum(i.width for i in ims) + gap * 2, max(i.height for i in ims)), "white"); x = 0
+    for i in ims:
+        out.paste(i, (x, 0)); x += i.width + gap
+    out.save(f"print/civic_{kind}_triptych.png", dpi=(300, 300)); print(f"print/civic_{kind}_triptych.png", out.size)
 PYEOF
   cd $ROOT
 fi
