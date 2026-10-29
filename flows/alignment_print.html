@@ -13,6 +13,8 @@
   .dd-visual { padding: 0; }
   .dd-subtitle { margin-bottom: var(--s-2); }
   .dd-ramp-strip { width: 13rem; }
+  .dd-legend .item.head { flex-basis: 100%; color: var(--text-1); font-weight: 600; }
+  .dd-ramp-strip { width: 17rem; }
   .dd-legend { row-gap: var(--s-2); margin-bottom: var(--s-2); align-items: center; }
   .dd-legend .item { display: inline-flex; align-items: center; color: var(--text-3); }
   .dd-legend svg { margin-right: .35rem; }
@@ -93,19 +95,23 @@ Promise.all([d3.json("cousub_29.geojson"), d3.json("alignment_2026_03.json")]).t
     `Source: visits, Advan Research, Neighborhood Patterns Plus (Dewey Data); coverage, Missouri School of ` +
     `Journalism analysis of ${name} County newsrooms' stories. U.S. Census Bureau 2020 boundaries; Nielsen DMA.`;
 
+  // THE KEY IN WORDS (authors, 2026-10-29: the terse key "made no sense"): what the shade compares, the ramp marked by
+  // how many times larger one share is than the other (alignment = smaller share / larger: 0.25, 0.5, 0.75 = 4x, 2x, 1.3x)
   const key = d3.select("#key");
+  key.append("span").attr("class", "item head")
+    .text("How closely news follows travel: each county's share of the home county's stories against its share of residents' visits");
   const ramp = key.append("span").attr("class", "dd-ramp");
   const strip = ramp.append("span").attr("class", "dd-ramp-strip");
   const blocks = strip.append("span").attr("class", "dd-ramp-blocks");
   RAMP.slice(1).forEach((c) => blocks.append("span").attr("class", "dd-ramp-block").style("background", c));
   const marks = strip.append("span").attr("class", "dd-ramp-marks");
-  [["far apart", 0, "start"], ["", 0.5], ["1:1", 1, "end"]].forEach(([t, at, align]) =>
+  [["one share 4\u00d7 the other or more", 0, "start"], ["", 0.5], ["about equal", 1, "end"]].forEach(([t, at, align]) =>
     marks.append("span").attr("class", "dd-ramp-mark").attr("data-align", align || null)
       .style("left", `${100 * at}%`).text(t));
   const item = (html) => key.append("span").attr("class", "item").html(html);
-  item(`<span class="dd-swatch" style="background:${TRAVEL_ONLY}"></span>visits, under ${MIN} stories`);
-  item(`<span class="dd-swatch" style="background:${STORIES_ONLY}"></span>stories, visits under ${FL}%`);
-  item(`<span class="dd-swatch base"></span>neither`);
+  item(`<span class="dd-swatch" style="background:${TRAVEL_ONLY}"></span>residents go there (${FL}%+ of visits); fewer than ${MIN} stories`);
+  item(`<span class="dd-swatch" style="background:${STORIES_ONLY}"></span>${MIN}+ stories; under ${FL}% of visits`);
+  item(`<span class="dd-swatch base"></span>under ${FL}% of visits and fewer than ${MIN} stories`);
   // the home county is not compared (residents live there); its story counts are given for reference
   // the shared key of a triptych serves all three counties; the counts are in Table 2
   item(KEYONLY ? `<span class="dd-swatch home"></span>Home county`
