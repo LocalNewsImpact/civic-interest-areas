@@ -47,6 +47,7 @@ step writes its log to `logs/reproduce/<step>.log`; figures are written to `flow
 | Table 2. Population; local outlets; stories analyzed (1,152 / 123 / 40); crossover; spillover | `alignment`, `crossover_compare`, `spillover_outlets` | `coverage/build_alignment.py`, `analysis/crossover_compare.py`, `analysis/spillover_outlets.py`; population: 2020 Census |
 | Table 3. Area (432 / 346 / 420 square miles); regular-travel distance; continuous territory | `coverage_density_columbia`, `regular_distance`, `area_core` | `analysis/area_coverage_alignment.py`, `flows/regular_distance.py`, `flows/area_core.py` |
 | Table S1. County spillover and held-out skill under alternative weights | `spillover_outlets` | `analysis/spillover_outlets.py` |
+| Table S2. Civic interest areas with the constants set by judgment halved or doubled | stage `sensitivity` (`judgment_constants`) | `flows/area_ensemble.py` (`TIE_W`, `GAMMA`), `analysis/judgment_constants.py` |
 
 ## Figures
 
@@ -70,6 +71,7 @@ The fitted values S2 lists for each measure, and the step that prints them.
 | D. Spillover | β₀–β₂; held-out error 5.98 against 7.49, skill 0.20 (also Table S1) | `spillover_outlets` | `analysis/spillover_outlets.py` |
 | D. Spillover | held-out error with the choice of terms repeated in each fold (6.57) | `spillover_nested` | `analysis/factor_search/spillover_nested_selection.py` |
 | E. Civic interest area | K, versions, regular-travel distance | `patterns_columbia`, `ensemble_columbia`, `regular_distance` | `flows/travel_patterns.py`, `flows/area_ensemble.py`, `flows/regular_distance.py` |
+| E. Civic interest area | Sensitivity: 94–100% of places kept, frequent coverage within 3 points (Table S2) | `judgment_constants` | `analysis/judgment_constants.py` |
 
 ## Supplementary material S3
 
