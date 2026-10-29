@@ -38,6 +38,11 @@
 // and keeps only its outline to mark it. Alignment is the smaller over the larger; the shade darkens toward 1:1.
 // ?v=audrain_all | boone_all | boone_no_broadcast | osage_all
 const q = new URLSearchParams(location.search);
+// ?paper=1: the image as the journal sets it -- map and key only; the title, notes and source are the manuscript's caption
+// (Journalism Studies style, authors 2026-10-29). ?panel=1 keeps a one-line panel name for a triptych
+const PAPER = q.get("paper") === "1", PANEL = q.get("panel") === "1";
+if (PAPER) document.head.insertAdjacentHTML("beforeend", "<style>.dd-subtitle,.dd-footer{display:none}" +
+  (PANEL ? ".dd-title{font-size:11px;margin-bottom:4px}" : ".dd-title{display:none}") + "</style>");
 const V = q.get("v") || "osage_all";
 const DMA = ["29007","29019","29027","29041","29051","29053","29089","29125","29131","29135","29139","29141","29151","29175"];
 const T = { seqLow: "#d3ecfa", seqHigh: "#003a56", boundary: "#c3c2b7", ink: "#0b0b0b", muted: "#898781",
@@ -190,6 +195,7 @@ Promise.all([d3.json("cousub_29.geojson"), d3.json("alignment_2026_03.json")]).t
        [`stories ${r.coverage.toFixed(1)}%`, 400]],   // the weighted share (Table 1), not a count of stories
       6.5, dark(r) ? "#ffffff" : T.ink);
   }
+  if (PAPER && PANEL) document.getElementById("title").textContent = `${name} County`;
   document.body.dataset.height = Math.ceil(document.querySelector("figure").getBoundingClientRect().height);
   document.body.dataset.ready = "1";
 });

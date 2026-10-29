@@ -71,6 +71,10 @@
     (areas: January–July). Calculations and fitted values: Supplementary Figure S1.</span></figcaption>
 </figure>
 <script>
+  // ?paper=1: the diagram as the journal sets it; the title, subtitle and source are the manuscript's caption
+  // (Journalism Studies style, authors 2026-10-29)
+  if (new URLSearchParams(location.search).get("paper") === "1")
+    document.head.insertAdjacentHTML("beforeend", "<style>.dd-title,.dd-subtitle,.dd-footer{display:none}</style>");
   // The figures stage reads data-height to size the screenshot window.
   addEventListener("load", () => {
     document.body.dataset.height = Math.ceil(document.querySelector("figure").getBoundingClientRect().height);

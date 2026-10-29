@@ -33,9 +33,11 @@ shot() {   # shot <url path> <png name>
   sips -s dpiWidth 300 -s dpiHeight 300 "print/$2" >/dev/null
   echo "print/$2"
 }
-for v in audrain_all boone_all boone_no_broadcast osage_all; do shot "alignment_print.html?v=$v" "alignment_${v}_2026_03.png"; done
+# paper=1&panel=1: the triptych panels as Journalism Studies sets them -- map, key and county name; the rest is the caption
+for v in audrain_all boone_all osage_all; do shot "alignment_print.html?v=$v&paper=1&panel=1" "alignment_${v}_2026_03.png"; done
+shot "alignment_print.html?v=boone_no_broadcast" "alignment_boone_no_broadcast_2026_03.png"
 shot "outlet_spillover_print.html" "outlet_spillover_2026_03.png"
-shot "model_diagram_print.html" "model_diagram.png"
+shot "model_diagram_print.html?paper=1" "model_diagram.png"
 kill $SRV
 cd print && eval $PY - <<'PYEOF'
 from PIL import Image

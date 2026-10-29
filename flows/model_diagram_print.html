@@ -47,6 +47,10 @@
     Commuting: LODES 2023.</span></figcaption>
 </figure>
 <script>
+// ?paper=1: the diagram as the journal sets it; the title, subtitle and source note are the manuscript's caption
+// (Journalism Studies style, authors 2026-10-29)
+if (new URLSearchParams(location.search).get("paper") === "1")
+  document.head.insertAdjacentHTML("beforeend", "<style>.dd-title,.dd-subtitle,.dd-footer{display:none}</style>");
 // Each panel: title, question, equations (TeX), estimation note, key rows [symbol (TeX), meaning, value], output.
 const P = [
  { t: "A  Travel: where each county's residents go",
