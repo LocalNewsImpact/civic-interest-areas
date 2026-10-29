@@ -163,9 +163,10 @@ if stage figures; then
     shot "market_pattern_print.html?town=$t&rank=1&paper=1&panel=1&ls=1.9" "civic_area_${(L)t}.png" 528   # Figure 4
     shot "market_pattern_print.html?town=$t&rank=1&measure=coverage&paper=1&panel=1&ls=1.9" "civic_coverage_${(L)t}.png" 528   # Figure 5
   done
-  # Figure 3 panels: county labels stay at full size, since larger labels no longer fit the smaller counties
+  # Figure 3 panels: counties named only (the shares are the shading); ls=1.7 is the largest size at which every
+  # compared county keeps its name (Montgomery, beside its county on a hairline)
   for c in audrain boone osage; do
-    shot "alignment_print.html?v=${c}_all&paper=1&panel=1" "alignment_${c}_all_2026_03.png" 528
+    shot "alignment_print.html?v=${c}_all&paper=1&panel=1&names=1&ls=1.7" "alignment_${c}_all_2026_03.png" 528
   done
   key() {   # key <page and query> <png>: the triptych's shared key, 660 CSS px drawn to the triptych's 5,130 px
     "$CHROME" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=7.773 --window-size=660,600 \
