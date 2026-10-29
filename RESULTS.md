@@ -64,10 +64,10 @@ The fitted values S2 lists for each measure, and the step that prints them.
 
 | Measure | Values | Step | Script |
 |---|---|---|---|
-| A. Travel | β₁–β₈, held-out R² and share-weighted error | `travel_model` | `analysis/travel_model.py` |
+| A. Travel | β₁–β₈, held-out R² and share-weighted error; elasticity at 25 miles (−0.88 / −0.70); 25 to 50 miles keeps 48% / 49% of visits | `travel_model` | `analysis/travel_model.py` |
 | B. Crossover | b = 0.62 [0.53, 0.71], first-stage F; county shares | `build_unique_od`, `crossover_compare` | `analysis/build_unique_od.py`, `analysis/crossover_compare.py` |
 | C. Coverage | β₁–β₃, twice the visits, held-out error | `coverage_model` | `analysis/coverage_model.py` |
-| D. Spillover | β₀–β₂ | `spillover_outlets` | `analysis/spillover_outlets.py` |
+| D. Spillover | β₀–β₂; held-out error 5.98 against 7.49, skill 0.20 (also Table S1) | `spillover_outlets` | `analysis/spillover_outlets.py` |
 | D. Spillover | held-out error with the choice of terms repeated in each fold (6.57) | `spillover_nested` | `analysis/factor_search/spillover_nested_selection.py` |
 | E. Civic interest area | K, versions, regular-travel distance | `patterns_columbia`, `ensemble_columbia`, `regular_distance` | `flows/travel_patterns.py`, `flows/area_ensemble.py`, `flows/regular_distance.py` |
 

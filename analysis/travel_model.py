@@ -85,6 +85,18 @@ print("| Distance | Urban home county | Rural home county |\n|---|---:|---:|")
 for mi in (10, 25, 50, 100):
     print(f"| {mi} mi | " + " | ".join("{:+.2f} ({:.2f})".format(*elasticity(m, mi, nm)) for nm in (False, True)) + " |")
 
+
+def doubling(mod, rural):
+    """visits at 50 miles / visits at 25, home county of mean population: the linear and quadratic terms together
+    (Supplementary material S2, A)"""
+    p, l = mod.params, np.log(2)
+    b1 = p["log_dist"] + (p["rural_i_x_log_dist"] if rural else 0)
+    b2 = p["log_dist_sq"] + (p["rural_i_x_log_dist_sq"] if rural else 0)
+    return float(np.exp(b1 * l + b2 * l * l))
+
+
+print(f"25 to 50 miles: urban home county keeps {doubling(m, False):.0%} of its visits, rural {doubling(m, True):.0%}")
+
 # ---- primary validation: leave one county out ------------------------------------------------------------------------
 unit = lambda f: "29189" if f == "29510" else f
 tier = pd.read_csv(root / "analysis/county_class_k4.csv", dtype={"fips": str}).set_index("fips")["class"]
