@@ -28,12 +28,14 @@ step writes its log to `logs/reproduce/<step>.log`; figures are written to `flow
 |---|---|---|---|
 | Stories reaching another county, counted in full: Audrain, Osage, Boone, all three | 65 of 123; 20 of 40; 546 of 1,152; 631 of 1,315 | `alignment` | `coverage/build_alignment.py` |
 | Spillover, weighted: Audrain, Osage, Boone | 20%, 26%, 29% | `spillover_outlets` | `analysis/spillover_outlets.py` (`analysis/spillover_quoted_rows.csv`) |
-| Broadcasters against print and digital outlets | 31% / 22% | `spillover_population` | `analysis/spillover_population_test.py` |
-| Print and digital outlets by outlets in the county: four or more, one | 16% / about a quarter | `spillover_population` | `analysis/spillover_population_test.py` |
+| Spillover 95% intervals (Table 2): Audrain, Osage, Boone; Boone print and digital | [16, 23], [17, 35], [27, 31]; 18% [16, 20] | `county_intervals` | `analysis/county_intervals.py` |
+| Crossover ÷ spillover ("roughly twice"): Audrain, Osage | 2.3 [1.9, 2.7], 2.3 [1.6, 3.6] | `county_intervals` | `analysis/county_intervals.py` |
+| Broadcasters against print and digital outlets | 31% / 22%; term 0.67 (SE 0.15), p < 0.001 | `spillover_population` | `analysis/spillover_population_test.py` |
+| Print and digital outlets by outlets in the county: four or more, one | 16% / about a quarter; term −0.39 (SE 0.12), p = 0.003 | `spillover_population` | `analysis/spillover_population_test.py` |
 | Boone without KOMU, KMIZ and KBIA | 29% → 18% | `spillover_outlets` | `analysis/spillover_outlets.py` |
 | Crossover, residents seen outside the county in a typical month: Osage, Audrain, Boone | 59%, 44%, 26% | `crossover_compare` | `analysis/crossover_compare.py` |
-| Crossover against print and digital spillover, 47 counties with fitted outlets | r = 0.33, p = 0.02 | `spillover_quality` | `analysis/collection_quality_robustness.py` |
-| Stories when travel doubles: urban, rural newsrooms | +38%, +18% | `coverage_model` | `analysis/coverage_model.py` |
+| Crossover against print and digital spillover, 47 counties with fitted outlets | r = 0.33 [0.05, 0.57], p = 0.02 | `spillover_quality`, `county_intervals` | `analysis/collection_quality_robustness.py`, `analysis/county_intervals.py` |
+| Stories when travel doubles: urban, rural newsrooms | +38% [26, 52], +18% [9, 28] | `coverage_model` | `analysis/coverage_model.py` |
 | Places in both odd-month and even-month areas: Columbia, Mexico, Linn | 86%, 92%, 67% | `area_core` | `flows/area_core.py` (`flows/reach/probability_columbia.json`, `core50_area_month_split`) |
 | Places kept when areas are drawn from travel alone | 91–95% | `ensemble_columbia` | `flows/area_ensemble.py` |
 | Frequent coverage: Columbia, Mexico, Linn; infrequent, Mexico and Linn | 60%, 44%, 41%; 54% each | `coverage_density_columbia` | `analysis/area_coverage_alignment.py` |
@@ -66,9 +68,10 @@ The fitted values S2 lists for each measure, and the step that prints them.
 | Measure | Values | Step | Script |
 |---|---|---|---|
 | A. Travel | β₁–β₈, held-out R² and share-weighted error; elasticity at 25 miles (−0.88 / −0.70); 25 to 50 miles keeps 48% / 49% of visits | `travel_model` | `analysis/travel_model.py` |
-| B. Crossover | b = 0.62 [0.53, 0.71], first-stage F; county shares | `build_unique_od`, `crossover_compare` | `analysis/build_unique_od.py`, `analysis/crossover_compare.py` |
-| C. Coverage | β₁–β₃, twice the visits, held-out error | `coverage_model` | `analysis/coverage_model.py` |
-| D. Spillover | β₀–β₂; held-out error 5.98 against 7.49, skill 0.20 (also Table S1) | `spillover_outlets` | `analysis/spillover_outlets.py` |
+| B. Crossover | b = 0.62 [0.53, 0.71], first-stage F; county shares and their range over the interval of b | `build_unique_od`, `crossover_compare` | `analysis/build_unique_od.py`, `analysis/crossover_compare.py` |
+| C. Coverage | β₁–β₃ and β₁ + β₂, twice the visits with 95% intervals, held-out error with and without the rural term (4.54 / 4.67) | `coverage_model` | `analysis/coverage_model.py` |
+| D. Spillover | β₀–β₂ with p; held-out error 5.98 against 7.49, skill 0.20 (also Table S1) | `spillover_outlets` | `analysis/spillover_outlets.py` |
+| D. Spillover | county spillover with 95% intervals; crossover ÷ spillover | `county_intervals` | `analysis/county_intervals.py` |
 | D. Spillover | held-out error with the choice of terms repeated in each fold (6.57) | `spillover_nested` | `analysis/factor_search/spillover_nested_selection.py` |
 | E. Civic interest area | K, versions, regular-travel distance | `patterns_columbia`, `ensemble_columbia`, `regular_distance` | `flows/travel_patterns.py`, `flows/area_ensemble.py`, `flows/regular_distance.py` |
 | E. Civic interest area | Sensitivity: 94–100% of places kept, frequent coverage within 3 points (Table S2) | `judgment_constants` | `analysis/judgment_constants.py` |

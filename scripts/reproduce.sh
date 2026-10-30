@@ -55,13 +55,14 @@ if stage coverage; then
 fi
 
 # Spillover: county tables, the outlet model on the 85 fitted outlets (Table 2, Table S1), outlet type and print
-# outlets in the county, and the crossover-spillover correlation on the fitted outlets.
+# outlets in the county, the crossover-spillover correlation on the fitted outlets, and the county figures' intervals.
 if stage spillover; then
   step spillover_v2            analysis/spillover_v2.py
   step spillover_outlets       analysis/spillover_outlets.py
   step spillover_population    analysis/spillover_population_test.py
   step county_collection_quality analysis/county_collection_quality.py
   step spillover_quality       analysis/collection_quality_robustness.py
+  step county_intervals        analysis/county_intervals.py
   # Table 2's story counts and the stories reaching another county: county story files from the statewide export, then
   # each study county's stories and travel by destination county
   step county_story_files      coverage/storymap/rebuild_county_files.py
