@@ -100,9 +100,20 @@ if (BARE) document.head.insertAdjacentHTML("beforeend", "<style>.dd-title,.dd-su
 // the three panels), enlarges the panel name, and ?ls= scales the place labels
 const PAPER = new URLSearchParams(location.search).get("paper") === "1", PANEL = new URLSearchParams(location.search).get("panel") === "1";
 const KEYONLY = new URLSearchParams(location.search).get("keyonly") === "1", LS = +(new URLSearchParams(location.search).get("ls") || 1);
+const FIT = new URLSearchParams(location.search).get("fit") === "1";   // one fitted scale for the region's towns (below)
+// ?keyparts=own: the measure's own key items only; ?keyparts=lines: only the home county, county border and TV market
+// lines, which a town panel shows once for both maps
+const KEYP = new URLSearchParams(location.search).get("keyparts") || "all";
+// the coverage map draws its reference lines lighter; in a town panel (?fit=1) both maps draw them alike
+const COVL = COVM && !FIT;
+// ?ground=1: land drawn in Figure 1's grey, counties parted by white lines, as the paper's locator map
+const GROUND = new URLSearchParams(location.search).get("ground") === "1", LAND = "#e8e8e8";
+// in a town panel (?fit=1) each title sits above its key: the maps draw none, the measure's key (?keyparts=own) carries it
+if (FIT) document.head.insertAdjacentHTML("beforeend", "<style>" + (KEYONLY && KEYP === "own"
+  ? ".dd-title{display:block!important;font-size:15px!important;margin:0 0 6px!important}" : ".dd-title{display:none!important}") + "</style>");
 if (PAPER) document.head.insertAdjacentHTML("beforeend", "<style>.dd-subtitle,.dd-note,.dd-footer{display:none}" +
   (PANEL ? ".dd-title{font-size:22px;margin-bottom:6px}.dd-legend{display:none}" : ".dd-title{display:none}") +
-  (KEYONLY ? ".dd-title{display:none}.dd-chart{height:0;overflow:hidden}body{width:660px}.dd-legend{margin:0}" : "") + "</style>");
+  (KEYONLY ? `.dd-title{display:none}.dd-chart{height:0;overflow:hidden}body{width:${+(new URLSearchParams(location.search).get("kw") || 660)}px}.dd-legend{margin:0}` : "") + "</style>");
 function quantizeRamp(low, high, n) {   // datadesk-chart.js: steps spaced evenly in luminance
   const parse = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   const [a, b] = [parse(low), parse(high)];
@@ -327,11 +338,15 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     document.getElementById("subtitle").textContent += `. Lighter: holds in only one half of the year (January, March, May, July or February, April, June)`;
     item(`<span style="display:inline-block;width:14px;height:10px;background:${RAMP[3]};opacity:0.4;margin-right:4px"></span>One half of the year only`);
   }
-  item(`<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="${OUTM ? T.muted : T.ink}" stroke-width="${COVM ? 1 : OUTM ? 1.3 : 1.6}"/></svg>Home county`);
-  item(`<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="${COVM ? COV_LINE : T.muted}" stroke-width="${COVM ? 0.8 : 1.2}"/></svg>County border`);
+  if (KEYP === "lines") key.selectAll("*").remove();
+  if (KEYP !== "own") {
+  item(`<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="${OUTM ? T.muted : T.ink}" stroke-width="${COVL ? 1 : OUTM ? 1.3 : 1.6}"/></svg>Home county`);
+  item(GROUND ? `<svg width="22" height="8"><rect width="22" height="8" fill="${LAND}"/><line x1="11" y1="0" x2="11" y2="8" stroke="#ffffff" stroke-width="1.2"/></svg>County border`
+    : `<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="${COVL ? COV_LINE : T.muted}" stroke-width="${COVL ? 0.8 : 1.2}"/></svg>County border`);
   item(`<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="${T.ink}" stroke-width="1.4" stroke-dasharray="5 3"/></svg>${mp.market.name}`);
+  }
 
-  const W = 354, H = 338, OUT = 528;
+  const W = 354, OUT = 528; let H = 338;
   // THE FRAME IS THE TV MARKET unless the town's market crosses it: if 10%+ of the town's index (hexagons of 5+) lies
   // outside the TV market, the frame takes in the market's core too, and the TV market's outline shows the crossing
   // DMA-SIZED for legibility: only hexagons of 10+ count toward crossing (occasional long trips do not), and an extended
@@ -391,12 +406,31 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     cy = Math.min(Math.max(cy, hb[1][1] + m - HH), hb[0][1] - m + HH);
     frame = { type: "MultiPoint", coordinates: [[cx - HW, cy - HH], [cx + HW, cy - HH], [cx - HW, cy + HH], [cx + HW, cy + HH]] };
   }
-  const proj = d3.geoConicEqualArea().parallels([36.5, 40.5]).rotate([92.4, 0]).fitExtent([[4, 4], [W - 4, H - 4]], frame);
+  // ?fit=1 (pairs, authors 2026-10-29: each town's area and coverage maps side by side in one image): ONE SCALE FOR THE
+  // TOWNS OF THE REGION, FITTED TO THEIR AREAS. The frame is as wide as the widest area plus FIT_PAD a side, the same for
+  // every town; each town's frame is centred on its own area and as tall as its area plus FIT_PAD, so the scale is the
+  // largest at which every area fits the panel width. Both maps of a town frame on the same area: they align exactly
+  let proj = d3.geoConicEqualArea().parallels([36.5, 40.5]).rotate([92.4, 0]).fitExtent([[4, 4], [W - 4, H - 4]], frame);
+  let FIT_MI = 0;                                             // miles across a fitted map
+  if (FIT && PROB) {
+    const FIT_PAD = 9 / 6371, FIT_PADV = 4 / 6371;            // 9 km a side across, 4 km above and below (earth radius 1)
+    const base = d3.geoConicEqualArea().parallels([36.5, 40.5]).rotate([92.4, 0]).scale(1).translate([0, 0]);
+    const box = (t) => { const xy = PROB[t][RANK].core50_area_hexes.filter((id) => mp.hexes[id])
+      .flatMap((id) => mp.hexes[id].slice(0, 6)).map(base);
+      return [d3.extent(xy, (d) => d[0]), d3.extent(xy, (d) => d[1])]; };
+    const towns = Object.keys(PROB).filter((t) => PROB[t] && PROB[t][RANK] && PROB[t][RANK].core50_area_hexes);
+    const fw = d3.max(towns, (t) => { const [[x0, x1]] = box(t); return x1 - x0; }) + 2 * FIT_PAD;
+    const [[x0, x1], [y0, y1]] = box(TOWN), k = W / fw;
+    H = Math.round(W * (y1 - y0 + 2 * FIT_PADV) / fw);
+    proj = base.scale(k).translate([W / 2 - k * (x0 + x1) / 2, H / 2 - k * (y0 + y1) / 2]);
+    FIT_MI = fw * 6371 / 1.609; document.body.dataset.milesAcross = FIT_MI.toFixed(1);
+  }
   const path = d3.geoPath(proj);
   const svg = d3.select("#map").append("svg").attr("width", OUT).attr("height", Math.round(OUT * H / W)).attr("viewBox", [0, 0, W, H]);
   svg.append("defs").append("clipPath").attr("id", "clip").append("rect").attr("width", W).attr("height", H);
   const g = svg.append("g").attr("clip-path", "url(#clip)");
   g.append("rect").attr("width", W).attr("height", H).attr("fill", T.surface);
+  if (GROUND) g.append("g").selectAll("path").data(counties).join("path").attr("d", path).attr("fill", LAND).attr("stroke", "none");
   // HEXAGONS, 3 km across (market_patterns.py): those of 5+ shaded, one ring of empty hexagons around them as a border
   const hexPath = (id) => path({ type: "Polygon", coordinates: [mp.hexes[id].slice().reverse()] });
   // shown: 5+ inside the TV market, 10+ outside it -- one-off distant trips and rural destination clusters stay off
@@ -538,7 +572,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     }
   }
   g.append("g").selectAll("path").data([...ring]).join("path").attr("d", hexPath)
-    .attr("fill", "none").attr("stroke", "#d6d5cc").attr("stroke-width", 0.3);   // empty border ring: outline only, ground shows through
+    .attr("fill", "none").attr("stroke", GROUND ? "#ffffff" : "#d6d5cc").attr("stroke-width", 0.3);   // empty border ring: outline only, ground shows through
   if (DIETM && !COV_SURFACE) g.append("g").selectAll("path").data([...on]).join("path").attr("d", hexPath)   // the grid the
     .attr("fill", "#f6f5f0").attr("stroke", "#ffffff").attr("stroke-width", 0.3);                          // smaller ones sit in
   g.append("g").attr("clip-path", COVM && COV_SURFACE ? "url(#covclip)" : null).selectAll("path").data([...on]).join("path")
@@ -584,20 +618,20 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
       .attr("r", (id) => dotR(liftAt(id))).attr("fill", LIFT_INK).attr("stroke", "none");
   }
   g.append("g").selectAll("path").data(counties).join("path").attr("d", path)
-    .attr("fill", "none").attr("stroke", COVM ? COV_LINE : T.muted).attr("stroke-width", COVM ? 0.5 : 0.75);
+    .attr("fill", "none").attr("stroke", GROUND ? "#ffffff" : COVL ? COV_LINE : T.muted).attr("stroke-width", COVL ? 0.5 : 0.75);
   // THE AREA'S PARTS (the core, p >= 0.5; home body and every piece of 3+ hexagons): an indicator, not a dominant line --
   // mid-grey plain ink, about half the earlier weight, no casing (authors, 2026-10-25), visible over the darkest hexagons
   // coverage maps draw the same outline as the area map (2026-10-26), over the same hexagons
   // NO OUTLINE when the map draws only the area (authors, 2026-10-26): the shaded hexagons define it
   if ((PRB || COVM) && !ONLY && PR && PR.core50_outline) g.append("path").datum(ONLY && PR.core50_area_outline ? PR.core50_area_outline : PR.core50_outline).attr("d", path).attr("fill", "none")
     .attr("stroke", "#6f6d66").attr("stroke-width", 0.8).attr("stroke-linejoin", "round");
-  g.append("path").datum(mp.market.outline).attr("d", path).attr("fill", "none").attr("stroke", COVM ? T.muted : T.ink)
-    .attr("stroke-width", COVM ? 0.7 : 1.05).attr("stroke-dasharray", "3.4 2");
+  g.append("path").datum(mp.market.outline).attr("d", path).attr("fill", "none").attr("stroke", COVL ? T.muted : T.ink)
+    .attr("stroke-width", COVL ? 0.7 : 1.05).attr("stroke-dasharray", "3.4 2");
   // ?outline=1 draws no line (authors, 2026-10-18): the area it encloses decides which hexagons are drawn, and fills the
   // gaps with empty hexagons, so the market shows as one connected area of hexagons
   // with the market outline on, the home county steps back to a county border, a little heavier -- the outline leads
   g.append("path").datum(counties.find((f) => f.id === HOME)).attr("d", path).attr("fill", "none")
-    .attr("stroke", COVM ? T.muted : OUTM ? T.muted : T.ink).attr("stroke-width", COVM ? 0.8 : OUTM ? 1.1 : 1.4);
+    .attr("stroke", COVL ? T.muted : OUTM ? T.muted : T.ink).attr("stroke-width", COVL ? 0.8 : OUTM ? 1.1 : 1.4);
   // SERVICE ZONES (authors, 2026-10-20): each outlet that is the largest single source for 3+ hexagons of the area, as a
   // circle on its newsroom holding half its story weight (analysis/area_coverage_alignment.py); named at
   // the circle's top so outlets sharing a town stay apart
@@ -795,7 +829,13 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     };
     const pre = document.createElement("pre"); pre.id = "figure"; pre.textContent = JSON.stringify(fig); document.body.appendChild(pre);
   }
-  if (PAPER && PANEL) document.getElementById("title").textContent = TOWN;
+  if (FIT) svg.append("rect").attr("x", 0.25).attr("y", 0.25).attr("width", W - 0.5).attr("height", H - 0.5)
+    .attr("fill", "none").attr("stroke", "#c9c7bd").attr("stroke-width", 0.5);
+  // SCALE BAR (?fit=1), in the reference-line key: 10 miles at the maps' scale; ?kscale= is the map's device scale over
+  // the key's, so the bar prints at the length the maps do
+  if (FIT && KEYP === "lines" && FIT_MI) { const L = Math.round(10 * OUT / FIT_MI * +(q.get("kscale") || 1));
+    item(`<svg width="${L + 2}" height="10"><path d="M1,2V8H${L + 1}V2" fill="none" stroke="${T.ink}" stroke-width="1"/></svg>10 miles`); }
+  if (PAPER && (PANEL || (FIT && KEYONLY))) document.getElementById("title").textContent = FIT ? (COVM ? "Coverage" : "Civic interest area") : TOWN;
   document.body.dataset.height = Math.ceil(document.querySelector("figure").getBoundingClientRect().height);
   document.body.dataset.ready = "1";
 });
