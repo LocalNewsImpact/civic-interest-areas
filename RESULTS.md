@@ -40,6 +40,7 @@ step writes its log to `logs/reproduce/<step>.log`; figures are written to `flow
 | Places kept when areas are drawn from travel alone | 91–95% | `ensemble_columbia` | `flows/area_ensemble.py` |
 | Frequent coverage: Columbia, Mexico, Linn; infrequent, Mexico and Linn | 60%, 44%, 41%; 54% each | `coverage_density_columbia` | `analysis/area_coverage_alignment.py` |
 | Balanced diet: Columbia, Linn, Mexico | 56%, 36%, 21% | `diet_columbia` | `analysis/cin_diet.py` |
+| Fewest outlets whose stories alone give 80% of the frequently covered area 9+ stories a month: Columbia, Mexico, Linn | 2 (ABC 17 KMIZ News, Boone County Journal), 2 (KRCG, The Mexico Ledger), 1 (KRCG, New Bloomfield, Callaway County) | `coverage_density_columbia` | `analysis/area_coverage_alignment.py` (`analysis/area_coverage_alignment.csv`, `all: frequent outlets 80%/all`, with home town) |
 
 ## Tables
 
