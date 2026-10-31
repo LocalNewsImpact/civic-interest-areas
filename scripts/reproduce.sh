@@ -153,51 +153,60 @@ if stage sensitivity; then
   step judgment_constants      analysis/judgment_constants.py
 fi
 
-# Figures 2-4: the data-to-measures flow and the area and coverage maps (300 dpi PNG; Figure 2 also as PDF).
+# Figures 1-5: the TV market locator; the data-to-measures flow (300 dpi PNG and PDF); and one panel per town, its civic
+# interest area beside its coverage on one fitted scale (Figures 3-5). Figures 1 and 3-5 are 6.0 in wide at 600 dpi.
 if stage figures; then
   cd $ROOT/flows
   python3 -m http.server 8765 --bind 127.0.0.1 > /dev/null 2>&1 &
   SRV=$!
   for i in {1..20}; do curl -s -o /dev/null http://127.0.0.1:8765/ && break; sleep 0.5; done
   mkdir -p print
-  shot() {   # shot <page and query> <png> <width>
-    local h=$("$CHROME" --headless=new --disable-gpu --window-size=$3,2600 --virtual-time-budget=40000 --dump-dom \
-      "http://127.0.0.1:8765/$1" 2>/dev/null | grep -o 'data-height="[0-9]*"' | grep -o '[0-9]*')
-    "$CHROME" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=3.125 \
-      --window-size=$3,$(( ${h:-1100} + 10 )) --virtual-time-budget=40000 --screenshot="print/$2" \
-      "http://127.0.0.1:8765/$1" 2>/dev/null
+  blank() { ${=PY} -c "import sys; from PIL import Image, ImageChops; im = Image.open(sys.argv[1]).convert('RGB'); \
+sys.exit(0 if ImageChops.difference(im, Image.new('RGB', im.size, 'white')).getbbox() is None else 1)" "$1"; }
+  # shot <page and query> <png> <CSS width> <scale> [<CSS height>]: the page's own data-height unless a height is given.
+  # One Chrome at a time (parallel runs draw empty pages); an empty image is drawn again, up to three times
+  shot() {
+    local h=${5:-$("$CHROME" --headless=new --disable-gpu --window-size=$3,2600 --virtual-time-budget=40000 --dump-dom \
+      "http://127.0.0.1:8765/$1" 2>/dev/null | grep -o 'data-height="[0-9]*"' | grep -o '[0-9]*')}
+    for try in 1 2 3; do
+      "$CHROME" --user-data-dir=$(mktemp -d) --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=$4 \
+        --window-size=$3,$(( ${h:-1100} + 10 )) --virtual-time-budget=40000 --screenshot="print/$2" \
+        "http://127.0.0.1:8765/$1" 2>/dev/null
+      blank "print/$2" || break
+    done
+    blank "print/$2" && { echo "print/$2 EMPTY after three tries"; kill $SRV; exit 1; }
     echo "print/$2"
   }
+  shot "dma_locator_print.html" figure1_dma_locator.png 600 6 482   # Figure 1: 600 x 492 CSS px x 6 = 3,600 x 2,952 px
   # paper=1: the image as Journalism Studies sets it -- graphic and key only; title, notes and source are the caption
-  shot "measures_flow_print.html?paper=1" measures_flow.png 528
+  shot "measures_flow_print.html?paper=1" measures_flow.png 528 3.125   # Figure 2
   "$CHROME" --headless=new --disable-gpu --no-pdf-header-footer --virtual-time-budget=40000 \
     --print-to-pdf=print/measures_flow.pdf "http://127.0.0.1:8765/measures_flow_print.html?paper=1" 2>/dev/null
-  # triptych panels: ls=1.9 sets place labels at about 6 pt once a panel is a third of the page width
+  # Figures 3-5: each map 528 CSS px drawn to 1,764 px, two to a 3,600 px panel with a 72 px gutter; fit=1 one scale for
+  # the three towns; ground=1 Figure 1's grey land and white county lines; ls=1.45 the place labels at that size
   for t in Columbia Mexico Linn; do
-    shot "market_pattern_print.html?town=$t&rank=1&paper=1&panel=1&ls=1.9" "civic_area_${(L)t}.png" 528   # Figure 3
-    shot "market_pattern_print.html?town=$t&rank=1&measure=coverage&paper=1&panel=1&ls=1.9" "civic_coverage_${(L)t}.png" 528   # Figure 4
+    shot "market_pattern_print.html?town=$t&rank=1&paper=1&panel=1&fit=1&ls=1.45&ground=1" "area_${(L)t}.png" 528 3.3409
+    shot "market_pattern_print.html?town=$t&rank=1&measure=coverage&paper=1&panel=1&fit=1&ls=1.45&ground=1" "cov_${(L)t}.png" 528 3.3409
   done
-  key() {   # key <page and query> <png>: the triptych's shared key, 660 CSS px drawn to the triptych's 5,130 px
-    "$CHROME" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=7.773 --window-size=660,600 \
-      --virtual-time-budget=40000 --screenshot="print/$2" "http://127.0.0.1:8765/$1" 2>/dev/null
-    echo "print/$2"
-  }
-  key "market_pattern_print.html?town=Columbia&rank=1&paper=1&keyonly=1" civic_area_key.png
-  key "market_pattern_print.html?town=Columbia&rank=1&measure=coverage&paper=1&keyonly=1" civic_coverage_key.png
+  # keys at the type size they have when a 440 CSS px key is scaled to one map's width: each measure's own items, and the
+  # home county, county border and TV market lines with the scale bar, shown once across the panel
+  K="town=Columbia&rank=1&paper=1&fit=1&keyonly=1&ground=1"
+  shot "market_pattern_print.html?$K&keyparts=own&kw=440" key_area.png 440 4.0091 390
+  shot "market_pattern_print.html?$K&measure=coverage&keyparts=own&kw=440" key_cov.png 440 4.0091 390
+  shot "market_pattern_print.html?$K&keyparts=lines&kscale=0.83333&kw=898" key_lines.png 898 4.0091 390
   kill $SRV
-  ${=PY} - <<'PYEOF'   # Figures 3 and 4: each triptych's shared key over its three panels
+  ${=PY} - <<'PYEOF'   # Figures 3-5: the keys cropped to their content above the two maps
 from PIL import Image, ImageChops
-FIGS = {"civic_area_triptych.png": ("civic_area_key.png", [f"civic_area_{t}.png" for t in ("columbia", "mexico", "linn")]),
-        "civic_coverage_triptych.png": ("civic_coverage_key.png", [f"civic_coverage_{t}.png" for t in ("columbia", "mexico", "linn")])}
-for name, (key, panels) in FIGS.items():
-    ims = [Image.open(f"print/{f}").convert("RGB") for f in panels]
-    gap = 90; w = sum(i.width for i in ims) + gap * 2; h = max(i.height for i in ims)
-    k = Image.open(f"print/{key}").convert("RGB")
-    k = k.crop((0, 0, w, ImageChops.difference(k, Image.new("RGB", k.size, "white")).getbbox()[3] + 12))
-    out = Image.new("RGB", (w, k.height + 40 + h), "white"); out.paste(k, (0, 0)); x = 0
-    for i in ims:
-        out.paste(i, (x, k.height + 40)); x += i.width + gap
-    out.save(f"print/{name}", dpi=(300, 300)); print(f"print/{name}", out.size)
+def content(f):
+    im = Image.open(f"print/{f}").convert("RGB")
+    bb = ImageChops.difference(im, Image.new("RGB", im.size, "white")).getbbox()
+    return im.crop((0, bb[1], im.width, bb[3]))
+ka, kc, kl = content("key_area.png"), content("key_cov.png"), content("key_lines.png")
+for n, t in ((3, "columbia"), (4, "mexico"), (5, "linn")):
+    a, c = Image.open(f"print/area_{t}.png").convert("RGB"), Image.open(f"print/cov_{t}.png").convert("RGB")
+    out = Image.new("RGB", (3600, 335 + a.height), "white")
+    out.paste(ka, (0, 10)); out.paste(kc, (1836, 10)); out.paste(kl, (0, 288)); out.paste(a, (0, 335)); out.paste(c, (1836, 335))
+    out.save(f"print/figure{n}_{t}.png", dpi=(600, 600)); print(f"print/figure{n}_{t}.png", out.size)
 PYEOF
   cd $ROOT
 fi

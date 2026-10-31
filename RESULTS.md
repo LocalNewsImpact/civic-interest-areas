@@ -54,13 +54,11 @@ step writes its log to `logs/reproduce/<step>.log`; figures are written to `flow
 
 ## Figures
 
-Figure 1, the locator map of the Columbia–Jefferson City DMA, reports no result and is not built here.
-
 | Figure | Step | Page | Output (`flows/print/`) |
 |---|---|---|---|
+| Figure 1. The Columbia–Jefferson City DMA; Audrain, Boone and Osage counties | `figures` | `flows/dma_locator_print.html` (counties from `flows/dma_locator.json`) | `figure1_dma_locator.png` |
 | Figure 2. From data to measures | `figures` | `flows/measures_flow_print.html` | `measures_flow.png`, `.pdf` |
-| Figure 3. Civic interest areas | `area_core`, `figures` | `flows/market_pattern_print.html` | `civic_area_triptych.png` |
-| Figure 4. Coverage density and balance | `coverage_density_columbia`, `diet_columbia`, `figures` | `flows/market_pattern_print.html?measure=coverage` | `civic_coverage_triptych.png` |
+| Figures 3–5. Each town's civic interest area (left) and its coverage density and balance (right): Columbia, Mexico, Linn | `area_core`, `coverage_density_columbia`, `diet_columbia`, `figures` | `flows/market_pattern_print.html?fit=1&ground=1` (`measure=coverage` for the right map) | `figure3_columbia.png`, `figure4_mexico.png`, `figure5_linn.png` |
 
 ## Supplementary material S2: calculations
 
