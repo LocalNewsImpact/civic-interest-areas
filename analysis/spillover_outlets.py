@@ -42,8 +42,8 @@ from scipy import stats
 warnings.filterwarnings("ignore")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from spillover_common import (BORDER_FORM, CAMPUS, FINAL, FINAL_ALL_BORDER, FIT_FLOOR, PER_10K, WITH_CROWDED, paired_gain, predict, MENTION_WEIGHT, NOT_FITTED, NOT_LOCAL, SCORE_FLOOR,  # noqa: E402
-                              SPORTS_WEIGHT, STUDY, cluster_inference, loo, market, outlet_home, outlet_rows, skill,
-                              terms_of, unit)
+                              SPORTS_WEIGHT, STUDY, cluster_inference, design, irls, loo, market, outlet_home, outlet_rows,
+                              skill, terms_of, unit)
 
 DRY = bool(os.environ.get("SPILL_DRY"))
 root = Path(__file__).resolve().parents[1]
@@ -259,7 +259,17 @@ print(f"\n## adopted model: fitted on {len(g)} well-collected outlets with {FIT_
 print("coefficients: CRV3 (cluster jackknife) SE, p from t with G-1 df (CRV1 beside for comparison); county-cluster "
       "bootstrap, 1,999 draws, percentile 95% CI")
 print(inf.round(3).to_string())
-print(f"border point: {(g.location_basis == 'town centroid').sum()} of {len(g)} fitted outlets located at a town centroid, "
+# LEAVE ONE OUTLET OUT (review, 2026-10-31): the adopted model refitted without each fitted outlet in turn -- the range
+# of each coefficient and the outlet whose removal moves it most. The county-cluster jackknife above leaves out whole
+# counties; this asks whether any single outlet, such as a high-volume broadcaster, carries a term.
+Xg, yg = design(g, terms_of(FINAL)), g.rate.to_numpy(float)
+lo1 = np.array([irls(np.delete(Xg, i, 0), np.delete(yg, i)) for i in range(len(g))])
+print("leave one outlet out: each coefficient's range over the fits without one outlet, and the outlet whose removal moves it most")
+for j, t in enumerate(["intercept"] + terms_of(FINAL)):
+    k = int(np.argmax(np.abs(lo1[:, j] - m.params.iloc[j])))
+    print(f"  {t}: {lo1[:, j].min():+.3f} to {lo1[:, j].max():+.3f} (fit {m.params.iloc[j]:+.3f}); largest move without "
+          f"{g.outlet.iloc[k]} ({lo1[k, j]:+.3f})")
+print(f"border point:{(g.location_basis == 'town centroid').sum()} of {len(g)} fitted outlets located at a town centroid, "
       f"{(g.location_basis == 'address').sum()} at a street address; {int(g.outside_home.sum())} outside their home county "
       f"(border 0; in the three counties: {', '.join(g[g.outside_home & g.fips.isin(THREE)].outlet) or 'none'})")
 

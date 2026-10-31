@@ -134,6 +134,7 @@ if stage areas; then
   for r in $REGIONS; do
     step coverage_density_$r   REGION=$r analysis/area_coverage_alignment.py
     step diet_$r               REGION=$r DIET_K=0 analysis/cin_diet.py
+    step coverage_intervals_$r REGION=$r analysis/coverage_intervals.py
   done
 fi
 

@@ -69,7 +69,7 @@ STAGES="travel coverage" zsh scripts/reproduce.sh
 | `spillover` | Outlet model, outlet type and print outlets, crossover-spillover correlation, county story counts (Table 2) | `data`, story data |
 | `factors` | Factors tested and not adopted (`analysis/factor_search/`) | `travel`, `coverage`, `spillover` |
 | `public` | Public-data travel model, nested Stage 1 score against the Advan-fitted model (`scripts/public_model.sh`) | `travel`, public data |
-| `areas` | Travel patterns, network tie, 6,912-version drawing ensemble, multi-part areas, coverage density and balanced diet | Advan files, story data |
+| `areas` | Travel patterns, network tie, 6,912-version drawing ensemble, multi-part areas, coverage density and balanced diet with their story-resampling intervals and threshold sensitivity | Advan files, story data |
 | `figures` | Figures 1–5 (`flows/print/`) | `spillover`, `areas` |
 
 A full run takes about 6 hours on one processor core per process. The travel patterns and the drawing ensembles take
