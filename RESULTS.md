@@ -72,6 +72,7 @@ The fitted values S2 lists for each measure, and the step that prints them.
 | B. Crossover | b = 0.62 [0.53, 0.71], first-stage F; county shares and their range over the interval of b | `build_unique_od`, `crossover_compare` | `analysis/build_unique_od.py`, `analysis/crossover_compare.py` |
 | C. Coverage | β₁–β₃ and β₁ + β₂, twice the visits with 95% intervals, held-out error with and without the rural term (4.54 / 4.67) | `coverage_model` | `analysis/coverage_model.py` |
 | D. Spillover | β₀–β₂ with p; held-out error 5.98 against 7.49, skill 0.20 (also Table S1) | `spillover_outlets` | `analysis/spillover_outlets.py` |
+| D. Spillover | Fitted outlets against the others: mean spillover 24.7% (85) vs 18.7% (43) | `spillover_outlets` | `analysis/spillover_outlets.py` (QUALITY SELECTION, "fitted … vs others") |
 | D. Spillover | county spillover with 95% intervals; crossover ÷ spillover | `county_intervals` | `analysis/county_intervals.py` |
 | D. Spillover | held-out error with the choice of terms repeated in each fold (6.57) | `spillover_nested` | `analysis/factor_search/spillover_nested_selection.py` |
 | E. Civic interest area | K, versions, regular-travel distance | `patterns_columbia`, `ensemble_columbia`, `regular_distance` | `flows/travel_patterns.py`, `flows/area_ensemble.py`, `flows/regular_distance.py` |

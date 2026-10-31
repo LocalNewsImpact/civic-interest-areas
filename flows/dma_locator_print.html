@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Figure 1: the Columbia–Jefferson City TV market</title>
+<!-- The paper's Figure 1, drawn in the style of the civic interest area maps (market_pattern_print.html ?ground=1):
+     Missouri's counties in grey with white county lines, the TV market's counties in the area maps' blue, the three study
+     counties in their darkest step. Counties from dma_locator.json; geometry the counties layer of cousub_29.geojson, as the area maps.
+     ?w= CSS width (default 600); ?land= ground colour (default the maps' #e8e8e8) -->
+<style>
+  html, body { margin: 0; background: #ffffff; }
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+</style>
+<script src="d3.min.js"></script>
+</head>
+<body>
+<div id="map"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const W = +(q.get("w") || 600), LAND = "#" + (q.get("land") || "e8e8e8");
+const MARKET = "#9fc0d2", FOCUS = "#003a56", INK = "#0b0b0b";   // the area maps' ramp (market_pattern_print.html RAMP)
+// label offsets from each study county's centre, in CSS px: names sit outside the market, joined by a leader line
+const LABEL = { "29007": [50, -55], "29019": [-105, -30], "29151": [85, 40] };
+Promise.all([d3.json("cousub_29.geojson"), d3.json("dma_locator.json")]).then(([geo, L]) => {
+  const all = geo.counties.features;
+  const mo = { type: "FeatureCollection", features: all };
+  const H = Math.round(W * 0.82);
+  const proj = d3.geoTransverseMercator().rotate([92.45, -38.4]).fitExtent([[8, 8], [W - 8, H - 8]], mo);
+  const path = d3.geoPath(proj);
+  const market = new Set(L.dma), focus = new Set(L.focus);
+  const svg = d3.select("#map").append("svg").attr("width", W).attr("height", H).attr("viewBox", [0, 0, W, H]);
+  svg.append("g").selectAll("path").data(all).join("path").attr("d", path)
+    .attr("fill", (f) => (focus.has(f.id) ? FOCUS : market.has(f.id) ? MARKET : LAND))
+    .attr("stroke", "#ffffff").attr("stroke-width", 0.6).attr("stroke-linejoin", "round");
+  const lab = svg.append("g");
+  for (const id of L.focus) {
+    const f = all.find((x) => x.id === id), [cx, cy] = path.centroid(f), [dx, dy] = LABEL[id];
+    const lx = cx + dx, ly = cy + dy;
+    lab.append("line").attr("x1", cx).attr("y1", cy).attr("x2", lx).attr("y2", ly).attr("stroke", INK).attr("stroke-width", 0.6);
+    lab.append("circle").attr("cx", cx).attr("cy", cy).attr("r", 1.8).attr("fill", "#ffffff");
+    lab.append("text").attr("x", lx + (dx < 0 ? -3 : 3)).attr("y", ly + (dy < 0 ? -3 : 11)).attr("font-size", 13)
+      .attr("text-anchor", dx < 0 ? "end" : "start").attr("fill", INK).text(L.names[id]);
+  }
+  document.body.dataset.height = H;
+});
+</script>
+</body>
+</html>

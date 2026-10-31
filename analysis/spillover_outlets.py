@@ -224,6 +224,10 @@ print(f"\n## QUALITY SELECTION: well collected {int(d.good.sum())} of {len(d)} o
       f"{d[d.good].rate.mean():.1%} well collected vs {d[~d.good].rate.mean():.1%} others "
       f"(point-biserial r {pb[0]:+.2f}, p {pb[1]:.3f}); print/digital {d[d.good & (d.broadcast == 0)].rate.mean():.1%} vs "
       f"{d[~d.good & (d.broadcast == 0)].rate.mean():.1%}. The fit and its errors describe well-collected outlets.")
+# the same for the fitted outlets (the Methods rule) against all others: the comparison Supplementary material S2 D states
+pbf = stats.pointbiserialr(d.fitted.astype(bool), d.rate)
+print(f"   fitted {int(d.fitted.sum())} vs others {int((~d.fitted.astype(bool)).sum())}: mean spillover "
+      f"{d[d.fitted].rate.mean():.1%} vs {d[~d.fitted.astype(bool)].rate.mean():.1%} (point-biserial r {pbf[0]:+.2f}, p {pbf[1]:.3f})")
 m, inf, G = cluster_inference(g, FINAL)
 d["expected_full_fit"] = m.predict(d)
 # HELD-OUT EXPECTATION: each county's outlets predicted by the adopted model fitted without that county's outlets.
