@@ -72,7 +72,7 @@ The fitted values S2 lists for each measure, and the step that prints them.
 | D. Spillover | β₀–β₂ with p; held-out error 5.98 against 7.49, skill 0.20 (also Table S1) | `spillover_outlets` | `analysis/spillover_outlets.py` |
 | D. Spillover | Fitted outlets against the others: mean spillover 24.7% (85) vs 18.7% (43) | `spillover_outlets` | `analysis/spillover_outlets.py` (QUALITY SELECTION, "fitted … vs others") |
 | D. Spillover | county spillover with 95% intervals; crossover ÷ spillover | `county_intervals` | `analysis/county_intervals.py` |
-| D. Spillover | held-out error with the choice of terms repeated in each fold (6.57) | `spillover_nested` | `analysis/factor_search/spillover_nested_selection.py` |
+| D. Spillover | held-out error with the choice of terms repeated in each group (6.57) | `spillover_nested` | `analysis/factor_search/spillover_nested_selection.py` |
 | D. Spillover | Refitted without each outlet in turn: broadcaster term 0.62–0.74, outlet term −0.43 to −0.36 | `spillover_outlets` | `analysis/spillover_outlets.py` ("leave one outlet out") |
 | C. Coverage | Leaving out one newsroom county: urban elasticity 0.42–0.51, rural 0.21–0.28; standard errors by county pair (0.052 / 0.049) and two-way (0.076 / 0.068); 88 newsroom counties, 10,032 pairs, 14,877 stories; θ (eight terms) | `coverage_model` | `analysis/coverage_model.py` |
 | B. Crossover | b by month gap 1–6 (0.61–0.63); first stage 0.82, F 4,082; crossover over b in [0, 1] (Audrain 40–44%, Boone 24–26%, Osage 45–66%); counted in every destination 66% / 33% / 82% | `build_unique_od`, `crossover_compare` | `analysis/build_unique_od.py`, `analysis/crossover_compare.py` |
