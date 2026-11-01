@@ -16,7 +16,7 @@ for news stories.
 | Spillover | Share of an outlet's stories about counties other than its own | `analysis/spillover_outlets.py` |
 | Civic interest area | Places a town's residents share through travel, strengthened by news ties; each place shaded by how likely it is to be part of the area | `flows/area_ensemble.py`, `flows/area_core.py` |
 
-Supplementary material S2 sets out the calculation for each measure: the question it answers, the equation, its
+`SUPPLEMENT.md` holds the article's supplementary material; its S2 sets out the calculation for each measure: the question it answers, the equation, its
 terms with fitted values and its output (`RESULTS.md` names the script that prints each value).
 
 ## Results
