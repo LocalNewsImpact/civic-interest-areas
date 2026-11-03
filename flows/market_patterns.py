@@ -93,9 +93,10 @@ for town, home in STUDY.items():
     print(f"\n## {town}")
     # A MARKET needs 10%+ of the town's residents (adopted 2026-10-17) AND, for a secondary or tertiary market, 1,000+
     # residents (adopted 2026-10-18: below 1,000 a market's map spreads thinly -- Mexico's secondary, 729 residents,
-    # showed 389 hexagons, 72% of them holding in both halves of the year; analysis/market_stability.py); the primary is
-    # always kept
-    MIN_SHARE, MIN_RESIDENTS = 0.10, 1000
+    # showed 389 hexagons, 72% of them holding in both halves of the year; analysis/market_stability.py) or half the
+    # town's residents, whichever is fewer (2026-11-03: the same floor as travel_patterns.py town_floor, so a town under
+    # 2,000 is held to the same standard as a large one); the primary is always kept
+    MIN_SHARE, MIN_RESIDENTS = 0.10, min(1000, 0.5 * sum(t["people"]))
     groups = [g_ for i_, g_ in enumerate(groups[:3]) if i_ == 0 or (sum(t["share"][k] for k in g_) >= MIN_SHARE
                                                                     and sum(t["people"][k] for k in g_) >= MIN_RESIDENTS)]
     for rank, g_ in enumerate(groups):

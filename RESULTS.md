@@ -15,7 +15,7 @@ step writes its log to `logs/reproduce/<step>.log`; figures are written to `flow
 | Broadcasters cover other counties more; more print outlets in the county, less | outlet model terms | `spillover_outlets` | `analysis/spillover_outlets.py` |
 | Rural newsrooms' coverage follows travel less | coverage model term | `coverage_model` | `analysis/coverage_model.py` |
 | Road stops (gas stations, convenience stores, fast food) at half weight | Weekly Patterns Plus, March 2026 | `stop_weights` | `flows/build_stop_weights.py` |
-| Travel patterns: non-negative matrix factorization; patterns of 10%+ and 1,000+ residents and 10%+ of travel, stable across starts and alternate months | one area per town | `patterns_columbia`, `market_columbia` | `flows/travel_patterns.py`, `flows/market_patterns.py` |
+| Travel patterns: non-negative matrix factorization; patterns of 10%+ of a town's residents (at least 1,000, or half the town) and 10%+ of its travel, stable across starts and alternate months | one area per town | `patterns_columbia`, `market_columbia` | `flows/travel_patterns.py`, `flows/market_patterns.py` |
 | News ties (home outlets report on a place, its outlets on the home town, shared third places) | network tie | `confidence_columbia`, `ensemble_columbia` | `analysis/network_tie.py` |
 | Versions of the map | 6,912 | `ensemble_columbia` | `flows/area_ensemble.py` |
 | Regular-travel distance (90% of trips to places visited every month, January–July 2026) | 15 / 30 / 44 miles | `regular_distance` | `flows/regular_distance.py` |

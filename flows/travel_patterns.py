@@ -13,9 +13,10 @@ out (masked): patterns describe travel beyond home. Residents: ACS 2020-2024 pop
 calibrated denominator of crossover, analysis/crossover_bg_month_mo_2026.csv). The masked NMF updates subtract the
 masked cells from the full products instead of multiplying by the mask: identical results, about 6x faster.
 The number of patterns K (authors, 2026-10-24): the largest K (grid 1-12, extended while its last K passes) at which every
-pattern holds 10%+ and 1,000+ of some study town's estimated residents and 10%+ of that town's travel (residents x
-reconstructed reach), and has matched cosine 0.9+ across 10 random starts (median) and between fits to odd and to even
-months. Per town, not per market: the area rule is per town, and a market's share depends on which counties form it.
+pattern holds 10%+ of some study town's estimated residents and 10%+ of that town's travel (residents x
+reconstructed reach), and at least 1,000 of them or half the town's residents, whichever is fewer (2026-11-03: the floor
+was 1,000 for every town; half the town for a town under 2,000 holds a small town to the same standard as a large one),
+and has matched cosine 0.9+ across 10 random starts (median) and between fits to odd and to even months. Per town, not per market: the area rule is per town, and a market's share depends on which counties form it.
 The kept fit is the lowest-loss of the 10 starts. Held-out month error (all 105 4 / 2 / 1 month partitions) is printed
 as a persistence diagnostic.
 Writes <region out>/patterns.json and patterns_halves.json (the odd- and even-month fits).
@@ -163,12 +164,12 @@ from scipy.optimize import linear_sum_assignment
 # AND replicability"; the same day: population and volume per TOWN). K = the LARGEST K at which EVERY
 # pattern passes both:
 #   (a+b) a town  at least one of the market's towns (the towns the maps are drawn for, flows/regions.json) for which
-#                 the pattern holds 10%+ AND 1,000+ of the town's residents AND 10%+ of the town's travel -- the same
+#                 the pattern holds 10%+ AND min(1,000, half the town) of the town's residents AND 10%+ of the town's travel -- the same
 #                 town for all three. Residents: ACS population (the calibrated denominator), split by each block
 #                 group's membership (as the areas use). Travel: residents x reconstructed reach, sum over the town's
 #                 block groups h and destinations u -- the town's own units masked, as the maps mask them
 #                 (own_units_of) -- of people(h) W[h,k] H[k,u].
-#                 Why per town: the area rule already requires 10% and 1,000 of a town's residents; a share of the
+#                 Why per town: the area rule already requires 10% and the floor of a town's residents; a share of the
 #                 MARKET depends on which home counties form the market (the same number of residents passes in a small
 #                 market and fails in a large one). A 5% level is not considered.
 #   (c) stability (i) across 10 random starts, the pattern's median matched cosine to the kept solution >= 0.9;
@@ -183,6 +184,7 @@ from scipy.optimize import linear_sum_assignment
 KMAX0, KCAP = int(os.environ.get("KMAX", 12)), 20
 STARTS, HALF_STARTS, ITERS = 10, 5, 2000
 TOWN_MIN, TOWN_ABS, COS_MIN = 0.10, 1000, 0.90
+town_floor = lambda res_total: min(TOWN_ABS, 0.5 * res_total)     # 1,000 people, or half the town's residents
 unit_ = lambda A_: A_ / np.maximum(np.linalg.norm(A_, axis=1, keepdims=True), 1e-12)
 
 
@@ -234,14 +236,15 @@ def town_tests(W, H):
         r_ = (ppl0[ix, None] * member_[ix]).sum(0)
         Mt = MASK[ix] * OWN_MASK[t_][None, :]
         v_ = np.array([(ppl0[ix, None] * Mt * (W[ix][:, [j]] @ H[[j]])).sum() for j in range(W.shape[1])])
-        out_[t_] = {"res": r_, "res_share": r_ / max(r_.sum(), 1e-9), "travel_share": v_ / max(v_.sum(), 1e-9)}
+        out_[t_] = {"res": r_, "res_share": r_ / max(r_.sum(), 1e-9), "travel_share": v_ / max(v_.sum(), 1e-9),
+                    "res_total": float(ppl0[ix].sum())}
     return out_
 
 
 def carrier(c_, j, tmin=TOWN_MIN):
     """the town carrying pattern j (all three tests), the one where it holds most of the residents; else None"""
     ok = [(c_["towns"][t_]["res_share"][j], t_) for t_ in c_["towns"]
-          if c_["towns"][t_]["res_share"][j] >= tmin and c_["towns"][t_]["res"][j] >= TOWN_ABS
+          if c_["towns"][t_]["res_share"][j] >= tmin and c_["towns"][t_]["res"][j] >= town_floor(c_["towns"][t_]["res_total"])
           and c_["towns"][t_]["travel_share"][j] >= tmin]
     return max(ok)[1] if ok else None
 
@@ -296,8 +299,8 @@ for k in crit:
     binding[k] = [n_ for n_, bad in (("no town", not all(carrier(c_, j) for j in range(k))),
                                      ("starts", (c_["cos_starts"] < COS_MIN).any()),
                                      ("halves", (c_["cos_halves"] < COS_MIN).any())) if bad]
-print(f"chosen K={K}: the largest K in 1-{max(crit)} at which every pattern holds 10%+ and 1,000+ of some study town's "
-      f"residents and 10%+ of that town's travel, with matched cosine 0.9+ across starts and between odd and even months. "
+print(f"chosen K={K}: the largest K in 1-{max(crit)} at which every pattern holds 10%+ of some study town's residents "
+      f"(at least 1,000, or half the town) and 10%+ of that town's travel, with matched cosine 0.9+ across starts and between odd and even months. "
       f"Fails by K: " + "; ".join(f"{k} {','.join(v) or 'pass'}" for k, v in binding.items()))
 print(f"   carriers at K={K}: " + ", ".join(f"pattern {j} {carrier(crit[K], j)}" for j in range(K)))
 SENS = {}
@@ -368,7 +371,7 @@ if scores:
 peak = H.max(1, keepdims=True)
 H, W = H / peak, W * peak.T
 name = lambda u: place_name.get(u, u)
-out = {"K": K, "k_rule": "largest K at which every pattern holds 10%+ and 1,000+ of some study town's residents and 10%+ "
+out = {"K": K, "k_rule": "largest K at which every pattern holds 10%+ of some study town's residents (at least 1,000, or half the town) and 10%+ "
                          "of that town's travel (residents x reach), matched cosine 0.9+ across 10 starts and odd vs even months",
        "criteria": criteria, "sensitivity": SENS, "stability": stability,
        "persistence_scores": scores, "errors_by_training_set": {j: np.round(v, 5).tolist() for j, v in err.items()},
