@@ -210,7 +210,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     `where it is mentioned. A story about a whole town, county or region is spread across that place, so it adds less to each ` +
     `hexagon the larger the place; a county or region is spread by where people live.`;
   document.getElementById("subtitle").textContent = COVM && ONLY
-    ? `Local news stories a month about each 1.9-mile hexagon of the area, March 2026. Frequent coverage (9+ a month): ` +
+    ? `Local news stories a month about each hexagon of the area (2.3 square miles), March 2026. Frequent coverage (9+ a month): ` +
       `${covShare(9, 1e9)}% of the area; regular (2–8): ${covShare(2, 9)}%; infrequent (under 2): ${covShare(0.005, 2)}%. ` +
       `Full-size hexagons: at least 8 of the 10 critical information needs (CIN) categories get a story a month (${BAL()}% of the area)`
     : COVM
