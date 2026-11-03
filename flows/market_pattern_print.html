@@ -210,7 +210,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     `where it is mentioned. A story about a whole town, county or region is spread across that place, so it adds less to each ` +
     `hexagon the larger the place; a county or region is spread by where people live.`;
   document.getElementById("subtitle").textContent = COVM && ONLY
-    ? `Local news stories a month about each hexagon of the area (2.3 square miles), March 2026. Frequent coverage (9+ a month): ` +
+    ? `Weighted local news stories a month about each hexagon of the area (2.3 square miles), March 2026. Frequent coverage (9+ a month): ` +
       `${covShare(9, 1e9)}% of the area; regular (2–8): ${covShare(2, 9)}%; infrequent (under 2): ${covShare(0.005, 2)}%. ` +
       `Full-size hexagons: at least 8 of the 10 critical information needs (CIN) categories get a story a month (${BAL()}% of the area)`
     : COVM
@@ -246,9 +246,9 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
         `(home outlets' stories located there; its outlets' stories located in home); by 3 km hexagon, home = 100`);
   const key = d3.select("#key");
   const ramp = key.append("span").attr("class", "dd-ramp");
-  ramp.append("span").html(COVM ? `<span class="dd-swatch base"></span>under 2 a month &nbsp; Stories a month` : STORY_LAYER ? `Stories centred there` : LIFT ? `<span class="dd-swatch base"></span>under ${FLOOR}%`
-    : PRB && ONLY ? `How likely the place is part of the area`
-    : PRB ? `How likely the place is part of the area&nbsp;&nbsp;<span class="dd-swatch base"></span>under 10%`
+  ramp.append("span").html(COVM ? `<span class="dd-swatch base"></span>under 2 a month &nbsp; Weighted stories a month` : STORY_LAYER ? `Stories centred there` : LIFT ? `<span class="dd-swatch base"></span>under ${FLOOR}%`
+    : PRB && ONLY ? `Share of the 6,912 versions that include the place`
+    : PRB ? `Share of the 6,912 versions that include the place&nbsp;&nbsp;<span class="dd-swatch base"></span>under 10%`
     : `<span class="dd-swatch base"></span>not shown: outside the ${Math.round(100 * (+(q.get("sel") || 0.5)))}% strongest ties`);
   if (STORY_LAYER) ramp.html(`Stories centred there<svg width="150" height="34" style="margin-left:.4rem;vertical-align:middle">` +
     `<circle cx="8" cy="17" r="2.6" fill="#0b0b0b" fill-opacity="0.55" stroke="#fff"/><text x="14" y="20.5" font-size="9" fill="currentColor">place</text>` +
@@ -272,11 +272,12 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     if (q.get("balance") !== "0") {
       const hx = (cx, r) => d3.range(6).map((i) => { const a = Math.PI / 180 * (60 * i - 30);
         return `${(cx + r * Math.cos(a)).toFixed(2)},${(7 + r * Math.sin(a)).toFixed(2)}`; }).join(" ");
-      item(`Breadth <svg width="66" height="14" style="vertical-align:middle;margin:0 4px"><polygon points="${hx(8, 2.8)}" fill="#2f6b2f"/>` +
-        `<polygon points="${hx(30, 4.6)}" fill="#2f6b2f"/><polygon points="${hx(54, 7)}" fill="#2f6b2f"/></svg>few \u2192 8+ of 10 CIN categories`);
+      item(`Breadth: CIN categories reached, of 10 <svg width="66" height="14" style="vertical-align:middle;margin:0 4px"><polygon points="${hx(8, 2.8)}" fill="#2f6b2f"/>` +
+        `<polygon points="${hx(30, 4.9)}" fill="#2f6b2f"/><polygon points="${hx(54, 7)}" fill="#2f6b2f"/></svg>0, 4, 8+`);
     }
-    item(`Stories a month: rarely <span style="display:inline-block;width:120px;height:10px;margin:0 6px;vertical-align:middle;` +
-      `background:linear-gradient(to right,${stops})"></span> several a week or more`);
+    item(`Weighted stories a month: 0 <span style="display:inline-block;position:relative;width:120px;height:10px;margin:0 6px;vertical-align:middle;` +
+      `background:linear-gradient(to right,${stops})"><span style="position:absolute;left:48%;top:-1px;width:1px;height:12px;background:#fff"></span>` +
+      `<span style="position:absolute;left:48%;top:11px;transform:translateX(-50%);font-size:0.85em">2</span></span> 9+`);
     if (!ONLY) item(`<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="#6f6d66" stroke-width="1"/></svg>The area: likely 50% or more`);
   }
   if (STORY_LAYER) item(`County in` + quantizeRamp("#d3ecfa", "#003a56", 5).slice(0, 4).map((c, i) =>
