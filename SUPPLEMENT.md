@@ -1,6 +1,6 @@
 # Supplementary material
 
-Supplement to "Mapping Outside the Lines: Crossover and Spillover in Rural News" (manuscript under review). Copied from the manuscript on 2026-11-03; the manuscript is the authority where the two differ. `RESULTS.md` names the script that prints each value.
+Supplement to "Beyond Counties: Mapping Civic Interest Areas" (manuscript under review). Copied from the manuscript on 2026-11-03; the manuscript is the authority where the two differ. `RESULTS.md` names the script that prints each value.
 
 ## S1. Spillover under other weights
 
