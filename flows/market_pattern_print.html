@@ -268,16 +268,16 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
   if (COVM) {
     ramp.remove();
     const sw = (c, line) => `<span style="display:inline-block;width:14px;height:10px;background:${c};${line ? "border:0.5px solid #c9c7bd;" : ""}margin-right:4px;vertical-align:baseline"></span>`;
-    const stops = d3.range(0, 1.001, 0.1).map((t) => d3.interpolateLab("#f1efe7", "#2f6b2f")(t)).join(",");
     if (q.get("balance") !== "0") {
       const hx = (cx, r) => d3.range(6).map((i) => { const a = Math.PI / 180 * (60 * i - 30);
         return `${(cx + r * Math.cos(a)).toFixed(2)},${(7 + r * Math.sin(a)).toFixed(2)}`; }).join(" ");
       item(`Breadth: CIN categories reached, of 10 <svg width="66" height="14" style="vertical-align:middle;margin:0 4px"><polygon points="${hx(8, 2.8)}" fill="#2f6b2f"/>` +
         `<polygon points="${hx(30, 4.9)}" fill="#2f6b2f"/><polygon points="${hx(54, 7)}" fill="#2f6b2f"/></svg>0, 4, 8+`);
     }
-    item(`Weighted stories a month: 0 <span style="display:inline-block;position:relative;width:120px;height:10px;margin:0 6px;vertical-align:middle;` +
-      `background:linear-gradient(to right,${stops})"><span style="position:absolute;left:48%;top:-1px;width:1px;height:12px;background:#fff"></span>` +
-      `<span style="position:absolute;left:48%;top:11px;transform:translateX(-50%);font-size:0.85em">2</span></span> 9+`);
+    // the ramp in two pieces with 2 a month written between them: the text's tier threshold sits at log1p(2)/log1p(9) = 0.48
+    const seg = (a, b, w) => `<span style="display:inline-block;width:${w}px;height:10px;vertical-align:middle;background:linear-gradient(to right,` +
+      d3.range(0, 1.001, 0.125).map((t) => d3.interpolateLab("#f1efe7", "#2f6b2f")(a + (b - a) * t)).join(",") + `)"></span>`;
+    item(`Weighted stories a month: 0&nbsp;${seg(0, 0.48, 58)}&nbsp;2&nbsp;${seg(0.48, 1, 62)}&nbsp;9+`);
     if (!ONLY) item(`<svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="#6f6d66" stroke-width="1"/></svg>The area: likely 50% or more`);
   }
   if (STORY_LAYER) item(`County in` + quantizeRamp("#d3ecfa", "#003a56", 5).slice(0, 4).map((c, i) =>
