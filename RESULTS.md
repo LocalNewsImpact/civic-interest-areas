@@ -7,7 +7,7 @@ step writes its log to `logs/reproduce/<step>.log`; figures are written to `flow
 
 | Result in the article | Value | Step | Script |
 |---|---|---|---|
-| Share-of-travel error, public-data model against the Advan-fitted model (counties held out) | 4.6 / 3.3 points | `public_model` (step 4) / `travel_model` | `analysis/public_stage1_nested.py` / `analysis/travel_model.py` |
+| Share-of-travel error, public-data model against the Advan-fitted model (counties held out; settings chosen on the counties scored) | 4.4 / 3.3 points (4.6 with the public model's setting chosen without the county scored) | `public_model` (step 4) / `travel_model` | `analysis/public_stage1_nested.py` / `analysis/travel_model.py` |
 | Spillover weights (Table 1): centred 1, mention 0.5, sports half | definitions | — | `analysis/spillover_common.py` |
 | Newsroom comparisons: well-collected outlets (95% body text, 80% full length, 60% and 20+ geolocated) | 85 outlets, 48 counties | `spillover_outlets` | `analysis/spillover_outlets.py` |
 | Rural county: under half of its 2020 population in Census urban areas | Audrain, Osage rural; Boone urban | `coverage_model` | `analysis/gravity_terms.py`, `analysis/coverage_model.py` |
@@ -36,10 +36,10 @@ step writes its log to `logs/reproduce/<step>.log`; figures are written to `flow
 | Crossover, residents seen outside the county in a typical month: Osage, Audrain, Boone | 59%, 44%, 26% | `crossover_compare` | `analysis/crossover_compare.py` |
 | Crossover against print and digital spillover, 47 counties with fitted outlets | r = 0.33 [0.05, 0.57], p = 0.02 | `spillover_quality`, `county_intervals` | `analysis/collection_quality_robustness.py`, `analysis/county_intervals.py` |
 | Stories when travel doubles: urban, rural newsrooms | +38% [26, 52], +18% [9, 28] | `coverage_model` | `analysis/coverage_model.py` |
-| Places in both odd-month and even-month areas: Columbia, Mexico, Linn | 86%, 92%, 67% | `area_core` | `flows/area_core.py` (`flows/reach/probability_columbia.json`, `core50_area_month_split`) |
-| Places kept when areas are drawn from travel alone | 91–95% | `ensemble_columbia` | `flows/area_ensemble.py` |
-| Frequent coverage: Columbia, Mexico, Linn; infrequent, Mexico and Linn | 60%, 44%, 41%; 54% each | `coverage_density_columbia` | `analysis/area_coverage_alignment.py` |
-| Balanced diet: Columbia, Linn, Mexico | 56%, 36%, 21% | `diet_columbia` | `analysis/cin_diet.py` |
+| Places in both odd-month and even-month areas: Columbia, Mexico, Mexico's second area, Linn | 87%, 65%, 67%, 66% | `area_core` | `flows/area_core.py` (`flows/reach/probability_columbia.json`, `core50_area_month_split`) |
+| Places kept when areas are drawn from travel alone | 86–96% | `ensemble_columbia` | `flows/area_ensemble.py` |
+| Frequent coverage: Columbia, Mexico, Mexico's second area, Linn; infrequent, Mexico and Linn | 58%, 38%, 100%, 41%; 61%, 54% | `coverage_density_columbia` | `analysis/area_coverage_alignment.py` |
+| Balanced diet: Columbia, Linn, Mexico, Mexico's second area | 54%, 36%, 17%, 61% | `diet_columbia` | `analysis/cin_diet.py` |
 | Fewest outlets whose stories alone give 80% of the frequently covered area 9+ stories a month: Columbia, Mexico, Linn | 2 (ABC 17 KMIZ News, Boone County Journal), 2 (KRCG, The Mexico Ledger), 1 (KRCG, New Bloomfield, Callaway County) | `coverage_density_columbia` | `analysis/area_coverage_alignment.py` (`analysis/area_coverage_alignment.csv`, `all: frequent outlets 80%/all`, with home town) |
 
 ## Tables
@@ -48,7 +48,7 @@ step writes its log to `logs/reproduce/<step>.log`; figures are written to `flow
 |---|---|---|
 | Table 1. How a story counts as spillover | — | `analysis/spillover_common.py` |
 | Table 2. Population; local outlets; stories analyzed (1,152 / 123 / 40); crossover; spillover | `alignment`, `crossover_compare`, `spillover_outlets` | `coverage/build_alignment.py`, `analysis/crossover_compare.py`, `analysis/spillover_outlets.py`; population: 2020 Census |
-| Table 3. Area (432 / 346 / 420 square miles); regular-travel distance; continuous territory | `coverage_density_columbia`, `regular_distance`, `area_core` | `analysis/area_coverage_alignment.py`, `flows/regular_distance.py`, `flows/area_core.py` |
+| Table 3. Area (448 / 420 / 115 / 420 square miles: Columbia, Mexico, Mexico's second area, Linn); regular-travel distance; continuous territory | `coverage_density_columbia`, `regular_distance`, `area_core` | `analysis/area_coverage_alignment.py`, `flows/regular_distance.py`, `flows/area_core.py` |
 | Table S1. County spillover and held-out skill under alternative weights | `spillover_outlets` | `analysis/spillover_outlets.py` |
 | Table S2. Civic interest areas with the constants set by judgment halved or doubled | stage `sensitivity` (`judgment_constants`) | `flows/area_ensemble.py` (`TIE_W`, `GAMMA`), `analysis/judgment_constants.py` |
 
@@ -77,13 +77,13 @@ The fitted values S2 lists for each measure, and the step that prints them.
 | C. Coverage | Leaving out one newsroom county: urban elasticity 0.42–0.51, rural 0.21–0.28; standard errors by county pair (0.052 / 0.049) and two-way (0.076 / 0.068); 88 newsroom counties, 10,032 pairs, 14,877 stories; θ (eight terms) | `coverage_model` | `analysis/coverage_model.py` |
 | B. Crossover | b by month gap 1–6 (0.61–0.63); first stage 0.82, F 4,082; crossover over b in [0, 1] (Audrain 40–44%, Boone 24–26%, Osage 45–66%); counted in every destination 66% / 33% / 82% | `build_unique_od`, `crossover_compare` | `analysis/build_unique_od.py`, `analysis/crossover_compare.py` |
 | E. Civic interest area | K, versions, regular-travel distance | `patterns_columbia`, `ensemble_columbia`, `regular_distance` | `flows/travel_patterns.py`, `flows/area_ensemble.py`, `flows/regular_distance.py` |
-| E. Civic interest area | Sensitivity: 94–100% of places kept, frequent coverage within 3 points (Table S2) | `judgment_constants` | `analysis/judgment_constants.py` |
+| E. Civic interest area | Sensitivity: 95–100% of places kept, frequent coverage within 3 points (Table S2) | `judgment_constants` | `analysis/judgment_constants.py` |
 
 ## Supplementary material S3
 
 | Result | Value | Step | Script |
 |---|---|---|---|
-| Frequent coverage before whole towns are added: Columbia, Mexico, Linn | 54%, 38%, 34% | `coverage_density_columbia` | `analysis/area_coverage_alignment.py` (last lines of its log) |
-| The same, areas drawn from travel alone | 51%, 35%, 35% | `coverage_density_columbia` | `analysis/area_coverage_alignment.py` (last lines of its log) |
-| Story-resampling intervals (999 draws): frequent coverage; balanced diet | 60% [59, 62], 44% [44, 44], 41% [40, 44]; 56% [45, 56], 21% [19, 21], 36% [33, 36] | `coverage_intervals_columbia` | `analysis/coverage_intervals.py` (`analysis/coverage_intervals.csv`) |
-| Thresholds: frequent at 6+ / 12+ a month; balanced at 7 / 9 of 10 categories | 61 / 59%, 44 / 44%, 44 / 40%; 56 / 48%, 25 / 19%, 36 / 35% | `coverage_intervals_columbia` | `analysis/coverage_intervals.py` |
+| Frequent coverage before whole towns are added: Columbia, Mexico, Linn | 53%, 33%, 33% | `coverage_density_columbia` | `analysis/area_coverage_alignment.py` (last lines of its log) |
+| The same, areas drawn from travel alone | 51%, 29%, 35% | `coverage_density_columbia` | `analysis/area_coverage_alignment.py` (last lines of its log) |
+| Story-resampling intervals (999 draws): frequent coverage; balanced diet | 58% [58, 61], 38% [37, 38], 41% [40, 44]; 54% [44, 54], 17% [16, 18], 36% [33, 36]; Mexico's second area 100% [100, 100]; 61% [61, 63] | `coverage_intervals_columbia` | `analysis/coverage_intervals.py` (`analysis/coverage_intervals.csv`) |
+| Thresholds: frequent at 6+ / 12+ a month; balanced at 7 / 9 of 10 categories | 59 / 58%, 38 / 37%, 44 / 40%; 54 / 47%, 20 / 16%, 36 / 35% | `coverage_intervals_columbia` | `analysis/coverage_intervals.py` |

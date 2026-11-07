@@ -155,7 +155,8 @@ if stage sensitivity; then
 fi
 
 # Figures 1-5: the TV market locator; the data-to-measures flow (300 dpi PNG and PDF); and one panel per town, its civic
-# interest area beside its coverage on one fitted scale (Figures 3-5). Figures 1 and 3-5 are 6.0 in wide at 600 dpi.
+# interest area beside its coverage on one fitted scale (Figures 3-5), Mexico's two areas as two rows of Figure 4.
+# Figures 1 and 3-5 are 6.0 in wide at 600 dpi.
 if stage figures; then
   cd $ROOT/flows
   python3 -m http.server 8765 --bind 127.0.0.1 > /dev/null 2>&1 &
@@ -189,6 +190,9 @@ sys.exit(0 if ImageChops.difference(im, Image.new('RGB', im.size, 'white')).getb
     shot "market_pattern_print.html?town=$t&rank=1&paper=1&panel=1&fit=1&ls=1.45&ground=1" "area_${(L)t}.png" 528 3.3409
     shot "market_pattern_print.html?town=$t&rank=1&measure=coverage&paper=1&panel=1&fit=1&ls=1.45&ground=1" "cov_${(L)t}.png" 528 3.3409
   done
+  # Mexico's second civic interest area (13% of its residents, toward Columbia): Figure 4's second row
+  shot "market_pattern_print.html?town=Mexico&rank=2&paper=1&panel=1&fit=1&ls=1.45&ground=1" area_mexico_2.png 528 3.3409
+  shot "market_pattern_print.html?town=Mexico&rank=2&measure=coverage&paper=1&panel=1&fit=1&ls=1.45&ground=1" cov_mexico_2.png 528 3.3409
   # keys at the type size they have when a 440 CSS px key is scaled to one map's width: each measure's own items, and the
   # home county, county border and TV market lines with the scale bar, shown once across the panel
   K="town=Columbia&rank=1&paper=1&fit=1&keyonly=1&ground=1"
@@ -203,10 +207,15 @@ def content(f):
     bb = ImageChops.difference(im, Image.new("RGB", im.size, "white")).getbbox()
     return im.crop((0, bb[1], im.width, bb[3]))
 ka, kc, kl = content("key_area.png"), content("key_cov.png"), content("key_lines.png")
-for n, t in ((3, "columbia"), (4, "mexico"), (5, "linn")):
-    a, c = Image.open(f"print/area_{t}.png").convert("RGB"), Image.open(f"print/cov_{t}.png").convert("RGB")
-    out = Image.new("RGB", (3600, 335 + a.height), "white")
-    out.paste(ka, (0, 10)); out.paste(kc, (1836, 10)); out.paste(kl, (0, 288)); out.paste(a, (0, 335)); out.paste(c, (1836, 335))
+# one row per civic interest area, area left and coverage right; rows 72 px apart, the panel gutter
+for n, t, rows in ((3, "columbia", [""]), (4, "mexico", ["", "_2"]), (5, "linn", [""])):
+    pairs = [(Image.open(f"print/area_{t}{r}.png").convert("RGB"), Image.open(f"print/cov_{t}{r}.png").convert("RGB"))
+             for r in rows]
+    out = Image.new("RGB", (3600, 335 + sum(a.height for a, _ in pairs) + 72 * (len(pairs) - 1)), "white")
+    out.paste(ka, (0, 10)); out.paste(kc, (1836, 10)); out.paste(kl, (0, 288))
+    y = 335
+    for a, c in pairs:
+        out.paste(a, (0, y)); out.paste(c, (1836, y)); y += a.height + 72
     out.save(f"print/figure{n}_{t}.png", dpi=(600, 600)); print(f"print/figure{n}_{t}.png", out.size)
 PYEOF
   cd $ROOT

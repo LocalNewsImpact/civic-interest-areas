@@ -45,6 +45,7 @@ excludes every one of these folders' data files.
 | Advan Neighborhood Patterns Plus, Missouri destinations and Kansas destinations of Missouri residents, January–September 2026 | `neighborhood/raw/`, `neighborhood/raw_ks/` | Dewey Data, academic licence |
 | Advan Weekly Patterns Plus, Missouri, March 2026 | `weekly/raw/` | Dewey Data, academic licence |
 | Census boundary, population, American Community Survey (ACS), County Business Patterns, Business Dynamics Statistics and National Household Travel Survey (NHTS) files; state taxable sales | `census_dl/` | Public; cited in `CITATIONS.md` |
+| 2020 Census block populations of Audrain, Boone and Osage counties (PL 94-171) and the Census block-to-place assignment file, which assign each home block group to the town holding half or more of its residents | `census_dl/ref/pl2020_blocks_<county>.csv` (fetched from the Census API by `flows/build_homes.py` when absent), `census_dl/BlockAssign_ST29_MO.zip` | Public; cited in `CITATIONS.md` |
 | LEHD Origin-Destination Employment Statistics (LODES), 2023 | `free/` | Public; cited in `CITATIONS.md` |
 | OpenStreetMap extract, Missouri | `osm/` | Geofabrik |
 | Outlet registry and television market assignments | `data/registry/` | Missouri School of Journalism outlet registry; checksums committed in `data/registry/README.md` |

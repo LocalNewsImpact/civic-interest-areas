@@ -2,7 +2,7 @@
 
 Reads the adopted ensemble (flows/reach/probability_columbia.json) and the six redrawn ensembles that
 scripts/reproduce.sh (stage sensitivity) writes to flows/reach/sensitivity/prob_<variant>.json, each with its area
-rule applied by flows/area_core.py. For each variant and town: the share of the adopted area's places the redrawn area
+rule applied by flows/area_core.py. For each variant and civic interest area (Mexico has two): the share of the adopted area's places the redrawn area
 also includes, the Jaccard overlap, square miles, and frequent coverage (9+ stories a month) on the redrawn area.
 """
 import json, os, runpy, sys
@@ -14,15 +14,17 @@ os.environ["COV_LIB"] = "1"
 sys.argv = ["area_coverage_alignment.py"]
 A = runpy.run_path(str(root / "analysis/area_coverage_alignment.py"), run_name="cov_lib")
 cov, TIERS, MAPS, km2_of = A["cov"], A["TIERS"], A["MAPS"], A["km2_of"]
-TOWNS = ("Columbia", "Mexico", "Linn")
+AREAS = {"Columbia": ("Columbia", "1"), "Mexico": ("Mexico", "1"), "Mexico II": ("Mexico", "2"), "Linn": ("Linn", "1")}
+TOWNS = tuple(AREAS)   # each civic interest area: town and pattern rank
 VARIANTS = [   # (file key, constant, value): adopted direct 0.3, shared places 0.7, direction 0.5
     ("direct_half", "Direct news ties", "0.15"), ("direct_double", "Direct news ties", "0.6"),
     ("shared_half", "Ties through shared places", "0.35"), ("shared_double", "Ties through shared places", "1.4"),
     ("gamma_quarter", "Direction strength", "0.25"), ("gamma_one", "Direction strength", "1.0")]
 
 
-def area(pr, t):
-    return {k for k in pr[t]["1"]["core50_area_hexes"] if k in MAPS["hexes"]}
+def area(pr, a):
+    t, r = AREAS[a]
+    return {k for k in pr[t].get(r, {}).get("core50_area_hexes", []) if k in MAPS["hexes"]}
 
 
 def frequent(hs):
@@ -41,16 +43,16 @@ for key, constant, value in VARIANTS:
     m = {}
     for t in TOWNS:
         a1 = area(pr, t)
-        m[t] = (100 * len(a0[t] & a1) / len(a0[t]), len(a0[t] & a1) / len(a0[t] | a1), sq_mi(a1), frequent(a1))
+        m[t] = (100 * len(a0[t] & a1) / len(a0[t]), len(a0[t] & a1) / max(1, len(a0[t] | a1)), sq_mi(a1), frequent(a1))
     rows.append((constant, value, m))
 
-print("Table S2. Places kept | frequent coverage: Columbia, Mexico, Linn")
+print("Table S2. Places kept | frequent coverage: " + ", ".join(TOWNS))
 print("| Constant | Value | " + " | ".join(f"Kept {t}" for t in TOWNS) + " | " + " | ".join(f"Frequent {t}" for t in TOWNS) + " |")
-print("|---|---|" + "---:|" * 6)
+print("|---|---|" + "---:|" * (2 * len(TOWNS)))
 for constant, value, m in rows:
     print(f"| {constant} | {value} | " + " | ".join(f"{m[t][0]:.0f}%" for t in TOWNS) + " | "
           + " | ".join(f"{m[t][3]:.0f}%" for t in TOWNS) + " |")
-print("\nJaccard overlap | square miles: Columbia, Mexico, Linn")
+print("\nJaccard overlap | square miles: " + ", ".join(TOWNS))
 for constant, value, m in rows:
     print(f"  {constant:28s} {value:14s} " + "  ".join(f"{m[t][1]:.2f} {m[t][2]:,.0f}" for t in TOWNS))
 kept = [m[t][0] for _, _, m in rows[1:] for t in TOWNS]

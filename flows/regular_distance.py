@@ -64,6 +64,9 @@ for flows in sorted({c["flows"] for c in REG.values()}):
     g = f.groupby(["home_cbg", "dest_cbg", "dest_county"]).agg(w=("device_home_areas", "sum"), months=("month", "nunique")).reset_index()
     g = g[g.months >= MIN_MONTHS].assign(town=lambda d: d.home_cbg.map(bg_town))
     for t, (r, bs) in town_bgs.items():
+        if not bs:
+            print(f"{t}: no home block groups (build_homes.py); skipped")
+            continue
         pts = [BG[b] for b in bs if b in BG]
         P_ = sum(p for *_, p in pts)
         clon, clat = sum(lo * p for lo, _, p in pts) / P_, sum(la * p for _, la, p in pts) / P_
