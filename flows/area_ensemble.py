@@ -79,12 +79,15 @@ def held_constants(G):
     if GAMMA_S is not None:
         G["GAMMA"] = GAMMA_S
     return G
+BUILT = {"columbia": ("Columbia", "Mexico", "Linn")}     # the Columbia-Jefferson City TV market only
+if len(sys.argv) > 2 and sys.argv[2] == "--towns":    # the towns one run draws, for one process per town
+    print(" ".join(BUILT.get(region, ())))             # (scripts/reproduce.sh; merged by merge_ensembles.py)
+    raise SystemExit
 os.environ.pop("HEX_KM", None)
 sys.argv = ["confidence_layer.py", region]
 C = runpy.run_path(str(root / "analysis/confidence_layer.py"), run_name="confidence_lib")
 ns, P, MAPS, HALVES = C["ns"], C["P"], C["MAPS"], C["HALVES"]
 G3 = held_constants(ns["tie_map"].__globals__)
-BUILT = {"columbia": ("Columbia", "Mexico", "Linn")}     # the Columbia-Jefferson City TV market only
 towns = list(MAPS["towns"]) if ALL else list(BUILT.get(region, ()))
 if os.environ.get("TOWNS"):                # one process per subset of towns (merged afterwards; the members are the same)
     towns = [t for t in towns if t in os.environ["TOWNS"].split(",")]

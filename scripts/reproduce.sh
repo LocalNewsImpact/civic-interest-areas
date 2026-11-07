@@ -7,8 +7,8 @@
 # Stages: data travel coverage spillover factors public areas sensitivity figures. Logs: logs/reproduce/<step>.log.
 # Requires the Python environment in requirements.txt at .venv/, the Advan files under neighborhood/ and weekly/
 # (Dewey Data, academic licence) and the inputs listed in README.md (Inputs). The figures stage requires Google Chrome.
-# Runtime on one laptop core per process: about 7 hours, most of it in the travel patterns and the drawing ensembles;
-# the sensitivity stage adds about 2 hours on six cores.
+# Runtime: about 7 hours, most of it in the travel patterns and the drawing ensembles. The ensembles run one process
+# per town, JOBS at a time (default 8; each holds about 1.2 GB), so the areas and sensitivity stages use several cores.
 set -e
 ROOT=${0:A:h:h}
 cd $ROOT
@@ -17,6 +17,7 @@ LOG=$ROOT/logs/reproduce
 CHROME=${CHROME:-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}
 REGIONS=(columbia)        # Columbia-Jefferson City television market: the study's civic interest areas
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 MKL_NUM_THREADS=1 PYTHONHASHSEED=0
+JOBS=${JOBS:-8}           # ensemble processes at once
 mkdir -p $LOG
 stage() { [[ " ${STAGES:-data travel coverage spillover factors public areas sensitivity figures} " == *" $1 "* ]]; }
 step() {   # step <name> [VAR=value ...] <script> [args]
@@ -25,6 +26,14 @@ step() {   # step <name> [VAR=value ...] <script> [args]
   local t=$(date +%s)
   env $envs ${=PY} $ROOT/$@ > $LOG/$name.log 2>&1 || { echo "$name FAILED (see $LOG/$name.log)"; exit 1; }
   echo "$name $(( $(date +%s) - t ))s"
+}
+PIDS=()
+spawn() {  # spawn <step args>: a step in the background, at most JOBS at once
+  while :; do
+    local live=(); for p in $PIDS; do kill -0 $p 2>/dev/null && live+=$p; done; PIDS=($live)
+    (( ${#PIDS} < JOBS )) && break; sleep 5
+  done
+  step "$@" & PIDS+=$!
 }
 
 # Visits by home and destination county, the population calibration, distinct residents, the pass-through discount and
@@ -128,8 +137,19 @@ if stage areas; then
     step confidence_$r         analysis/confidence_layer.py $r
   done
   step regular_distance        flows/regular_distance.py
+  # one process per town, merged into the region's ensemble file
+  PARTS=$ROOT/flows/reach/ensemble_parts; mkdir -p $PARTS
   for r in $REGIONS; do
-    step ensemble_$r           flows/area_ensemble.py $r
+    for t in $(${=PY} flows/area_ensemble.py $r --towns); do
+      rm -f $PARTS/${r}_$t.json   # a failed town leaves no part, so its merge fails
+      spawn ensemble_${r}_$t TOWNS=$t OUT=$PARTS/${r}_$t.json flows/area_ensemble.py $r
+    done
+  done
+  wait
+  for r in $REGIONS; do
+    f=flows/reach/probability_$r.json
+    [[ $r == columbia ]] || f=$(${=PY} -c "import json; print(json.load(open('flows/regions.json'))['$r']['out'])")/probability.json
+    step merge_$r flows/merge_ensembles.py $f $(for t in $(${=PY} flows/area_ensemble.py $r --towns); do echo $PARTS/${r}_$t.json; done)
   done
   step area_core               flows/area_core.py $REGIONS
   for r in $REGIONS; do
@@ -147,10 +167,17 @@ if stage sensitivity; then
   V=(direct_half "TIE_W=0.15,0.15,0.7,0.7" direct_double "TIE_W=0.6,0.6,0.7,0.7" shared_half "TIE_W=0.3,0.3,0.35,0.35"
      shared_double "TIE_W=0.3,0.3,1.4,1.4" gamma_quarter "GAMMA=0.25" gamma_one "GAMMA=1.0")
   for k e in ${(kv)V}; do
-    ( step ensemble_$k $e OUT=$SENS/prob_$k.json flows/area_ensemble.py columbia &&
-      step area_core_$k PROB=$SENS/prob_$k.json flows/area_core.py columbia ) &
+    for t in $(${=PY} flows/area_ensemble.py columbia --towns); do
+      rm -f $SENS/part_${k}_$t.json
+      spawn ensemble_${k}_$t $e TOWNS=$t OUT=$SENS/part_${k}_$t.json flows/area_ensemble.py columbia
+    done
   done
   wait
+  for k in ${(k)V}; do
+    step merge_$k flows/merge_ensembles.py $SENS/prob_$k.json \
+      $(for t in $(${=PY} flows/area_ensemble.py columbia --towns); do echo $SENS/part_${k}_$t.json; done)
+    step area_core_$k PROB=$SENS/prob_$k.json flows/area_core.py columbia
+  done
   for k in ${(k)V}; do [[ -f $SENS/prob_$k.json ]] || { echo "sensitivity $k FAILED"; exit 1; }; done
   step judgment_constants      analysis/judgment_constants.py
 fi

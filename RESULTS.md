@@ -16,8 +16,8 @@ step writes its log to `logs/reproduce/<step>.log`; figures are written to `flow
 | Rural newsrooms' coverage follows travel less | coverage model term | `coverage_model` | `analysis/coverage_model.py` |
 | Road stops (gas stations, convenience stores, fast food) at half weight | Weekly Patterns Plus, March 2026 | `stop_weights` | `flows/build_stop_weights.py` |
 | Travel patterns: non-negative matrix factorization; patterns of 10%+ of a town's residents (at least 1,000, or half the town) and 10%+ of its travel, stable across starts and alternate months | one area per town | `patterns_columbia`, `market_columbia` | `flows/travel_patterns.py`, `flows/market_patterns.py` |
-| News ties (home outlets report on a place, its outlets on the home town, shared third places) | network tie | `confidence_columbia`, `ensemble_columbia` | `analysis/network_tie.py` |
-| Versions of the map | 6,912 | `ensemble_columbia` | `flows/area_ensemble.py` |
+| News ties (home outlets report on a place, its outlets on the home town, shared third places) | network tie | `confidence_columbia`, `ensemble_columbia_<town>` | `analysis/network_tie.py` |
+| Versions of the map | 6,912 | `ensemble_columbia_<town>` | `flows/area_ensemble.py` |
 | Regular-travel distance (90% of trips to places visited every month, January–September 2026) | 15 / 30 / 44 miles | `regular_distance` | `flows/regular_distance.py` |
 | Civic interest area: places in half or more of the versions; disconnected clusters within the regular-travel distance; towns whole | — | `area_core` | `flows/area_core.py` |
 | Coverage density tiers (frequent 9+, regular 2–8, infrequent under 2 stories a month); balanced diet (8 of 10 CIN categories) | — | `coverage_density_columbia`, `diet_columbia` | `analysis/area_coverage_alignment.py`, `analysis/cin_diet.py` |
@@ -76,7 +76,7 @@ The fitted values S2 lists for each measure, and the step that prints them.
 | D. Spillover | Refitted without each outlet in turn: broadcaster term 0.62–0.74, outlet term −0.43 to −0.36 | `spillover_outlets` | `analysis/spillover_outlets.py` ("leave one outlet out") |
 | C. Coverage | Leaving out one newsroom county: urban elasticity 0.42–0.51, rural 0.21–0.28; standard errors by county pair (0.052 / 0.049) and two-way (0.076 / 0.068); 88 newsroom counties, 10,032 pairs, 14,877 stories; θ (eight terms) | `coverage_model` | `analysis/coverage_model.py` |
 | B. Crossover | b by month gap 1–6 (0.61–0.63); first stage 0.82, F 4,082; crossover over b in [0, 1] (Audrain 40–44%, Boone 24–26%, Osage 45–66%); counted in every destination 66% / 33% / 82% | `build_unique_od`, `crossover_compare` | `analysis/build_unique_od.py`, `analysis/crossover_compare.py` |
-| E. Civic interest area | K, versions, regular-travel distance | `patterns_columbia`, `ensemble_columbia`, `regular_distance` | `flows/travel_patterns.py`, `flows/area_ensemble.py`, `flows/regular_distance.py` |
+| E. Civic interest area | K, versions, regular-travel distance | `patterns_columbia`, `ensemble_columbia_<town>`, `regular_distance` | `flows/travel_patterns.py`, `flows/area_ensemble.py`, `flows/regular_distance.py` |
 | E. Civic interest area | Sensitivity: 93–100% of places kept, frequent coverage within 6 points (Table S2) | `judgment_constants` | `analysis/judgment_constants.py` |
 
 ## Supplementary material S3
