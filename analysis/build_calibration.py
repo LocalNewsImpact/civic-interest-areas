@@ -153,7 +153,7 @@ print(f"phantom home block group-months (own > {PHANTOM:g} x expected): {bg.phan
       f"({bg.phantom.mean():.1%}), holding {bg.own[bg.phantom == 1].sum() / bg.own.sum():.1%} of devices seen at home")
 print(cal[cal.county.isin(["29007", "29019", "29151"])].pivot(index="month", columns="county", values="factor").round(2).to_string())
 
-# Study towns: estimated residents (mean over Jan-Jul, the travel-pattern months) under each calibration, against the
+# Study towns: estimated residents (mean over Jan-Jul, the months Advan reports on 2020 block groups) under each calibration, against the
 # ACS population of the same block groups (flows/reach/*/homes.csv, written by flows/build_homes.py)
 towns = {"Columbia": "", "Mexico": "", "Linn": ""}
 jj = bg[bg.month <= "2026-07"].merge(cal[["county", "month", "factor", "factor_trimmed", "factor_statewide"]], on=["county", "month"])

@@ -37,7 +37,7 @@
   <p class="dd-note" id="note"></p>
   <figcaption class="dd-footer">
     <span class="dd-source">Source: Missouri School of Journalism analysis of local news stories (March 2026) and Advan
-      Research, Neighborhood Patterns Plus (Dewey Data), January–July 2026; U.S. Census Bureau 2020 block groups and places;
+      Research, Neighborhood Patterns Plus (Dewey Data), January–September 2026; U.S. Census Bureau 2020 block groups and places;
       OpenStreetMap.</span>
   </figcaption>
 </figure>
@@ -235,14 +235,14 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
       `both visit and report on; percent, by 3 km hexagon`
     :
     `About ${P.residents.toLocaleString()} residents of ${who} (${Math.round(100 * P.share)}%) travel in this pattern, ` +
-    (MEASURE === "travel" || SX === "0" ? `January\u2013July 2026. Travel only, no news coverage: how much they go to each place, by 3 km hexagon, home = 100`
-      : SX === "travel" ? `January\u2013July 2026. How local each place is: how much they go there, by 3 km hexagon, home = 100; ` +
+    (MEASURE === "travel" || SX === "0" ? `January\u2013September 2026. Travel only, no news coverage: how much they go to each place, by 3 km hexagon, home = 100`
+      : SX === "travel" ? `January\u2013September 2026. How local each place is: how much they go there, by 3 km hexagon, home = 100; ` +
         `dots: where news coverage strengthens the tie`
-      : SX === "netcov" ? `January\u2013July 2026. How local each place is: their travel there, strengthened by news ties; and ` +
+      : SX === "netcov" ? `January\u2013September 2026. How local each place is: their travel there, strengthened by news ties; and ` +
         `where the newsrooms inside their market report (${Object.keys(P0.newsrooms || {}).join(", ")}), at up to 0.3 of a travel tie; by 3 km hexagon, home = 100`
-      : SX === "net" ? `January\u2013July 2026. How local each place is: their travel there, strengthened by news ties \u2013 ` +
+      : SX === "net" ? `January\u2013September 2026. How local each place is: their travel there, strengthened by news ties \u2013 ` +
         `coverage each way, and places both visit and report on; by 3 km hexagon, home = 100`
-      : `January\u2013July 2026. How local each place is: their travel there, weighted by news coverage both ways ` +
+      : `January\u2013September 2026. How local each place is: their travel there, weighted by news coverage both ways ` +
         `(home outlets' stories located there; its outlets' stories located in home); by 3 km hexagon, home = 100`);
   const key = d3.select("#key");
   const ramp = key.append("span").attr("class", "dd-ramp");
@@ -302,7 +302,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     document.getElementById("subtitle").textContent = `Across ${PR.members.toLocaleString()} equally plausible ways of drawing ` +
       `the map; outlined: the area, places likely 50% or more (${km_.toLocaleString()} km\u00b2)`;
     document.getElementById("note").textContent = `About ${P.residents.toLocaleString()} residents of ${who} ` +
-      `(${Math.round(100 * P.share)}%) travel in this pattern, January\u2013July 2026. A place's tie: their travel there, ` +
+      `(${Math.round(100 * P.share)}%) travel in this pattern, January\u2013September 2026. A place's tie: their travel there, ` +
       `strengthened by news ties \u2013 coverage each way, and places both visit and report on. Each of the ` +
       `${PR.members.toLocaleString()} versions (seven drawing choices: hexagon 2\u20134 km across, busiest place at 50 or 100, ` +
       `travel spread within towns and rural areas or not, spatial lag, selectivity, distance rule, reach; and the weight ` +
@@ -310,19 +310,19 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
       `so the likelihood is conditional on that range of choices. The area: the home body and every other piece of three or ` +
       `more hexagons likely 50% or more${PARTN_ && PARTN_.length ? ` (${PARTN_.join(", ")})` : ""}, provided it starts within ` +
       `${LIM_} km of the town's centre \u2013 the distance within which 90% of its residents' regular travel (places visited ` +
-      `in every one of the seven months) lies; pieces ` +
+      `in every one of the nine months) lies; pieces ` +
       `of one or two hexagons are left out of the outline (their shading stays).`;
     if (ONLY) {
       const TOWNS_ = Object.entries(PR.core50_area_towns || {}).filter(([, t_]) => t_.added > 0);   // towns the rule adds
       document.getElementById("subtitle").textContent = `Across ${PR.members.toLocaleString()} equally plausible ways of ` +
         `drawing the map: every place likely 50% or more to be part of the area (${SQMI.toLocaleString()} square miles)`;
       document.getElementById("note").textContent = `About ${P.residents.toLocaleString()} residents of ${who} ` +
-        `(${Math.round(100 * P.share)}%) travel in this pattern, January–July 2026. A place's tie: their travel there, ` +
+        `(${Math.round(100 * P.share)}%) travel in this pattern, January–September 2026. A place's tie: their travel there, ` +
         `strengthened by news ties – coverage each way, and places both visit and report on. A place's likelihood is ` +
         `the share of it included, averaged over ${PR.members.toLocaleString()} versions of the map; the versions vary how the map is ` +
         `drawn and how much the news ties count, from not at all to double. The area: every place likely 50% or more, ` +
         `within ${Math.round(LIM_ / 1.609)} miles of the town's center – the distance within which 90% of its residents' ` +
-        `regular travel (places visited in every one of the seven months) lies` +
+        `regular travel (places visited in every one of the nine months) lies` +
         `${PARTN_.length ? `; it includes ${PARTN_.length > 1 ? `${PARTN_.slice(0, -1).join(", ")} and ${PARTN_.at(-1)}` : PARTN_[0]}` : ""}` +
         `${TOWNS_.length ? `. A town is part of the area when half or more of the versions place it inside the area: ` +
           TOWNS_.map(([n_, t_]) => `${n_} (${Math.round(100 * t_.in_area)}%)`).join(", ") : ""}.`;
@@ -336,7 +336,7 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
     item(`<span style="display:inline-block;width:14px;height:10px;background:#cdb98a;margin-right:4px"></span>Road between`);
   }
   if (CONFM) {
-    document.getElementById("subtitle").textContent += `. Lighter: holds in only one half of the year (January, March, May, July or February, April, June)`;
+    document.getElementById("subtitle").textContent += `. Lighter: holds in only one half of the year (January, March, May, July, September or February, April, June, August)`;
     item(`<span style="display:inline-block;width:14px;height:10px;background:${RAMP[3]};opacity:0.4;margin-right:4px"></span>One half of the year only`);
   }
   if (KEYP === "lines") key.selectAll("*").remove();
@@ -690,8 +690,10 @@ const probUrl = (r) => r === "columbia" ? "reach/probability_columbia.json" : `r
   const cand = data.labels.map((l) => { const [x, y] = proj([l.lon, l.lat]); return { ...l, x, y, v: localAt(x, y) }; })
     .filter((l) => inView(l.x, l.y));
   const home = cand.filter((l) => l.name === TOWN);
-  // every non-home part of the area is labelled by its largest town (area_core.py names it), ahead of the other towns
-  const PARTN = new Set(PRB ? (PR.core50_parts || []).filter((d) => !d.home).map((d) => d.name) : []);
+  // every non-home part of the area is labelled by its largest town (area_core.py names it), and every whole town the
+  // rule adds (its centre can sit on a hexagon under 50%), ahead of the other towns -- on both panels
+  const PARTN = new Set([...(PRB ? (PR.core50_parts || []).filter((d) => !d.home).map((d) => d.name) : []),
+    ...(PR && !STORY_LAYER ? Object.entries(PR.core50_area_towns || {}).filter(([n_, t_]) => t_.added > 0 && n_ !== TOWN).map(([n_]) => n_) : [])]);
   const rankOf = (l) => (PARTN.has(l.name) ? 1e9 : 0) + l.v * Math.sqrt(l.pop || 1);
   const market = cand.filter((l) => l.name !== TOWN && (l.v >= FLOOR || PARTN.has(l.name))).sort((a, b) => rankOf(b) - rankOf(a)).slice(0, 8);
   const context = cand.filter((l) => l.name !== TOWN && l.v < FLOOR && (l.pop || 0) >= 20000).sort((a, b) => b.pop - a.pop).slice(0, 4);

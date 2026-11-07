@@ -1,4 +1,5 @@
-"""Travel patterns: the recurring ways residents of Audrain, Boone and Osage travel, January-July 2026.
+"""Travel patterns: the recurring ways residents of Audrain, Boone and Osage travel, January-September 2026
+(2026-11-07: nine months, from seven; August-September restated on 2020 block groups by build_flows_bg2020.py).
 
 Advan counts residents of a home block group seen in each destination block group; it does not link one person's trips,
 so cohorts of people are not observed. Instead each home block group's travel is decomposed into a few recurring
@@ -17,7 +18,7 @@ pattern holds 10%+ of some study town's estimated residents and 10%+ of that tow
 reconstructed reach), and at least 1,000 of them or half the town's residents, whichever is fewer (2026-11-03: the floor
 was 1,000 for every town; half the town for a town under 2,000 holds a small town to the same standard as a large one),
 and has matched cosine 0.9+ across 10 random starts (median) and between fits to odd and to even months. Per town, not per market: the area rule is per town, and a market's share depends on which counties form it.
-The kept fit is the lowest-loss of the 10 starts. Held-out month error (all 105 4 / 2 / 1 month partitions) is printed
+The kept fit is the lowest-loss of the 10 starts. Held-out month error (all 252 6 / 2 / 1 month partitions) is printed
 as a persistence diagnostic.
 Writes <region out>/patterns.json and patterns_halves.json (the odd- and even-month fits).
 """
@@ -38,7 +39,7 @@ R = here.parent / CFG["out"]
 exec(open(here / "build_cousub_shares.py").read().split("\ndef read_shp(")[0].split("from shapely")[0])
 DMA = ["29007", "29019", "29027", "29041", "29051", "29053", "29089", "29125", "29131", "29135", "29139", "29141",
        "29151", "29175"]
-MONTHS = [f"2026-0{m}" for m in range(1, 8)]
+MONTHS = [f"2026-0{m}" for m in range(1, 10)]
 f = pd.read_csv(here.parent / CFG["flows"],
                 dtype={"dest_cbg": str, "home_cbg": str, "dest_county": str, "home_county": str},
                 usecols=["month", "dest_cbg", "dest_county", "home_cbg", "device_home_areas"])
@@ -148,7 +149,7 @@ def nmf(X, k, iters=600, seed=0, H=None, M=None):
 # RESIDENTS (2026-10-24; replaces devices at home / the county-month factor): each block group's residents
 # through the calibrated per-block-group denominator of crossover (analysis/crossover_bg_month_mo_2026.csv,
 # build_unique_od.py): people = devices x ACS population / D_h, so a block group's residents are its ACS 2020-2024
-# population (B01003), mean over January-July. Mixed membership: a block group's residents are split across the
+# population (B01003), mean over the months observed. Mixed membership: a block group's residents are split across the
 # patterns in proportion to the travel each carries.
 _cb = pd.read_csv(here.parent / "analysis/crossover_bg_month_mo_2026.csv", dtype={"home_bg": str}, usecols=["month", "home_bg", "acs_population"])
 _cb = _cb[_cb.month.isin(MONTHS) & _cb.home_bg.isin(hi)]
@@ -173,8 +174,8 @@ from scipy.optimize import linear_sum_assignment
 #                 MARKET depends on which home counties form the market (the same number of residents passes in a small
 #                 market and fails in a large one). A 5% level is not considered.
 #   (c) stability (i) across 10 random starts, the pattern's median matched cosine to the kept solution >= 0.9;
-#                 (ii) MONTH-SPLIT STABILITY: refitted on odd months (Jan, Mar, May, Jul) and on even months (Feb, Apr,
-#                 Jun) separately (W and H both; best of 5 starts each, the two halves on DISJOINT seeds: odd 0-4, even
+#                 (ii) MONTH-SPLIT STABILITY: refitted on odd months (Jan, Mar, May, Jul, Sep) and on even months (Feb,
+#                 Apr, Jun, Aug) separately (W and H both; best of 5 starts each, the two halves on DISJOINT seeds: odd 0-4, even
 #                 100-104); each half's patterns matched to the KEPT patterns (Hungarian, cosine), and
 #                 for every kept pattern the cosine between its odd and its even match >= 0.9 (2026-10-24: matched in
 #                 the kept order -- before, the odd fit's order was reported as if it were the kept one)
@@ -323,10 +324,10 @@ criteria = {str(k): {"towns": {t_: {n_: np.round(v, 4).tolist() for n_, v in tt.
                      "cos_kept_odd": np.round(c_["cos_kept_odd"], 4).tolist(), "cos_kept_even": np.round(c_["cos_kept_even"], 4).tolist(),
                      "carriers": [carrier(c_, j) for j in range(k)], "fails": binding[k]} for k, c_ in crit.items()}
 
-# PERSISTENCE DIAGNOSTIC (not the K rule): held-out months, every K on the same splits -- all 105 distinct 4 / 2 / 1
-# partitions of the seven months (35 training sets; block-group weights refitted on two held-out months, scored on the
-# third). Cached by the travel cube's checksum (flows/reach/**/persistence.json): the data and seeds fix the result.
-TRAIN = [list(c) for c in itertools.combinations(range(len(MONTHS)), 4)]
+# PERSISTENCE DIAGNOSTIC (not the K rule): held-out months, every K on the same splits -- all 252 distinct 6 / 2 / 1
+# partitions of the nine months (84 training sets; block-group weights refitted on two held-out months, scored on the
+# third; with seven months it was 105 4 / 2 / 1 partitions). Cached by the travel cube's checksum (flows/reach/**/persistence.json): the data and seeds fix the result.
+TRAIN = [list(c) for c in itertools.combinations(range(len(MONTHS)), len(MONTHS) - 3)]
 TESTS = lambda tr: [([a, b], c) for c in [m for m in range(len(MONTHS)) if m not in tr]
                     for a, b in [[m for m in range(len(MONTHS)) if m not in tr and m != c]]]
 key = hashlib.sha256(cube.tobytes() + MASK.tobytes()).hexdigest()

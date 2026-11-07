@@ -38,6 +38,7 @@ if stage data; then
   step build_road_stop_share   analysis/build_road_stop_share.py
   step crossover_compare       analysis/crossover_compare.py
   step extract_three_counties  neighborhood/extract.py $ROOT/neighborhood/raw $ROOT/neighborhood/flows_audrain_boone_osage_2026.csv
+  step flows_bg2020            flows/build_flows_bg2020.py   # August-September on 2020 block groups: the areas' nine months
   step cousub_geo              flows/build_cousub_shares.py --geo
   step destinations            flows/build_destinations.py
 fi

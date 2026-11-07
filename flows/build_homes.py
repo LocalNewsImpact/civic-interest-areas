@@ -1,8 +1,8 @@
 """Home block groups of the Columbia-Jefferson City TV market's study counties (Audrain, Boone, Osage), for
 travel_patterns.py and the scripts after it.
 
-From neighborhood/flows_audrain_boone_osage_2026.csv (Advan Neighborhood Patterns Plus, distinct devices by home block
-group, January-July 2026: the months on 2020 block groups). A home block group is one with 50+ residents seen at home in
+From neighborhood/flows_audrain_boone_osage_2026_bg2020.csv (Advan Neighborhood Patterns Plus, distinct devices by home
+block group, January-September 2026, August-September restated on 2020 block groups by build_flows_bg2020.py). A home block group is one with 50+ residents seen at home in
 a month. Its town is the study town (Columbia, Mexico or Linn), and its place the 2020 Census place, in which half or
 more of its 2020 Census population lives: block populations (P1_001N, 2020 PL 94-171 redistricting file, Census API,
 cached in census_dl/ref/pl2020_blocks_<county>.csv) summed by the place each block lies in (Census block assignment file,
@@ -13,7 +13,7 @@ tenth of the town's area inside the block group. It left out half of Mexico's re
 city line.)
 
 usage: build_homes.py [columbia]. Writes flows/reach/homes.csv: home_cbg, county, town, place, lon, lat, own_mean
-(residents seen at home, January-July 2026 mean), months; prints each study town's coverage.
+(residents seen at home, January-September 2026 mean), months; prints each study town's coverage.
 """
 import io
 import json
@@ -28,12 +28,12 @@ here = Path(__file__).parent
 DL = here.parent / "census_dl"
 OUT = here / "reach"
 OUT.mkdir(exist_ok=True)
-MONTHS = [f"2026-0{m}" for m in range(1, 8)]
+MONTHS = [f"2026-0{m}" for m in range(1, 10)]
 MIN_OWN = 50
 SHARE = 0.5                                     # of the block group's 2020 population inside the place
 TOWNS = {"2915670": "Columbia", "2947648": "Mexico", "2943238": "Linn"}
 
-f = pd.read_csv(here.parent / "neighborhood/flows_audrain_boone_osage_2026.csv",
+f = pd.read_csv(here.parent / "neighborhood/flows_audrain_boone_osage_2026_bg2020.csv",
                 dtype={"dest_cbg": str, "home_cbg": str},
                 usecols=["month", "dest_cbg", "home_cbg", "device_home_areas"])
 f = f[f.month.isin(MONTHS)]

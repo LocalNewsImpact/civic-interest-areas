@@ -2,7 +2,8 @@
 the settings ensemble (p >= 0.5, flows/area_ensemble.py; authors, 2026-10-25); this script gives the single
 adopted-setting drawing (?prob=0) and its drawing aids. Two ties: the NETWORK TIE (market_patterns.py idx["net"]: travel
 strengthened by news ties; the paper's map) and TRAVEL ONLY (idx["travel"]: no news term; the supply QA footprint).
-Each computed from odd months (January, March, May, July 2026) and from even months (February, April, June) on
+Each computed from odd months (January, March, May, July, September 2026) and from even months (February, April, June,
+August) on
 INDEPENDENT HALVES: each half's own W and H, refitted on that half's months on disjoint seeds and matched to the kept
 patterns (travel_patterns.py, patterns_halves.json), and that half's travel. The map (?conf=1 with ?prob=0) draws a
 shown hexagon lighter when it clears the map's floor in only one half. Holding in both halves is MONTH-SPLIT STABILITY,

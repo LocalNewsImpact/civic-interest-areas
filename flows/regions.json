@@ -2,7 +2,7 @@
  "columbia": {
   "dma": "Columbia - Jefferson City, MO DMA",
   "market": "Columbia–Jefferson City TV market",
-  "flows": "neighborhood/flows_audrain_boone_osage_2026.csv",
+  "flows": "neighborhood/flows_audrain_boone_osage_2026_bg2020.csv",
   "out": "flows/reach",
   "towns": {
    "Columbia": [
