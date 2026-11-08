@@ -102,6 +102,12 @@ staged data file not listed in `PUBLIC_DATA.txt` and any file over 1 MB.
 
 Code: MIT (`LICENSE`). Data created by the project: CC BY 4.0 (`LICENSE-DATA.md`).
 
+## How to cite
+
+Kiesow, D., Artman, H., & Dial, L. (2026). *Beyond Counties: Mapping Civic Interest Areas (replication code)* [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.24056822
+
+The DOI resolves to the latest release; each release also has its own DOI on Zenodo.
+
 ## Map pages
 
 `make serve` serves the map pages at `http://127.0.0.1:8765`. The civic interest area map for a town:
