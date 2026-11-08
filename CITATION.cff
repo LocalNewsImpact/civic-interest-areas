@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite it as below."
+type: software
+title: "Beyond Counties: Mapping Civic Interest Areas (replication code)"
+authors:
+  - family-names: Kiesow
+    given-names: Damon
+    orcid: "https://orcid.org/0000-0002-7400-4018"
+    affiliation: "Missouri School of Journalism, University of Missouri"
+  - family-names: Artman
+    given-names: Hannah
+    orcid: "https://orcid.org/0000-0002-2889-323X"
+    affiliation: "Missouri School of Journalism, University of Missouri"
+  - family-names: Dial
+    given-names: Levi
+    orcid: "https://orcid.org/0009-0006-6969-9405"
+    affiliation: "MU Institute for Data Science and Informatics, University of Missouri"
+repository-code: "https://github.com/LocalNewsImpact/civic-interest-areas"
+license: MIT
+keywords:
+  - local news
+  - news deserts
+  - civic interest areas
+  - mobility data
+  - Missouri
