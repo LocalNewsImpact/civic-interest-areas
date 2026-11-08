@@ -59,10 +59,9 @@ STUDY = {t_: c_ for t_, (c_, _) in TOWNS.items()}
 HOME_PLACE = {t_: p_ for t_, (_, p_) in TOWNS.items()}
 import numpy as np
 hm_ = pd.read_csv(R / "homes.csv", dtype={"home_cbg": str, "place": str}).set_index("home_cbg")
-# a town's home block groups: those homes.csv assigns to it (build_homes.py: the block group's centre in the town, OR
-# 10%+ of the town's area inside the block group). The 10% rule takes in fringe block groups whose residents mostly live
-# outside the town (Linn: its one block group covers the town and the land around it); they are the town's residents
-# here, and their units are home (100) on the map
+# a town's home block groups: those homes.csv assigns to it (build_homes.py: half or more of the block group's 2020
+# population lives in the town). A block group can reach past the town line (Linn: its one block group covers the town
+# and the land around it); its residents are the town's residents here, and its units are home (100) on the map
 town_bgs = lambda town: [h for h in hm_.index if hm_.town.get(h) == town or hm_.place.get(h) == HOME_PLACE[town]]
 # the town's own units: its block groups' towns and rural block groups, and the town itself -- home on the map, so masked
 # from its travel before the busiest place is set to 50 and before county shares (as network_tie.py, 2026-10-24)
@@ -73,6 +72,10 @@ Wa, Ha, Xa = np.array(P["W"]), np.array(P["H"]), np.array(P["X"])
 out = {}
 for town, home in STUDY.items():
     hbi = [P["homes"].index(h) for h in town_bgs(town) if h in P["homes"]]
+    if not hbi:                                  # no block group has half its residents in the town (build_homes.py)
+        print(f"\n## {town}: no home block groups; no market")
+        out[town] = []
+        continue
     ppl = (people_a[hbi, None] * member_a[hbi]).sum(0)
     t = {"people": [round(float(x)) for x in ppl], "share": [float(x) for x in ppl / ppl.sum()]}
     # THE TOWN'S OWN TRAVEL IN EACH PATTERN: a pattern is fitted across all 158 block groups, so it carries other

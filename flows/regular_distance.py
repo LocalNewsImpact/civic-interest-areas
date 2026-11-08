@@ -1,10 +1,10 @@
 """REGULAR-TRAVEL DISTANCE per study town (authors, 2026-10-25): "People are not driving 120 miles for errands or even 60
 miles regularly." D80 / D90 / D95 = the distance from the town's CENTRE OF POPULATION (the 2020-population-weighted mean
 of its home block groups' Census population centres) within which 80 / 90 / 95% of its residents' regular travel lies.
-Data: Advan Neighborhood Patterns Plus, January-July 2026, the block-group flows the patterns are fitted on
+Data: Advan Neighborhood Patterns Plus, January-September 2026, the block-group flows the patterns are fitted on
 (regions.json "flows"; DEVICE_HOME_AREAS by month, destination block group and home block group). The town's home block
 groups are those of the patterns (<region out>/homes.csv: town, or the town's place).
-REGULAR = a destination block group seen from a home block group in EVERY ONE of the 7 months (authors, 2026-10-25;
+REGULAR = a destination block group seen from a home block group in EVERY ONE of the 9 months (authors, 2026-10-25;
 stricter than analysis/activity_space.py's 4+ of 7, which gave D90 Columbia 103.0, Mexico 51.8, Linn 101.5 km). Tested
 per home block group, the patterns' home unit (per TOWN, every destination of a large town passes). Weight = residents
 seen there (device home counts) summed over the months -- activity_space.py's visit weight -- then over the town's home
@@ -24,8 +24,8 @@ import pandas as pd
 here = Path(__file__).resolve().parent
 root = here.parent
 REG = {k: v for k, v in json.load(open(here / "regions.json")).items() if k == "columbia"}   # the Columbia-Jefferson City TV market only
-MONTHS = [f"2026-0{m}" for m in range(1, 8)]
-MIN_MONTHS = int(os.environ.get("MIN_MONTHS", 7))      # regular: seen in every one of the 7 months
+MONTHS = [f"2026-0{m}" for m in range(1, 10)]
+MIN_MONTHS = int(os.environ.get("MIN_MONTHS", 9))      # regular: seen in every one of the 9 months
 ref = root / "census_dl/ref"
 cp = pd.concat([pd.read_csv(ref / f"CenPop2020_Mean_BG{s}.txt", dtype=str, encoding="utf-8-sig") for s in ("29", "20")])
 cp["bg"] = cp.STATEFP + cp.COUNTYFP + cp.TRACTCE + cp.BLKGRPCE
@@ -64,6 +64,9 @@ for flows in sorted({c["flows"] for c in REG.values()}):
     g = f.groupby(["home_cbg", "dest_cbg", "dest_county"]).agg(w=("device_home_areas", "sum"), months=("month", "nunique")).reset_index()
     g = g[g.months >= MIN_MONTHS].assign(town=lambda d: d.home_cbg.map(bg_town))
     for t, (r, bs) in town_bgs.items():
+        if not bs:
+            print(f"{t}: no home block groups (build_homes.py); skipped")
+            continue
         pts = [BG[b] for b in bs if b in BG]
         P_ = sum(p for *_, p in pts)
         clon, clat = sum(lo * p for lo, _, p in pts) / P_, sum(la * p for _, la, p in pts) / P_

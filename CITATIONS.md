@@ -21,6 +21,12 @@ U.S. Census Bureau. (2021a). *Cartographic boundary files: 2020* [Data set]. htt
 
 U.S. Census Bureau. (2021b). *Centers of population: 2020 Census* [Data set]. https://www.census.gov/geographies/reference-files/time-series/geo/centers-population.html
 
+U.S. Census Bureau. (2021c). *2020 Census redistricting data (Public Law 94-171) summary file: Table P1, total population, census blocks* [Data set]. https://www.census.gov/programs-surveys/decennial-census/about/rdo/summary-files.html
+
+U.S. Census Bureau. (2021d). *Block assignment files: 2020 Census, incorporated places and census designated places, Missouri* [Data set]. https://www.census.gov/geographies/reference-files/time-series/geo/block-assignment-files.html
+
+U.S. Census Bureau. (2021e). *2010 Census tabulation block to 2020 Census tabulation block relationship file, Missouri* [Data set]. https://www.census.gov/geographies/reference-files/time-series/geo/relationship-files.2020.html
+
 U.S. Census Bureau. (2023). *County adjacency file: 2023* [Data set]. https://www.census.gov/geographies/reference-files/time-series/geo/county-adjacency.html
 
 U.S. Census Bureau. (2024). *County Business Patterns: 2022* [Data set]. https://www.census.gov/data/datasets/2022/econ/cbp/2022-cbp.html

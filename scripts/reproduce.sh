@@ -7,8 +7,8 @@
 # Stages: data travel coverage spillover factors public areas sensitivity figures. Logs: logs/reproduce/<step>.log.
 # Requires the Python environment in requirements.txt at .venv/, the Advan files under neighborhood/ and weekly/
 # (Dewey Data, academic licence) and the inputs listed in README.md (Inputs). The figures stage requires Google Chrome.
-# Runtime on one laptop core per process: about 7 hours, most of it in the travel patterns and the drawing ensembles;
-# the sensitivity stage adds about 2 hours on six cores.
+# Runtime: about 7 hours, most of it in the travel patterns and the drawing ensembles. The ensembles run one process
+# per town, JOBS at a time (default 8; each holds about 1.2 GB), so the areas and sensitivity stages use several cores.
 set -e
 ROOT=${0:A:h:h}
 cd $ROOT
@@ -17,6 +17,7 @@ LOG=$ROOT/logs/reproduce
 CHROME=${CHROME:-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}
 REGIONS=(columbia)        # Columbia-Jefferson City television market: the study's civic interest areas
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 MKL_NUM_THREADS=1 PYTHONHASHSEED=0
+JOBS=${JOBS:-8}           # ensemble processes at once
 mkdir -p $LOG
 stage() { [[ " ${STAGES:-data travel coverage spillover factors public areas sensitivity figures} " == *" $1 "* ]]; }
 step() {   # step <name> [VAR=value ...] <script> [args]
@@ -25,6 +26,14 @@ step() {   # step <name> [VAR=value ...] <script> [args]
   local t=$(date +%s)
   env $envs ${=PY} $ROOT/$@ > $LOG/$name.log 2>&1 || { echo "$name FAILED (see $LOG/$name.log)"; exit 1; }
   echo "$name $(( $(date +%s) - t ))s"
+}
+PIDS=()
+spawn() {  # spawn <step args>: a step in the background, at most JOBS at once
+  while :; do
+    local live=(); for p in $PIDS; do kill -0 $p 2>/dev/null && live+=$p; done; PIDS=($live)
+    (( ${#PIDS} < JOBS )) && break; sleep 5
+  done
+  step "$@" & PIDS+=$!
 }
 
 # Visits by home and destination county, the population calibration, distinct residents, the pass-through discount and
@@ -38,6 +47,7 @@ if stage data; then
   step build_road_stop_share   analysis/build_road_stop_share.py
   step crossover_compare       analysis/crossover_compare.py
   step extract_three_counties  neighborhood/extract.py $ROOT/neighborhood/raw $ROOT/neighborhood/flows_audrain_boone_osage_2026.csv
+  step flows_bg2020            flows/build_flows_bg2020.py   # August-September on 2020 block groups: the areas' nine months
   step cousub_geo              flows/build_cousub_shares.py --geo
   step destinations            flows/build_destinations.py
 fi
@@ -127,8 +137,19 @@ if stage areas; then
     step confidence_$r         analysis/confidence_layer.py $r
   done
   step regular_distance        flows/regular_distance.py
+  # one process per town, merged into the region's ensemble file
+  PARTS=$ROOT/flows/reach/ensemble_parts; mkdir -p $PARTS
   for r in $REGIONS; do
-    step ensemble_$r           flows/area_ensemble.py $r
+    for t in $(${=PY} flows/area_ensemble.py $r --towns); do
+      rm -f $PARTS/${r}_$t.json   # a failed town leaves no part, so its merge fails
+      spawn ensemble_${r}_$t TOWNS=$t OUT=$PARTS/${r}_$t.json flows/area_ensemble.py $r
+    done
+  done
+  wait
+  for r in $REGIONS; do
+    f=flows/reach/probability_$r.json
+    [[ $r == columbia ]] || f=$(${=PY} -c "import json; print(json.load(open('flows/regions.json'))['$r']['out'])")/probability.json
+    step merge_$r flows/merge_ensembles.py $f $(for t in $(${=PY} flows/area_ensemble.py $r --towns); do echo $PARTS/${r}_$t.json; done)
   done
   step area_core               flows/area_core.py $REGIONS
   for r in $REGIONS; do
@@ -146,16 +167,24 @@ if stage sensitivity; then
   V=(direct_half "TIE_W=0.15,0.15,0.7,0.7" direct_double "TIE_W=0.6,0.6,0.7,0.7" shared_half "TIE_W=0.3,0.3,0.35,0.35"
      shared_double "TIE_W=0.3,0.3,1.4,1.4" gamma_quarter "GAMMA=0.25" gamma_one "GAMMA=1.0")
   for k e in ${(kv)V}; do
-    ( step ensemble_$k $e OUT=$SENS/prob_$k.json flows/area_ensemble.py columbia &&
-      step area_core_$k PROB=$SENS/prob_$k.json flows/area_core.py columbia ) &
+    for t in $(${=PY} flows/area_ensemble.py columbia --towns); do
+      rm -f $SENS/part_${k}_$t.json
+      spawn ensemble_${k}_$t $e TOWNS=$t OUT=$SENS/part_${k}_$t.json flows/area_ensemble.py columbia
+    done
   done
   wait
+  for k in ${(k)V}; do
+    step merge_$k flows/merge_ensembles.py $SENS/prob_$k.json \
+      $(for t in $(${=PY} flows/area_ensemble.py columbia --towns); do echo $SENS/part_${k}_$t.json; done)
+    step area_core_$k PROB=$SENS/prob_$k.json flows/area_core.py columbia
+  done
   for k in ${(k)V}; do [[ -f $SENS/prob_$k.json ]] || { echo "sensitivity $k FAILED"; exit 1; }; done
   step judgment_constants      analysis/judgment_constants.py
 fi
 
 # Figures 1-5: the TV market locator; the data-to-measures flow (300 dpi PNG and PDF); and one panel per town, its civic
-# interest area beside its coverage on one fitted scale (Figures 3-5). Figures 1 and 3-5 are 6.0 in wide at 600 dpi.
+# interest area beside its coverage on one fitted scale (Figures 3-5), Mexico's two areas as two rows of Figure 4.
+# Figures 1 and 3-5 are 6.0 in wide at 600 dpi.
 if stage figures; then
   cd $ROOT/flows
   python3 -m http.server 8765 --bind 127.0.0.1 > /dev/null 2>&1 &
@@ -189,6 +218,9 @@ sys.exit(0 if ImageChops.difference(im, Image.new('RGB', im.size, 'white')).getb
     shot "market_pattern_print.html?town=$t&rank=1&paper=1&panel=1&fit=1&ls=1.45&ground=1" "area_${(L)t}.png" 528 3.3409
     shot "market_pattern_print.html?town=$t&rank=1&measure=coverage&paper=1&panel=1&fit=1&ls=1.45&ground=1" "cov_${(L)t}.png" 528 3.3409
   done
+  # Mexico's second civic interest area (13% of its residents, toward Columbia): Figure 4's second row
+  shot "market_pattern_print.html?town=Mexico&rank=2&paper=1&panel=1&fit=1&ls=1.45&ground=1" area_mexico_2.png 528 3.3409
+  shot "market_pattern_print.html?town=Mexico&rank=2&measure=coverage&paper=1&panel=1&fit=1&ls=1.45&ground=1" cov_mexico_2.png 528 3.3409
   # keys at the type size they have when a 440 CSS px key is scaled to one map's width: each measure's own items, and the
   # home county, county border and TV market lines with the scale bar, shown once across the panel
   K="town=Columbia&rank=1&paper=1&fit=1&keyonly=1&ground=1"
@@ -203,10 +235,15 @@ def content(f):
     bb = ImageChops.difference(im, Image.new("RGB", im.size, "white")).getbbox()
     return im.crop((0, bb[1], im.width, bb[3]))
 ka, kc, kl = content("key_area.png"), content("key_cov.png"), content("key_lines.png")
-for n, t in ((3, "columbia"), (4, "mexico"), (5, "linn")):
-    a, c = Image.open(f"print/area_{t}.png").convert("RGB"), Image.open(f"print/cov_{t}.png").convert("RGB")
-    out = Image.new("RGB", (3600, 335 + a.height), "white")
-    out.paste(ka, (0, 10)); out.paste(kc, (1836, 10)); out.paste(kl, (0, 288)); out.paste(a, (0, 335)); out.paste(c, (1836, 335))
+# one row per civic interest area, area left and coverage right; rows 72 px apart, the panel gutter
+for n, t, rows in ((3, "columbia", [""]), (4, "mexico", ["", "_2"]), (5, "linn", [""])):
+    pairs = [(Image.open(f"print/area_{t}{r}.png").convert("RGB"), Image.open(f"print/cov_{t}{r}.png").convert("RGB"))
+             for r in rows]
+    out = Image.new("RGB", (3600, 335 + sum(a.height for a, _ in pairs) + 72 * (len(pairs) - 1)), "white")
+    out.paste(ka, (0, 10)); out.paste(kc, (1836, 10)); out.paste(kl, (0, 288))
+    y = 335
+    for a, c in pairs:
+        out.paste(a, (0, y)); out.paste(c, (1836, y)); y += a.height + 72
     out.save(f"print/figure{n}_{t}.png", dpi=(600, 600)); print(f"print/figure{n}_{t}.png", out.size)
 PYEOF
   cd $ROOT
