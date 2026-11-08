@@ -17,6 +17,7 @@ authors:
     affiliation: "MU Institute for Data Science and Informatics, University of Missouri"
 repository-code: "https://github.com/LocalNewsImpact/civic-interest-areas"
 license: MIT
+doi: 10.5281/zenodo.24056822
 keywords:
   - local news
   - news deserts
